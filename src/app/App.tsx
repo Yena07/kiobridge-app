@@ -578,6 +578,16 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
       </div>
 
       <StickyFooter>
+        {/*
+         * 버튼이 잠긴 이유를 버튼 옆에서 밝힌다.
+         * 폼이 길어 버튼까지 내려오면 '메뉴 이름' 칸은 이미 화면 위로 사라진 뒤라,
+         * 이 줄이 없으면 그냥 고장 난 버튼으로 보인다. 어느 칸인지까지 짚어 준다.
+         */}
+        {!menuName.trim() && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            맨 위 <span style={{ fontWeight: 600, color: TEXT_1 }}>메뉴 이름</span>을 적으면 저장할 수 있어요
+          </p>
+        )}
         <PrimaryBtn
           onClick={() => onNext({ id: Date.now().toString(), menuName, place, selections, memo })}
           disabled={!menuName.trim()}
