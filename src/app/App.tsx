@@ -601,6 +601,12 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
 
 // ─── Saved Profiles ───────────────────────────────────────────────────────────
 
+/** 눈에는 안 보이지만 포커스와 스크린리더에는 남아 있어야 하는 요소. */
+const SR_ONLY: React.CSSProperties = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+};
+
 function ProfileCard({
   profile, selected, onSelect, onDelete,
 }: {
@@ -609,84 +615,104 @@ function ProfileCard({
   const allTags = [...(profile.place ? [profile.place] : []), ...Object.values(profile.selections).flat()];
   const visibleTags = allTags.slice(0, 4);
   const overflow = allTags.length - visibleTags.length;
+  const [focused, setFocused] = useState(false);
 
+  /*
+   * 고르는 곳과 지우는 곳은 형제여야 한다.
+   *
+   * 예전에는 카드 전체가 role="radio" 이고 그 안에 삭제 버튼이 들어 있었다.
+   * 그러면 삭제 버튼에 포커스를 두고 Enter 를 눌러도 카드만 선택되고 지워지지 않는다.
+   * 부모가 그 Enter 를 가로채 preventDefault() 해 버리기 때문이다.
+   * 키보드만 쓰는 사람에게는 프로필을 지울 방법이 아예 없었다.
+   *
+   * 고르는 일은 진짜 input[type=radio] 에 맡긴다. 화살표 키로 옮겨 다니는 것과
+   * 그룹 전체에 탭이 한 번만 걸리는 것을 브라우저가 알아서 해 준다.
+   */
   return (
     <div
-      role="radio"
-      aria-checked={selected}
-      aria-label={`${profile.menuName}${profile.place ? `, ${profile.place}` : ""}`}
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); }
-      }}
       style={{
-        borderRadius: RADIUS.card, padding: 20, marginBottom: 10, cursor: "pointer",
+        position: "relative",
+        borderRadius: RADIUS.card, marginBottom: 10,
         border: "none",
         backgroundColor: selected ? P : SURFACE,
         transition: "background-color 0.15s",
+        outline: focused ? `3px solid ${TEXT_1}` : "none",
+        outlineOffset: 2,
       }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          {/* 저장된 프로필에는 사진을 붙이지 않는다. 아직 어느 키오스크에도 물어보기 전이라
-              여기서 사진을 보여 주면 오늘 실제로 나올 메뉴를 앱이 장담하는 꼴이 된다. */}
+      <label style={{ display: "block", padding: "20px 20px 0", cursor: "pointer" }}>
+        <input
+          type="radio"
+          name="saved-profile"
+          style={SR_ONLY}
+          checked={selected}
+          onChange={onSelect}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          aria-label={`${profile.menuName}${profile.place ? `, ${profile.place}` : ""}`}
+        />
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            {/* 저장된 프로필에는 사진을 붙이지 않는다. 아직 어느 키오스크에도 물어보기 전이라
+                여기서 사진을 보여 주면 오늘 실제로 나올 메뉴를 앱이 장담하는 꼴이 된다. */}
+            <div
+              aria-hidden="true"
+              style={{
+                width: 40, height: 40, borderRadius: 12,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                backgroundColor: selected ? "rgba(255,255,255,0.16)" : "white",
+                color: selected ? "white" : P, flexShrink: 0,
+              }}
+            >
+              {profile.place ? PLACE_ICONS[profile.place] : <Pictogram name="squaresFour" size={19} />}
+            </div>
+            <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{profile.menuName}</span>
+          </div>
           <div
             aria-hidden="true"
             style={{
-              width: 40, height: 40, borderRadius: 12,
+              width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 5,
               display: "flex", alignItems: "center", justifyContent: "center",
-              backgroundColor: selected ? "rgba(255,255,255,0.16)" : "white",
-              color: selected ? "white" : P, flexShrink: 0,
+              backgroundColor: selected ? "white" : "transparent",
+              border: selected ? "none" : `1.5px solid ${TEXT_3}`,
             }}
           >
-            {profile.place ? PLACE_ICONS[profile.place] : <Pictogram name="squaresFour" size={19} />}
+            {selected && <Check size={13} strokeWidth={3} color={P} />}
           </div>
-          <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{profile.menuName}</span>
         </div>
-        <div
-          aria-hidden="true"
-          style={{
-            width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 5,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            backgroundColor: selected ? "white" : "transparent",
-            border: selected ? "none" : `1.5px solid ${TEXT_3}`,
-          }}
-        >
-          {selected && <Check size={13} strokeWidth={3} color={P} />}
-        </div>
-      </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {visibleTags.map((tag, i) => (
-          <span key={i} style={{
-            fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
-            backgroundColor: selected ? "rgba(255,255,255,0.14)" : "white",
-            color: selected ? "rgba(255,255,255,0.86)" : TEXT_2,
-          }}>
-            {tag}
-          </span>
-        ))}
-        {overflow > 0 && (
-          <span style={{
-            fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
-            backgroundColor: selected ? "rgba(255,255,255,0.14)" : "white",
-            color: selected ? "rgba(255,255,255,0.86)" : TEXT_2,
-          }}>
-            +{overflow}
-          </span>
+        <div className="flex flex-wrap gap-1.5">
+          {visibleTags.map((tag, i) => (
+            <span key={i} style={{
+              fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
+              backgroundColor: selected ? "rgba(255,255,255,0.14)" : "white",
+              color: selected ? "rgba(255,255,255,0.86)" : TEXT_2,
+            }}>
+              {tag}
+            </span>
+          ))}
+          {overflow > 0 && (
+            <span style={{
+              fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
+              backgroundColor: selected ? "rgba(255,255,255,0.14)" : "white",
+              color: selected ? "rgba(255,255,255,0.86)" : TEXT_2,
+            }}>
+              +{overflow}
+            </span>
+          )}
+        </div>
+
+        {profile.memo && (
+          <p style={{ fontSize: 14, color: selected ? "rgba(255,255,255,0.7)" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{profile.memo}</p>
         )}
-      </div>
+      </label>
 
-      {profile.memo && (
-        <p style={{ fontSize: 14, color: selected ? "rgba(255,255,255,0.7)" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{profile.memo}</p>
-      )}
-
-      <div className="flex justify-end" style={{ marginTop: 4 }}>
+      {/* 삭제는 라벨 바깥에 둔다. 안에 있으면 label 이 클릭을 가로채 선택으로 바꿔 버린다. */}
+      <div className="flex justify-end" style={{ padding: "0 20px 20px", marginTop: 4 }}>
         <button
           type="button"
           aria-label={`${profile.menuName} 프로필 삭제`}
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onClick={onDelete}
           style={{
             fontSize: 13, fontWeight: 500, minHeight: 44, padding: "6px 4px",
             background: "none", border: "none", cursor: "pointer",
@@ -728,7 +754,14 @@ function SavedProfilesScreen({
             <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>새 프로필을 추가해보세요</p>
           </div>
         ) : (
-          <div role="radiogroup" aria-label="저장된 프로필 목록">
+          /*
+           * role="radiogroup" 을 쓰지 않고 fieldset 을 쓴다.
+           * radiogroup 은 라디오만 품는 게 원칙인데 여기에는 카드마다 삭제 버튼이 같이 있다.
+           * fieldset/legend 는 브라우저가 원래 갖고 있는 묶음이라 버튼이 섞여 있어도 괜찮고,
+           * 같은 name 을 가진 라디오끼리 화살표 키로 옮겨 다니는 것도 그대로 동작한다.
+           */
+          <fieldset style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}>
+            <legend style={SR_ONLY}>저장된 프로필 목록</legend>
             {profiles.map((profile) => (
               <ProfileCard
                 key={profile.id}
@@ -744,7 +777,7 @@ function SavedProfilesScreen({
                 }}
               />
             ))}
-          </div>
+          </fieldset>
         )}
       </div>
 
