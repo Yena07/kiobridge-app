@@ -232,6 +232,24 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
 }
 
 // P0-7: 결제 경계. 종료 상태는 장바구니까지이며 결제 관련 필드는 두지 않는다.
+/**
+ * 사용자가 실제로 승인한 것으로 장바구니 결과를 만든다.
+ * 고정값을 쓰면 확인 화면에서 6,500원을 보고 승인했는데 결과 화면은
+ * 6,000원이라고 말하게 된다. 대신 눌러 주는 앱에서 그 불일치는
+ * 승인이라는 절차 자체를 무의미하게 만든다.
+ */
+export function buildCart(승인한: { displayName: string; priceText: string; 수량?: string }): CartResult {
+  const 개수 = Number((승인한.수량 ?? "1개").replace(/[^0-9]/g, "")) || 1;
+  const 단가 = Number(승인한.priceText.replace(/[^0-9]/g, "")) || 0;
+  return {
+    itemCountText: `${개수}개`,
+    totalText: 원(단가 * 개수),
+    evidenceLabel: "화면 인식으로 확인됨",
+    handoff: "키오스크 화면에서 장바구니를 확인해 주세요. 결제는 키오스크에서 직접 진행하시면 돼요.",
+  };
+}
+
+// P0-7 검사용 기준값. 실제 결과는 buildCart 가 만든다.
 export const MOCK_CART: CartResult = {
   itemCountText: "1개",
   totalText: "6,000원",

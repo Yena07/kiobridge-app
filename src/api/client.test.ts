@@ -24,7 +24,7 @@ const 이유 = async (id: string) =>
 beforeEach(() => {
   // 목의 응답 지연은 시연을 위한 것이지 검사 대상이 아니다.
   // 그대로 두면 이 파일 하나가 12초를 순수하게 기다리기만 한다.
-  setMockDelays({ pairing: 0, mapping: 0, approve: 0 });
+  setMockDelays({ pairing: 0, mapping: 0, approve: 0, step: 1 });
   clearProfiles();
   setScenario({ pairing: "connected", mapping: "exact", execution: "cart_ready" });
 });
@@ -78,6 +78,50 @@ describe("등록되지 않은 프로필로는 답을 만들지 않는다", () =>
 
   it("없는 id 를 지워도 터지지 않는다", () => {
     expect(() => unregisterProfile("없는id")).not.toThrow();
+  });
+});
+
+describe("장바구니는 승인한 내용과 같아야 한다", () => {
+  // 예전에는 MOCK_CART 고정값이라, 확인 화면에서 6,500원을 보고 승인해도
+  // 결과 화면은 6,000원이라고 말했다. 대신 눌러 주는 앱에서 그 불일치는
+  // 승인이라는 절차 자체를 무의미하게 만든다.
+  const 담길때까지 = async (planId: string) => {
+    for (let i = 0; i < 60; i++) {
+      const s = await api.getPlanStatus(planId);
+      if (s.state === "cart_ready") return s;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error("장바구니까지 가지 못했다");
+  };
+
+  it("확인 화면의 가격이 그대로 결과에 나온다", async () => {
+    registerProfile(매운);
+    const m = await api.requestMapping(PAIRING, "p1");
+    const { planId } = await api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" });
+    const s = await 담길때까지(planId);
+    expect(s.cart?.totalText).toBe(m.item!.priceText);
+  });
+
+  it("수량을 2개로 저장했으면 금액도 두 배가 된다", async () => {
+    registerProfile(프로필("p3", { "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"], "수량": ["2개"] }));
+    const m = await api.requestMapping(PAIRING, "p3");
+    const { planId } = await api.approve({ pairingId: PAIRING, profileId: "p3", mappingResult: "exact" });
+    const s = await 담길때까지(planId);
+    const 단가 = Number(m.item!.priceText.replace(/[^0-9]/g, ""));
+    expect(s.cart?.itemCountText).toBe("2개");
+    expect(Number(s.cart!.totalText.replace(/[^0-9]/g, ""))).toBe(단가 * 2);
+  });
+
+  it("여러 후보에서 고른 것이 그대로 담긴다", async () => {
+    setScenario({ mapping: "clarification" });
+    registerProfile(매운);
+    const m = await api.requestMapping(PAIRING, "p1");
+    const 고른것 = m.candidates![1];   // 첫 번째가 아닌 것을 일부러 고른다
+    const { planId } = await api.approve({
+      pairingId: PAIRING, profileId: "p1", mappingResult: "clarification", candidateId: 고른것.candidateId,
+    });
+    const s = await 담길때까지(planId);
+    expect(s.cart?.totalText).toBe(고른것.priceText);
   });
 });
 

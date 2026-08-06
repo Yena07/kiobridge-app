@@ -1,7 +1,7 @@
 import type {
-  ApproveInput, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
+  ApproveInput, CartResult, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
-import { MOCK_CART, buildMapping } from "@/api/mock";
+import { MOCK_CART, buildCart, buildMapping } from "@/api/mock";
 import { STEPS } from "@/domain/catalog";
 
 export class KioBridgeError extends Error {
@@ -62,7 +62,10 @@ export const clearProfiles = (): void => {
 // 목이 흉내 내는 응답 지연. 시연에서는 실제로 기다리는 편이 자연스럽지만
 // (연결 중·찾는 중 화면이 한순간에 지나가면 무슨 일이 일어났는지 안 보인다),
 // 테스트에서는 순수한 대기라 0 으로 낮춘다. setScenario 와 같은 시연용 손잡이다.
-let delays = { pairing: 1800, mapping: 1300, approve: 600 };
+// step 은 실행 화면의 단계 하나가 넘어가는 데 걸리는 시간이다.
+// 5단계 × 1.4초라 실제로는 7초쯤 걸린다. 시연에서는 진행되는 게 보여야 하지만
+// 테스트에서는 그냥 기다리는 시간이다.
+let delays = { pairing: 1800, mapping: 1300, approve: 600, step: 1400 };
 export const setMockDelays = (patch: Partial<typeof delays>): void => {
   delays = { ...delays, ...patch };
 };
@@ -71,7 +74,6 @@ export const setMockDelays = (patch: Partial<typeof delays>): void => {
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const STEP_MS = 1400;
 const ABORT_STEP = 2;
 
 function buildSteps(activeIndex: number): StepStatus[] {
@@ -83,9 +85,15 @@ function buildAbortedSteps(): StepStatus[] {
 }
 
 // 서버가 이 페어링에 뭐라고 답했는지. 승인 검사의 기준이 된다.
-const sessions = new Map<string, { result: MappingState; candidateIds: string[] }>();
+const sessions = new Map<string, {
+  result: MappingState;
+  candidateIds: string[];
+  item?: { displayName: string; priceText: string };
+  byId: Record<string, { displayName: string; priceText: string }>;
+  수량?: string;
+}>();
 
-const plans = new Map<string, { startedAt: number; outcome: Scenario["execution"] }>();
+const plans = new Map<string, { startedAt: number; outcome: Scenario["execution"]; cart: CartResult }>();
 
 export const mockApi: KioBridgeApi = {
   async claimPairing(claimCode) {
@@ -120,6 +128,11 @@ export const mockApi: KioBridgeApi = {
     sessions.set(_pairingId, {
       result: res.result,
       candidateIds: (res.candidates ?? []).map((c) => c.candidateId),
+      // 승인 결과로 장바구니를 만들려면 무엇을 담기로 했는지도 알아야 한다.
+      // 화면이 보여 준 값과 결과 화면의 값이 어긋나면 안 되기 때문이다.
+      item: res.item && { displayName: res.item.displayName, priceText: res.item.priceText },
+      byId: Object.fromEntries((res.candidates ?? []).map((c) => [c.candidateId, { displayName: c.displayName, priceText: c.priceText }])),
+      수량: res.item?.options.find((o) => o.label === "수량")?.value,
     });
     return res;
   },
@@ -152,8 +165,14 @@ export const mockApi: KioBridgeApi = {
       throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
     }
     await delay(delays.approve);
+    // 사용자가 고른 후보가 있으면 그것이 담기는 것이다.
+    const 담을것 = (input.candidateId && session.byId[input.candidateId]) || session.item;
     const planId = `pln_${Date.now()}`;
-    plans.set(planId, { startedAt: Date.now(), outcome: scenario.execution });
+    plans.set(planId, {
+      startedAt: Date.now(),
+      outcome: scenario.execution,
+      cart: 담을것 ? buildCart({ ...담을것, 수량: session.수량 }) : MOCK_CART,
+    });
     return { planId };
   },
 
@@ -162,7 +181,7 @@ export const mockApi: KioBridgeApi = {
     if (!plan) {
       throw new KioBridgeError("PLAN_NOT_FOUND", "실행 정보를 찾을 수 없어요", false);
     }
-    const reached = Math.floor((Date.now() - plan.startedAt) / STEP_MS);
+    const reached = Math.floor((Date.now() - plan.startedAt) / Math.max(1, delays.step));
 
     if (plan.outcome === "aborted" && reached >= ABORT_STEP) {
       return {
@@ -178,7 +197,7 @@ export const mockApi: KioBridgeApi = {
       };
     }
     if (reached >= STEPS.length) {
-      return { state: "cart_ready", steps: STEPS.map(() => "done"), cart: MOCK_CART };
+      return { state: "cart_ready", steps: STEPS.map(() => "done"), cart: plan.cart };
     }
     return { state: "running", steps: buildSteps(reached) };
   },
