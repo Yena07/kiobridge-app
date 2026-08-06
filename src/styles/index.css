@@ -1,3 +1,6 @@
 @import './fonts.css';
 @import './tailwind.css';
-@import './theme.css';
+/* theme.css 는 지웠다. shadcn 이 남긴 CSS 변수 181줄인데
+   var(--primary) 같은 값을 읽는 곳이 앱 어디에도 없었다(참조 0곳).
+   대비가 4.5:1 에 못 미친다는 지적이 있었지만, 화면에 닿지 않는 색을
+   고치는 것보다 지우는 게 맞다. 실제 색은 design/tokens.ts 가 정한다. */

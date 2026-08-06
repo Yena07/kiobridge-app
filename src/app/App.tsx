@@ -406,16 +406,26 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
       </div>
 
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `48px ${GAP.screenX}px 0` }}>
-        <CenterHeadline title={<>반갑습니다!<br />어떻게 불러드릴까요?</>} />
+        {/*
+         * 실제 이름을 받지 않는다. 화면에 부를 호칭만 받는다.
+         * 심사 규칙이 실제 개인정보 수집을 금지하고, 개인정보 화면도
+         * "이름은 받지도 저장하지도 않아요" 라고 약속하고 있다.
+         * 예전에는 autoComplete="name" 에 '이름 입력' 이라고 적어 두어
+         * 브라우저 자동완성이 진짜 이름을 채워 넣었다. 약속과 정반대였다.
+         */}
+        <CenterHeadline
+          title={<>반갑습니다!<br />어떻게 불러드릴까요?</>}
+          desc="부르는 말만 쓰여요. 실제 이름이 아니어도 괜찮아요"
+        />
 
-        <label htmlFor="name-input" className="sr-only">이름</label>
+        <label htmlFor="name-input" className="sr-only">부를 호칭</label>
         <input
           id="name-input"
           type="text"
-          autoComplete="name"
+          autoComplete="off"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="이름 입력"
+          placeholder="예: 할머니, 김씨"
           autoFocus
           style={{
             width: "100%", marginTop: 36, textAlign: "center",
@@ -1398,7 +1408,7 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
     },
     {
       title: "저장하지 않는 것",
-      body: "이름·주소·주민등록번호 같은 정보는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요.",
+      body: "실제 이름·주소·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
     },
     {
       title: "키오스크에 넘기는 것",
