@@ -26,6 +26,16 @@
 | `execute` | `POST /api/v1/sessions/:id/execute` |
 | `getEvidence` | `GET /internal/simulation/evidence/{sessionId}` |
 
+### 삭제 경로가 필요합니다
+
+화면의 '이 기기에서 정보 지우기' 는 `api.forgetAll()` 을 부릅니다. 지금 조립 계층은 자기가 들고 있는 세션만 비웁니다.
+
+**서버에도 지우는 경로가 있어야 합니다.** 사용자가 저장한 프로필·세션을 서버가 들고 있다면, 명세에 삭제 엔드포인트를 하나 추가해 주세요. 알려 주시면 `createApi` 의 `forgetAll` 에서 함께 부르겠습니다. 없으면 "모두 지워요" 라는 화면의 약속이 절반만 사실이 됩니다.
+
+### 타임아웃은 15초로 두었습니다
+
+`createHttpBackend` 가 `AbortController` 로 15초에 끊고 `TIMEOUT` 코드를 올립니다. 서버가 더 오래 걸리는 경로가 있으면 알려 주세요.
+
 응답 모양은 같은 파일의 타입(`RecommendationResult`, `EvidenceSummary`)을 보시면 됩니다. **`src/api/backend.test.ts` 에 명세대로 응답하는 가짜 백엔드가 있으니 그걸 실제 응답 예시로 쓰셔도 됩니다.** 테스트 12개가 조립이 맞는지 검사합니다.
 
 ### 두 곳만 봐 주시면 됩니다

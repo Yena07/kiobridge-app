@@ -141,6 +141,21 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
   });
 });
 
+describe("forgetAll", () => {
+  it("세션을 비워서 이전 매핑으로 승인할 수 없게 한다", async () => {
+    // 세션 Map 은 비우는 경로가 없으면 무한히 자라기도 한다.
+    const api = createApi(가짜백엔드());
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+
+    await api.forgetAll();
+
+    await expect(
+      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
   it("cart_ready 는 모든 단계를 done 으로 만든다", async () => {
     const api = createApi(가짜백엔드());

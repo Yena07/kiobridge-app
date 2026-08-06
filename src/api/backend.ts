@@ -171,6 +171,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
       return { planId: `${input.pairingId}::${planId}` };
     },
 
+    // 서버에 지우기 경로가 생기면 여기서 함께 부른다. 지금은 이 계층이 들고 있는
+    // 것만 지운다. 세션 Map 은 비우는 경로가 없으면 무한히 자라기도 한다.
+    async forgetAll() {
+      세션.clear();
+    },
+
     async getPlanStatus(planId): Promise<PlanStatus> {
       const sessionId = planId.split("::")[0];
       const e = await backend.getEvidence(sessionId);
@@ -196,11 +202,28 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
 // ─── HTTP 구현 — 서버 주소만 넣으면 된다 ─────────────────────────────────────
 
 export function createHttpBackend(baseUrl: string): Backend {
+  // 타임아웃이 없으면 서버가 응답하지 않을 때 화면이 '연결 중' 에서 멈춘다.
+  // 그 화면에는 취소 버튼도 하단 탭도 없어서 사용자가 할 수 있는 게 없다.
+  const TIMEOUT_MS = 15_000;
   const 부르기 = async <T>(path: string, init?: RequestInit): Promise<T> => {
-    const res = await fetch(baseUrl + path, {
-      ...init,
-      headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    });
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(baseUrl + path, {
+        ...init,
+        signal: ac.signal,
+        headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+      });
+    } catch (e) {
+      throw new KioBridgeError(
+        (e as Error)?.name === "AbortError" ? "TIMEOUT" : "NETWORK_ERROR",
+        (e as Error)?.name === "AbortError" ? "응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요" : "연결하지 못했어요",
+        true,
+      );
+    } finally {
+      clearTimeout(t);
+    }
     if (!res.ok) {
       // 서버가 준 코드·문구를 그대로 화면까지 올린다. 삼키면 사용자가 왜 막혔는지 알 수 없다.
       const body = await res.json().catch(() => ({}));

@@ -80,6 +80,19 @@ describe("등록되지 않은 프로필로는 답을 만들지 않는다", () =>
     expect(() => unregisterProfile("없는id")).not.toThrow();
   });
 
+  it("forgetAll 은 계약의 삭제 경로다 — 목 전용 함수를 화면이 부르지 않아도 된다", async () => {
+    // 화면이 clearProfiles 를 직접 부르면 실제 client 로 바꾸는 순간
+    // 그 호출은 목의 Map 만 비우고 서버 데이터는 남는다.
+    registerProfile(매운);
+    await api.requestMapping(PAIRING, "p1");
+    const { planId } = await api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" });
+
+    await api.forgetAll();
+
+    await expect(api.requestMapping(PAIRING, "p1")).rejects.toThrow();
+    await expect(api.getPlanStatus(planId)).rejects.toThrow();
+  });
+
   it("이미 만든 실행 계획도 함께 지운다", async () => {
     // 계획에는 무엇을 몇 개 담았고 얼마인지가 들어 있다.
     // 프로필만 지우고 이건 남겨 두면 '모두 지워요' 가 반쯤만 사실이 된다.

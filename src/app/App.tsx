@@ -14,7 +14,7 @@ import type {
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
-import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, unregisterProfile, clearProfiles, type Scenario } from "@/api/client";
+import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, unregisterProfile, type Scenario } from "@/api/client";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
 const FRAME_W = 384;
@@ -2537,8 +2537,9 @@ export default function App() {
                 body: "저장한 프로필과 호칭, 전화번호가 모두 사라져요. 되돌릴 수 없어요.",
                 confirmLabel: "모두 지우기",
                 run: () => {
-                  // "지금까지 입력한 내용을 모두 지워요" 라고 했으면 목에 올린 사본도 지운다.
-                  clearProfiles();
+                  // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
+                  // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
+                  void api.forgetAll();
                   setProfiles([]); setName(""); setPhone("");
                   setOrderProfile(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가

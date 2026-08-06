@@ -43,6 +43,15 @@ export interface KioBridgeApi {
    */
   approve(input: ApproveInput): Promise<PlanCreated>;
   getPlanStatus(planId: string): Promise<PlanStatus>;
+  /**
+   * '이 기기에서 정보 지우기'. 서버에 남은 것까지 함께 지운다.
+   *
+   * 화면이 목 전용 함수(clearProfiles)를 직접 부르면, 실제 client 로 바꾸는 순간
+   * 그 호출은 목의 Map 만 비우고 실서버 데이터는 그대로 남는다. 사용자에게는
+   * "모두 지워요" 라고 말해 놓고 조용히 아무 일도 안 하게 된다.
+   * 그래서 삭제도 계약에 넣는다.
+   */
+  forgetAll(): Promise<void>;
 }
 
 // ─── 데모 시나리오 ─────────────────────────────────────────────────────────────
@@ -204,6 +213,11 @@ export const mockApi: KioBridgeApi = {
       cart: 담을것 ? buildCart({ ...담을것, 수량: session.수량 }) : MOCK_CART,
     });
     return { planId };
+  },
+
+  async forgetAll() {
+    clearProfiles();
+    plans.clear();
   },
 
   async getPlanStatus(planId) {
