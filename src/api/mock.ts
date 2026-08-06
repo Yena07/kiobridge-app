@@ -1,4 +1,4 @@
-import type { CartResult, MappedOption, MappingResponse, MappingState, ProfileData, RecommendationReason } from "@/domain/types";
+import type { CartResult, MappedOption, MappingResponse, MappingState, PlaceType, ProfileData, RecommendationReason } from "@/domain/types";
 
 import dakgangjeongImg from "@/assets/images/dakgangjeong.jpg";
 import icedAmericanoImg from "@/assets/images/iced-americano.jpg";
@@ -92,8 +92,19 @@ const 알레르기축 = "알레르기 (꼭 빼주세요)";
  * 절대 조건으로 후보를 거른다. 점수를 깎는 게 아니라 목록에서 아예 뺀다.
  * 알레르기·품절·이용 불가가 여기 해당한다.
  */
-/** 이 프로필이 보는 키오스크의 오늘 메뉴. */
-const 카탈로그 = (p: ProfileData | undefined) => (p?.place === "카페" ? 카페후보 : 오늘의후보);
+/**
+ * 이 프로필이 보는 키오스크의 오늘 메뉴.
+ *
+ * 목록이 없는 장소는 빈 배열을 준다. 지어내지 않는다.
+ * 병원에서 '매운 순살 닭강정' 을 승인하라는 화면이 뜨는 것보다
+ * "이 키오스크는 아직 지원하지 않아요" 가 낫다.
+ * 병원·관공서는 백엔드가 fixture 를 내려 주면 그때 채운다.
+ */
+const 장소별카탈로그: Partial<Record<NonNullable<PlaceType>, 후보[]>> = {
+  음식점: 오늘의후보,
+  카페: 카페후보,
+};
+const 카탈로그 = (p: ProfileData | undefined) => (p?.place ? (장소별카탈로그[p.place] ?? []) : 오늘의후보);
 
 function 절대조건으로거르기(p: ProfileData | undefined) {
   const 알레르기 = 고른값들(p, 알레르기축);
@@ -171,9 +182,11 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
 /** 확인 카드에 그대로 올라가는 표. 사용자가 고른 값만 넣는다. */
 function 확인표(p: ProfileData | undefined, 고름: 후보 | undefined): MappedOption[] {
   const 행: MappedOption[] = [];
+  // 다중 선택 축(시럽·알레르기 등)은 첫 값만 보여 주면 나머지가 조용히 사라진다.
+  // 확인 화면이 사용자가 고른 것보다 적게 말하는 것도 거짓말이다.
   const 넣기 = (label: string, matched: boolean, note?: string) => {
-    const v = 고른값(p, label);
-    if (v) 행.push({ label, value: v, matched, ...(note ? { note } : {}) });
+    const vs = 고른값들(p, label);
+    if (vs.length > 0) 행.push({ label, value: vs.join(", "), matched, ...(note ? { note } : {}) });
   };
   // 사용자가 고른 축만 넣는다. 장소마다 축이 다르므로 없는 항목은 자동으로 빠진다.
   const 맞았나 = (축: string, 후보값?: string) => 후보값 === 고른값(p, 축);
@@ -215,10 +228,15 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
   // 그때 item 없이 exact/changed/low_confidence 를 돌려주면 화면이 item 을 있다고 믿고
   // 그리다가 터진다. 담을 게 없다는 건 그 자체로 not_found 이므로 그렇게 답한다.
   if (!고름 && state !== "not_found") {
+    // 애초에 그 장소의 메뉴를 모르는 경우와, 조건에 걸려 다 빠진 경우는 다르다.
+    // 사용자가 무엇을 해야 하는지가 다르므로 문장도 달라야 한다.
+    const 목록없음 = 카탈로그(profile).length === 0;
     return {
       result: "not_found",
-      message: "조건에 맞는 메뉴가 오늘은 없어요. 알레르기나 이용 방식 때문에 모두 빠졌어요.",
-      reasons: 이유,
+      message: 목록없음
+        ? "이 종류의 키오스크는 아직 도와드리지 못해요. 직원에게 이 화면을 보여 주세요."
+        : "조건에 맞는 메뉴가 오늘은 없어요. 알레르기나 이용 방식 때문에 모두 빠졌어요.",
+      reasons: 목록없음 ? [] : 이유,
     };
   }
 
@@ -230,10 +248,13 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
       return {
         result: "clarification",
         // 후보 이름·가격만 보내면 사용자는 포장인지 종이컵인지 몇 개인지
-        // 한 번도 못 보고 승인을 누르게 된다. 어느 후보를 고르든 사용자가
-        // 고른 조건은 같으므로, 그 표를 함께 실어 화면이 보여 줄 수 있게 한다.
-        // displayName·priceText 는 아직 정해지지 않았으므로 비워 둔다.
-        item: 고름 && { displayName: "", priceText: "", options: 확인표(profile, 고름) },
+        // 한 번도 못 보고 승인을 누르게 된다. 저장해 둔 조건을 함께 보낸다.
+        //
+        // 여기서는 '맞았는지' 를 판단하지 않는다. 어느 후보를 고르느냐에 따라
+        // 답이 달라지기 때문이다. 1순위 기준으로 계산해 두면 c2(뼈)를 고른
+        // 사용자에게 "형태: 순살, 그대로예요" 라고 말하게 된다.
+        // 화면이 고른 후보에 맞춰 다시 계산한다.
+        profileOptions: 확인표(profile, undefined).map((o) => ({ ...o, matched: true, note: undefined })),
         reason: `저장하신 '${profile?.menuName || MOCK_MENU_NAME}'과 비슷한 메뉴가 여러 개예요`,
         reasons: 이유,
         // candidateId 는 이번 매핑 응답에서만 쓰는 임시 표식이다.

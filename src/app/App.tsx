@@ -279,9 +279,10 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
             id="phone-input"
             type="tel"
             inputMode="numeric"
-            // 실제 번호를 자동완성으로 끌어오지 않는다. 심사 규칙이 실제 개인정보
-            // 수집을 금지하고, 이 화면은 흐름을 보여 주기 위한 선택 경로다.
-            autoComplete="off"
+            // 자동완성을 막지 않는다. 인증이 끝나면 바로 버리므로 막는다고
+            // 더 안전해지지 않고, 손 떨리는 분에게 11자리를 손으로 치게 하는
+            // 비용만 남는다. 이 앱의 주 사용자에게는 그게 더 큰 문제다.
+            autoComplete="tel"
             value={formatted}
             onChange={handleChange}
             placeholder="전화번호 입력"
@@ -368,6 +369,10 @@ function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => voi
               inputMode="numeric"
               // 문자로 온 인증번호를 기기가 대신 채워 준다. 첫 칸에만 붙인다.
               autoComplete={i === 0 ? "one-time-code" : "off"}
+              // 값이 있는 칸을 다시 누르면 기존 값을 선택해 둔다.
+              // 그러면 재입력이 '교체' 로 동작한다. 이게 없으면 e.target.value 가
+              // "12" 가 되어 붙여넣기 경로를 타고 옆 칸까지 덮어쓴다.
+              onFocus={(e) => e.target.select()}
               aria-label={`인증번호 ${i + 1}번째 자리`}
               maxLength={6}
               value={digit}
@@ -472,12 +477,9 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
   // '계속하기' 를 눌러 언제든 넘어갈 수 있게 하고, 자동 넘김은 넉넉히 둔다.
   // onNext 를 ref 에 담는 이유는, 인라인 화살표로 넘어와서 매 렌더 새 함수가 되면
   // deps 때문에 타이머가 계속 리셋되기 때문이다.
-  const next = useRef(onNext);
-  next.current = onNext;
-  useEffect(() => {
-    const t = setTimeout(() => next.current(), 8000);
-    return () => clearTimeout(t);
-  }, []);
+  // 자동 넘김을 아예 없앴다. 8초로 늘리는 것으로는 부족하다 —
+  // WCAG 2.2.1 은 끄거나 늘리거나 넘길 수 있을 것을 요구하는데,
+  // 자동으로 넘어가면 '머무를' 수가 없다. 사용자가 누를 때 넘어간다.
 
   return (
     <div
@@ -517,12 +519,17 @@ function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
+  // aria-modal="true" 는 "뒤는 없는 셈 치라" 는 선언이다. 선언만 하고
+  // Tab 이 뒤 화면으로 나가면 그 말이 사실이 아니게 된다.
+  // 되돌릴 수 없는 동작을 지키는 자리라 더 그렇다.
+  const 가두기 = 포커스가두기(ref, onCancel);
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col justify-end" style={{ backgroundColor: "rgba(0,0,0,0.45)" }}>
       <div
         ref={ref}
         tabIndex={-1}
+        onKeyDown={가두기}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
@@ -545,6 +552,51 @@ function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 모달 안에 Tab 을 가둔다. aria-modal 을 선언한 곳은 전부 이걸 쓴다.
+ * 선언만 하고 안 지키면 스크린리더에게 거짓말을 하는 셈이다.
+ */
+function 포커스가두기(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { onClose(); return; }
+    if (e.key !== "Tab") return;
+    const 대상 = ref.current?.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    );
+    if (!대상 || 대상.length === 0) return;
+    const 처음 = 대상[0];
+    const 마지막 = 대상[대상.length - 1];
+    if (e.shiftKey && document.activeElement === 처음) { e.preventDefault(); 마지막.focus(); }
+    else if (!e.shiftKey && document.activeElement === 마지막) { e.preventDefault(); 처음.focus(); }
+  };
+}
+
+/**
+ * 사용자가 직접 짚었다는 표시를 받는 한 줄.
+ * 고르는 자리가 아니라 확인하는 자리라 카드가 아니라 체크로 둔다.
+ */
+function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={onToggle}
+      style={{ display: "flex", alignItems: "center", gap: 11, minHeight: 44, border: "none", backgroundColor: "transparent", cursor: "pointer", fontFamily: FONT, padding: 0, textAlign: "left" }}
+    >
+      <div aria-hidden="true" style={{
+        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+        border: checked ? "none" : `1.5px solid ${TEXT_2}`,
+        backgroundColor: checked ? P : "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
+      }}>
+        {checked && <Check size={12} strokeWidth={3} color="white" />}
+      </div>
+      <span style={{ ...TYPE.caption, fontWeight: 600, color: TEXT_1 }}>{label}</span>
+    </button>
   );
 }
 
@@ -1130,16 +1182,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
   // Tab 을 누르면 보이지도 않는 곳으로 포커스가 나간다.
   const 모달 = useRef<HTMLDivElement>(null);
   useEffect(() => { 모달.current?.focus(); }, []);
-  const 가두기 = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") { onClose(); return; }
-    if (e.key !== "Tab") return;
-    const 대상 = 모달.current?.querySelectorAll<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])");
-    if (!대상 || 대상.length === 0) return;
-    const 처음 = 대상[0];
-    const 마지막 = 대상[대상.length - 1];
-    if (e.shiftKey && document.activeElement === 처음) { e.preventDefault(); 마지막.focus(); }
-    else if (!e.shiftKey && document.activeElement === 마지막) { e.preventDefault(); 처음.focus(); }
-  };
+  const 가두기 = 포커스가두기(모달, onClose);
 
   /*
    * 타이머가 둘이므로 둘 다 걷어야 한다.
@@ -1543,7 +1586,7 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
     },
     {
       title: "전화번호를 넣으셨다면",
-      body: "'전화번호로 로그인'을 고르신 경우에만 번호를 받아요. 다음에도 저장한 조건을 불러오기 위한 것이고, 이 기기 안에만 있다가 '이 기기에서 정보 지우기'를 누르면 함께 사라져요. 로그인 없이 쓰시면 번호를 받지 않아요.",
+      body: "'전화번호로 로그인'을 고르신 경우에만 번호를 받아요. 문자 인증에만 쓰고 인증이 끝나면 바로 지워요. 저장해 두지 않습니다. 로그인 없이 쓰시면 번호를 아예 받지 않아요.",
     },
     {
       title: "키오스크에 넘기는 것",
@@ -1602,7 +1645,18 @@ function ConfirmRow({
   );
 }
 
-function ConfirmCard({ children, badge, photo }: { children: React.ReactNode; badge?: string; photo?: string | null }) {
+function ConfirmCard({ children, badge, badgeTone = "success", photo }: {
+  children: React.ReactNode; badge?: string;
+  // 배지가 늘 초록 체크였다. "확실하지 않아요" 같은 문구가 성공 배지를 달고 나오면
+  // 색과 아이콘으로 상태를 알린다는 원칙이 여기서만 거꾸로 작동한다.
+  badgeTone?: "success" | "caution" | "neutral";
+  photo?: string | null;
+}) {
+  const 배지색 = badgeTone === "success"
+    ? { bg: SUCCESS_BG, fg: SUCCESS, icon: "checkCircle" as const }
+    : badgeTone === "caution"
+      ? { bg: WARN_BG, fg: WARN, icon: "warning" as const }
+      : { bg: SURFACE, fg: TEXT_2, icon: "notePencil" as const };
   return (
     <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
       {/* 키오스크가 오늘 걸어 둔 메뉴 사진. 담기 전 마지막 확인 화면이라 크게 둔다.
@@ -1613,9 +1667,9 @@ function ConfirmCard({ children, badge, photo }: { children: React.ReactNode; ba
       )}
       <div data-confirm-body style={{ padding: "6px 20px" }}>{children}</div>
       {badge && (
-        <div style={{ padding: "13px 20px", backgroundColor: SUCCESS_BG, display: "flex", alignItems: "center", gap: 8 }}>
-          <Pictogram name="checkCircle" size={17} color={SUCCESS} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: SUCCESS }}>{badge}</span>
+        <div style={{ padding: "13px 20px", backgroundColor: 배지색.bg, display: "flex", alignItems: "center", gap: 8 }}>
+          <Pictogram name={배지색.icon} size={17} color={배지색.fg} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 배지색.fg }}>{badge}</span>
         </div>
       )}
     </div>
@@ -1697,6 +1751,7 @@ function OptionCard({
   role?: "radio" | "button"; photo?: string | null; groupName?: string;
 }) {
   const radio = role === "radio";
+  const [포커스, set포커스] = useState(false);
   const 속: React.ReactNode = (
     <>
       <span className="flex items-center gap-3" style={{ minWidth: 0 }}>
@@ -1736,15 +1791,27 @@ function OptionCard({
   }
 
   return (
-    <label style={{ ...겉모양, position: "relative", margin: 0 }}>
-      {/* 눈에는 안 보이지만 지우지 않는다. 화살표 이동과 그룹 의미는 이 요소가 만든다. */}
+    <label style={{
+      ...겉모양, position: "relative", margin: 0,
+      // 포커스는 숨은 input 이 받지만 표시는 이 라벨이 한다.
+      // opacity:0 인 요소에 outline 을 그리면 그 outline 도 같이 투명해진다.
+      // 화살표 키를 살리려다 포커스 표시를 잃으면 안 된다.
+      outline: 포커스 ? `3px solid ${P}` : "none",
+      outlineOffset: 2,
+    }}>
+      {/*
+       * 눈에는 안 보이지만 지우지 않는다. 화살표 이동과 그룹 의미는 이 요소가 만든다.
+       * opacity 대신 clip 으로 숨긴다 — opacity:0 은 포커스 표시까지 지운다.
+       */}
       <input
         type="radio"
         name={groupName ?? "option"}
         checked={selected}
         onChange={onClick}
+        onFocus={() => set포커스(true)}
+        onBlur={() => set포커스(false)}
         aria-label={`${name}, ${price}`}
-        style={{ position: "absolute", opacity: 0, width: 1, height: 1, margin: 0, pointerEvents: "none" }}
+        style={{ position: "absolute", width: 1, height: 1, margin: 0, padding: 0, border: 0, clip: "rect(0 0 0 0)", clipPath: "inset(50%)", overflow: "hidden", whiteSpace: "nowrap" }}
       />
       {속}
     </label>
@@ -1772,6 +1839,10 @@ function OrderExact({
   );
 }
 
+// 메뉴 이름에 드러나는 축. '매운 뼈 닭강정' 이면 맵기와 형태를 이름으로 알 수 있다.
+// 이름에 안 나오는 축(컵·수량·이용 방식)은 후보를 바꿔도 그대로이므로 판단하지 않는다.
+const 이름에드러나는축 = ["맵기", "형태", "음료", "온도"];
+
 function OrderClarification({
   candidates, reason, reasons, options, onApprove, onCancel,
 }: {
@@ -1791,15 +1862,33 @@ function OrderClarification({
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8 }}>{reason}</p>
       </div>
       {/*
-       * 후보 이름·가격만 보여 주면 사용자는 포장인지 종이컵인지 몇 개인지
-       * 한 번도 못 보고 승인을 누른다. 메뉴만 다르고 나머지 조건은 같으므로
-       * 고르기 전에 먼저 보여 준다.
+       * 저장해 둔 조건을 고르기 전에 먼저 보여 준다.
+       *
+       * '그대로예요' 라고 단정하지 않는다. 후보마다 맞는 축이 다르기 때문이다.
+       * 예를 들어 형태를 '순살' 로 저장했는데 '매운 뼈 닭강정' 을 고르면 형태는
+       * 안 맞는다. 고른 후보의 이름에서 그 축을 확인해 안 맞는 행을 표시한다.
+       * 아무것도 안 고른 동안에는 판단하지 않고 저장한 값만 보여 준다.
        */}
       {options && options.length > 0 && (
-        <ConfirmCard badge="아래 조건은 그대로예요">
-          {options.map((o) => (
-            <ConfirmRow key={o.label} label={o.label} value={o.value} changed={!o.matched} changeNote={o.note} />
-          ))}
+        <ConfirmCard badge="저장하신 조건" badgeTone="neutral">
+          {options.map((o) => {
+            const 고른후보 = selected !== null ? candidates[selected] : undefined;
+            // '매운맛' 은 이름에 '매운' 으로 나온다. 어미를 떼고 본다.
+            // 안 떼면 '매운 뼈 닭강정' 을 고른 사람에게 맵기가 다르다고 거짓말한다.
+            const 어간 = o.value.replace(/맛$/, "");
+            const 안맞음 = 고른후보 && 이름에드러나는축.includes(o.label)
+              ? !고른후보.displayName.includes(어간)
+              : false;
+            return (
+              <ConfirmRow
+                key={o.label}
+                label={o.label}
+                value={o.value}
+                changed={안맞음}
+                changeNote={안맞음 ? "고르신 메뉴와 달라요" : undefined}
+              />
+            );
+          })}
         </ConfirmCard>
       )}
       <div className="flex flex-col gap-2" role="radiogroup" aria-label="비슷한 메뉴 후보">
@@ -1917,7 +2006,7 @@ function OrderLowConfidence({
        * 정보가 가장 적었다. exact 와 같은 확인 카드를 그대로 쓴다.
        * 사용자는 포장인지 종이컵인지 몇 개인지 다 보고 나서 짚는다.
        */}
-      <ConfirmCard badge="확실하지 않아요" photo={item.imageUrl}>
+      <ConfirmCard badge="확실하지 않아요" badgeTone="caution" photo={item.imageUrl}>
         <ConfirmRow label="상품" value={item.displayName} />
         {item.options.map((o) => (
           <ConfirmRow key={o.label} label={o.label} value={o.value} changed={!o.matched} changeNote={o.note ?? "오늘은 이 조합이 없어요"} />
@@ -1925,13 +2014,15 @@ function OrderLowConfidence({
         <ConfirmRow label="가격" value={item.priceText} large />
       </ConfirmCard>
       <InfoBox variant="info">시스템이 정확하게 찾지 못했어요. 위 내용을 확인하고 맞으면 아래에서 짚어 주세요.</InfoBox>
-      <OptionCard
-        role="button"
-        selected={selected}
-        name={item.displayName}
-        price={item.priceText}
-        photo={item.imageUrl}
-        onClick={() => setSelected((v) => !v)}
+      {/*
+       * 위 확인 카드와 같은 메뉴를 카드 모양으로 또 그리면 두 개인 줄 안다.
+       * 여기는 고르는 자리가 아니라 "위 내용이 맞다" 고 짚는 자리이므로
+       * 체크 한 줄로 둔다.
+       */}
+      <CheckRow
+        checked={selected}
+        onToggle={() => setSelected((v) => !v)}
+        label="위 내용이 제가 시키려던 것이 맞아요"
       />
       <ReasonList reasons={reasons} />
       {!selected && (
@@ -2022,7 +2113,7 @@ function OrderConfirmScreen({
             candidates={mapping.candidates ?? []}
             reason={mapping.reason}
             reasons={mapping.reasons}
-            options={mapping.item?.options}
+            options={mapping.profileOptions}
             onApprove={(candidateId) => approve({ candidateId })}
             onCancel={onBack}
           />
@@ -2499,6 +2590,10 @@ export default function App() {
             zoom: largeText ? LARGE_TEXT_SCALE : 1,
             width: largeText ? FRAME_W / LARGE_TEXT_SCALE : "100%",
             height: largeText ? FRAME_H / LARGE_TEXT_SCALE : FRAME_H,
+            // absolute 로 띄우는 것들(확인 시트·QR 스캐너)이 이 안에 갇히려면
+            // 여기가 컨테이닝 블록이어야 한다. overflow-hidden 만으로는
+            // 자기가 기준이 아니면 클리핑도 못 해서 화면 전체를 덮어 버린다.
+            position: "relative",
             borderRadius: 44, boxShadow: "0 24px 80px rgba(0,0,0,0.45)",
           }}
         >
@@ -2588,7 +2683,17 @@ export default function App() {
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
-                  void api.forgetAll();
+                  //
+                  // 실패를 삼키지 않는다. 개인정보를 지웠다는 약속이라
+                  // 안 지워졌으면 그렇게 말해야 한다.
+                  api.forgetAll().catch((e: KioBridgeError) => {
+                    set확인대기({
+                      title: "일부를 지우지 못했어요",
+                      body: `${e?.message ?? "서버에 남은 정보를 지우지 못했어요"}. 화면에서는 지워졌지만 서버에는 남아 있을 수 있어요. 잠시 뒤 다시 시도해 주세요.`,
+                      confirmLabel: "다시 시도",
+                      run: () => { void api.forgetAll(); },
+                    });
+                  });
                   setProfiles([]); setName(""); setPhone("");
                   setOrderProfile(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가

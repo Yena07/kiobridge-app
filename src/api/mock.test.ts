@@ -114,6 +114,13 @@ describe("못 맞춘 조건을 감추지 않는다", () => {
 });
 
 describe("상태별 화면 요건", () => {
+  it("clarification 은 저장한 조건을 함께 준다", () => {
+    const r = buildMapping("clarification", 땅콩알레르기);
+    expect(r.profileOptions?.length).toBeGreaterThan(0);
+    // '맞았는지' 는 여기서 판단하지 않는다 — 어느 후보를 고르느냐에 따라 달라진다.
+    expect(r.profileOptions?.every((o) => o.matched)).toBe(true);
+  });
+
   it("clarification 은 후보를 여러 개 주고 상품 ID 를 노출하지 않는다", () => {
     const r = buildMapping("clarification", 땅콩알레르기);
     expect(r.candidates?.length).toBeGreaterThan(1);

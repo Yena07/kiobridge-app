@@ -74,6 +74,12 @@ export interface MappingResponse {
   diffNote?: string;
   /** 추천 이유. 확인 화면에 그대로 보여 준다. */
   reasons?: RecommendationReason[];
+  /**
+   * 사용자가 저장해 둔 조건. clarification 처럼 상품이 아직 정해지지 않은 상태에서
+   * 조건만 보여 줄 때 쓴다. item 에 빈 displayName 을 넣어 실어 보내면
+   * 타입이 거짓말을 하게 되고, 누가 item.displayName 을 그리면 빈칸이 뜬다.
+   */
+  profileOptions?: MappedOption[];
 }
 
 // P0-7: 최종 상태는 cart_ready뿐. completed/paid 상태는 존재하지 않는다.

@@ -51,6 +51,16 @@ export interface Backend {
 
   /** GET /internal/simulation/evidence/{sessionId} */
   getEvidence(sessionId: string): Promise<EvidenceSummary>;
+
+  /**
+   * 이 세션에 남은 사용자 정보를 서버에서 지운다.
+   *
+   * 명세에 아직 경로가 없다. 자리를 비워 두면 백엔드 팀이 이 요구를 모른 채
+   * 가게 되므로 선택 메서드로 미리 만들어 둔다. 화면의 '이 기기에서 정보
+   * 지우기' 가 서버까지 닿으려면 이게 있어야 한다.
+   * 구현하지 않으면 이 계층이 들고 있는 것만 지워진다.
+   */
+  forgetSession?(sessionId: string): Promise<void>;
 }
 
 /** recommendations 응답 중 화면이 쓰는 부분. */
@@ -133,6 +143,10 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         return {
           result, reasons,
           reason: "비슷한 메뉴가 여러 개예요",
+          // 목에만 넣고 여기를 빼면, 실서버로 바꾸는 순간 조건표가 다시 통째로
+          // 사라진다. 사용자는 포장인지 종이컵인지 못 보고 승인하게 된다.
+          // '맞았는지' 는 판단하지 않는다 — 어느 후보를 고르느냐에 따라 달라진다.
+          profileOptions: rec.matchedOptions.map((o) => ({ ...o, matched: true, note: undefined })),
           // 상품 ID 를 화면으로 내보내지 않는다. 이번 응답 안에서만 쓰는 표식으로 바꾼다.
           candidates: [rec.recommendedCandidateId!, ...rec.alternativeCandidateIds]
             .map((id, i) => ({ candidateId: `c${i + 1}`, ...보이기(id) })),
@@ -188,7 +202,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
     // 서버에 지우기 경로가 생기면 여기서 함께 부른다. 지금은 이 계층이 들고 있는
     // 것만 지운다. 세션 Map 은 비우는 경로가 없으면 무한히 자라기도 한다.
     async forgetAll() {
+      // 서버에 지우기 경로가 있으면 함께 부른다. 없으면 이 계층 것만 지운다.
+      const ids = [...세션.keys()];
       세션.clear();
+      if (backend.forgetSession) {
+        await Promise.all(ids.map((id) => backend.forgetSession!(id)));
+      }
     },
 
     async getPlanStatus(planId): Promise<PlanStatus> {
