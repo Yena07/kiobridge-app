@@ -92,8 +92,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
   const 판정 = (r: RecommendationResult): MappingResponse["result"] => {
     if (!r.recommendedCandidateId) return "not_found";
     if (r.alternativeCandidateIds.length > 0 && r.requiresReconfirmation) return "clarification";
-    if (r.requiresReconfirmation || r.confidence < LOW_CONFIDENCE) return "low_confidence";
+    // 못 맞춘 조건이 있으면 그걸 먼저 알린다. 확신도가 낮다고 low_confidence 로
+    // 먼저 빠지면, 확신도 낮고 조건도 못 맞춘 경우에 "무엇을 못 맞췄는지" 가
+    // 화면에서 사라진다. 가장 조심해야 할 상황에서 정보가 가장 적어진다.
+    // low_confidence 화면도 이제 확인 카드를 그리므로 changed 를 먼저 봐도 잃는 게 없다.
     if (r.matchedOptions.some((o) => !o.matched)) return "changed";
+    if (r.requiresReconfirmation || r.confidence < LOW_CONFIDENCE) return "low_confidence";
     return "exact";
   };
 
@@ -156,9 +160,19 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
 
       // 사용자가 고른 표식(c1·c2·c3)을 서버가 아는 실제 후보로 되돌린다.
-      const 고른순번 = input.candidateId ? Number(input.candidateId.replace(/^c/, "")) - 1 : -1;
+      // 우리가 준 표식인지 반드시 확인한다. 예전에는 숫자로 바꾸기만 해서
+      // c99 는 undefined 를 제출했고, cabc·c0 는 조용히 1순위로 되돌아갔다.
+      // 사용자가 고르지 않은 메뉴가 담긴다는 뜻이다.
       const 후보목록 = [s.rec.recommendedCandidateId!, ...s.rec.alternativeCandidateIds];
-      const candidateId = 고른순번 >= 0 ? 후보목록[고른순번] : s.rec.recommendedCandidateId;
+      let candidateId = s.rec.recommendedCandidateId;
+      if (input.candidateId) {
+        const m = /^c(\d+)$/.exec(input.candidateId);
+        const 순번 = m ? Number(m[1]) - 1 : -1;
+        if (순번 < 0 || 순번 >= 후보목록.length) {
+          throw new KioBridgeError("CANDIDATE_UNKNOWN", "선택한 메뉴를 찾을 수 없어요", true);
+        }
+        candidateId = 후보목록[순번];
+      }
 
       // 제출 → 검증 → 실행. 어느 단계에서 멈췄는지 구분해서 알린다.
       await backend.submit(input.pairingId, { ...input, candidateId });
@@ -233,7 +247,9 @@ export function createHttpBackend(baseUrl: string): Backend {
         res.status >= 500 || res.status === 408,
       );
     }
-    return res.status === 204 ? (undefined as T) : res.json();
+    // 204 만 막으면 부족하다. 본문 없이 200 을 주는 서버도 있고 그때 json() 이 터진다.
+    const 본문 = await res.text();
+    return (본문 ? JSON.parse(본문) : undefined) as T;
   };
   const 보내기 = <T>(path: string, body: unknown) =>
     부르기<T>(path, { method: "POST", body: JSON.stringify(body) });

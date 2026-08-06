@@ -279,7 +279,9 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
             id="phone-input"
             type="tel"
             inputMode="numeric"
-            autoComplete="tel"
+            // 실제 번호를 자동완성으로 끌어오지 않는다. 심사 규칙이 실제 개인정보
+            // 수집을 금지하고, 이 화면은 흐름을 보여 주기 위한 선택 경로다.
+            autoComplete="off"
             value={formatted}
             onChange={handleChange}
             placeholder="전화번호 입력"
@@ -2203,16 +2205,24 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
     // 사용자는 실패한 줄도 모르고 빠져나갈 버튼도 없었다.
     let 연속실패 = 0;
     const 한계 = 5;
+    // 응답 순서가 뒤바뀌면 진행 표시가 뒤로 간다. 폴링이 겹치지 않게 하고,
+    // 늦게 도착한 답은 버린다.
+    let 진행중 = false;
+    let 차례 = 0;
     const poll = () => {
+      if (진행중) return;
+      진행중 = true;
+      const 내차례 = ++차례;
       api.getPlanStatus(planId)
-        .then((s) => { if (alive) { 연속실패 = 0; setStatus(s); } })
+        .then((s) => { if (alive && 내차례 === 차례) { 연속실패 = 0; setStatus(s); } })
         .catch((e: KioBridgeError) => {
           if (!alive) return;
           연속실패 += 1;
           if (연속실패 >= 한계) {
             setPollError(e?.message || "진행 상황을 확인할 수 없어요");
           }
-        });
+        })
+        .finally(() => { 진행중 = false; });
     };
     poll();
     const timer = setInterval(poll, POLL_MS);
@@ -2505,7 +2515,13 @@ export default function App() {
             <PhoneScreen onNext={(p) => { setPhone(p); setScreen("otp"); }} onBack={() => setScreen("welcome")} />
           )}
           {screen === "otp" && (
-            <OtpScreen phone={phone} onNext={() => setScreen("name")} onBack={() => setScreen("phone")} />
+            <OtpScreen
+              phone={phone}
+              // 인증이 끝나면 번호를 즉시 버린다. 더 들고 있을 이유가 없다.
+              // 남겨 두면 실제 개인정보를 저장하는 셈이 된다.
+              onNext={() => { setPhone(""); setScreen("name"); }}
+              onBack={() => setScreen("phone")}
+            />
           )}
           {screen === "name" && (
             <NameScreen onNext={(n) => { setName(n); setScreen("greeting"); }} onBack={() => setScreen("otp")} />

@@ -43,6 +43,27 @@ describe("프로필 등록", () => {
   });
 });
 
+describe("연결 시나리오", () => {
+  it("failed 는 복구 불가로 거절한다", async () => {
+    setScenario({ pairing: "failed" });
+    await expect(api.claimPairing("kb")).rejects.toThrow();
+  });
+
+  it("expired 는 다시 시도할 수 있는 오류로 준다", async () => {
+    setScenario({ pairing: "expired" });
+    await api.claimPairing("kb").then(
+      () => { throw new Error("거절했어야 한다"); },
+      (e) => { expect(e.code).toBe("CLAIM_EXPIRED"); expect(e.recoverable).toBe(true); },
+    );
+  });
+
+  it("connected 는 만료 시각이 미래인 세션을 준다", async () => {
+    const r = await api.claimPairing("kb");
+    expect(r.expiresAt).toBeGreaterThan(Date.now());
+    expect(r.kioskName.length).toBeGreaterThan(0);
+  });
+});
+
 describe("등록되지 않은 프로필로는 답을 만들지 않는다", () => {
   // 예전에는 undefined 를 그대로 buildMapping 에 넘겨서, 사용자가 고른 적 없는
   // 임의 메뉴가 승인 화면까지 올라갔다.

@@ -61,8 +61,10 @@ export const GAP = { screenX: 24, section: 28, card: 20 } as const;
 // 버튼은 완전한 알약. 카드는 테두리 대신 여백으로 나눈다.
 export const RADIUS = { card: 16, button: 100, pill: 100, input: 12 } as const;
 
+// Instrument Serif 는 styles/fonts.css 로 옮겼다.
+// @import 는 스타일시트 맨 위에만 유효한데 이 문자열은 런타임에 <style> 로 꽂히므로
+// 앞에 다른 규칙이 오면 브라우저가 조용히 무시한다. 폰트가 안 뜨는데 이유도 안 보인다.
 export const FOCUS_STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
 
   button:focus-visible,
   input:focus-visible,

@@ -1,7 +1,7 @@
 import type {
   ApproveInput, CartResult, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
-import { MOCK_CART, buildCart, buildMapping } from "@/api/mock";
+import { buildCart, buildMapping } from "@/api/mock";
 import { STEPS } from "@/domain/catalog";
 
 export class KioBridgeError extends Error {
@@ -206,11 +206,16 @@ export const mockApi: KioBridgeApi = {
     await delay(delays.approve);
     // 사용자가 고른 후보가 있으면 그것이 담기는 것이다.
     const 담을것 = (input.candidateId && session.byId[input.candidateId]) || session.item;
+    if (!담을것) {
+      throw new KioBridgeError("MENU_NOT_FOUND", "담을 수 있는 메뉴가 없어요", false);
+    }
     const planId = `pln_${Date.now()}`;
     plans.set(planId, {
       startedAt: Date.now(),
       outcome: scenario.execution,
-      cart: 담을것 ? buildCart({ ...담을것, 수량: session.수량 }) : MOCK_CART,
+      // 담을 것이 없으면 승인 자체가 성립하지 않는다. 고정값(MOCK_CART)으로
+      // 때우면 확인 화면에서 본 값과 결과가 어긋난 채로 통과해 버린다.
+      cart: buildCart({ ...담을것, 수량: session.수량 }),
     });
     return { planId };
   },

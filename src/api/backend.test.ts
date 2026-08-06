@@ -81,6 +81,22 @@ describe("상품 ID 를 화면으로 내보내지 않는다", () => {
     expect(JSON.stringify(r.candidates)).not.toContain("CHICKEN-");
   });
 
+  it("우리가 주지 않은 표식은 거절한다", async () => {
+    // 예전에는 숫자로 바꾸기만 해서 c99 는 undefined 를 제출하고
+    // cabc·c0 는 조용히 1순위로 되돌아갔다. 고르지 않은 메뉴가 담긴다.
+    const submit = vi.fn(async () => {});
+    const b = 가짜백엔드({ submit }, 기본추천({ alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true }));
+    const api = createApi(b);
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    for (const 가짜 of ["c99", "cabc", "c0"]) {
+      await expect(
+        api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "clarification", candidateId: 가짜 }),
+      ).rejects.toThrow();
+    }
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it("사용자가 고른 표식을 서버가 아는 후보로 되돌려 보낸다", async () => {
     const submit = vi.fn(async () => {});
     const b = 가짜백엔드({ submit }, 기본추천({ alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true }));
@@ -138,6 +154,22 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
       api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "low_confidence" }),
     ).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("판정 순서", () => {
+  it("확신이 낮아도 못 맞춘 조건이 있으면 그걸 먼저 알린다", async () => {
+    // low_confidence 가 changed 를 가리면, 확신 낮고 조건도 못 맞춘 경우에
+    // 무엇을 못 맞췄는지가 화면에서 사라진다.
+    const b = 가짜백엔드({}, 기본추천({
+      confidence: 0.4,
+      matchedOptions: [{ label: "컵", value: "종이컵", matched: false, note: "오늘은 제공되지 않아요" }],
+    }));
+    const api = createApi(b);
+    await api.claimPairing("kb");
+    const r = await api.requestMapping("s1", "p1");
+    expect(r.result).toBe("changed");
+    expect(r.item?.options[0].matched).toBe(false);
   });
 });
 
