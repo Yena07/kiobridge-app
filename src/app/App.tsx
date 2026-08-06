@@ -322,13 +322,25 @@ function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => voi
     if (e.key === "Backspace" && !otp[i] && i > 0) inputs.current[i - 1]?.focus();
   };
   const handleChange = (i: number, val: string) => {
-    const digit = val.replace(/[^0-9]/g, "").slice(-1);
+    const 숫자 = val.replace(/[^0-9]/g, "");
+    // 문자 앱의 자동완성이나 붙여넣기는 6자리를 한 번에 넣는다.
+    // 한 글자만 받으면 그 편의가 통째로 죽고, 손으로 여섯 번 옮겨 적어야 한다.
+    if (숫자.length > 1) {
+      const next = [...otp];
+      숫자.slice(0, 6).split("").forEach((d, n) => { if (i + n < 6) next[i + n] = d; });
+      setOtp(next);
+      inputs.current[Math.min(i + 숫자.length, 5)]?.focus();
+      return;
+    }
     const next = [...otp];
-    next[i] = digit;
+    next[i] = 숫자.slice(-1);
     setOtp(next);
-    if (digit && i < 5) inputs.current[i + 1]?.focus();
+    if (숫자 && i < 5) inputs.current[i + 1]?.focus();
   };
-  const filled = otp.every((d) => d !== "");
+  // 시간이 지나면 확인 버튼도 잠긴다. 남은 시간을 보여 주면서 눌리게 두면
+  // 눌러 놓고 왜 안 되는지 모르게 된다.
+  const expired = timer === 0;
+  const filled = otp.every((d) => d !== "") && !expired;
   const maskedPhone = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-****-$3");
   return (
     <div className="flex flex-col h-full bg-white">
@@ -352,8 +364,10 @@ function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => voi
               ref={(el) => { inputs.current[i] = el; }}
               type="tel"
               inputMode="numeric"
+              // 문자로 온 인증번호를 기기가 대신 채워 준다. 첫 칸에만 붙인다.
+              autoComplete={i === 0 ? "one-time-code" : "off"}
               aria-label={`인증번호 ${i + 1}번째 자리`}
-              maxLength={1}
+              maxLength={6}
               value={digit}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKey(i, e)}
@@ -386,6 +400,11 @@ function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => voi
       </div>
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
+        {expired && (
+          <p role="alert" style={{ ...TYPE.caption, color: FAIL, textAlign: "center", marginBottom: 12 }}>
+            입력 시간이 지났어요. 메시지를 다시 받아 주세요
+          </p>
+        )}
         <PrimaryBtn onClick={onNext} disabled={!filled}>확인</PrimaryBtn>
       </div>
     </div>
@@ -446,10 +465,17 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
 // ─── Greeting ─────────────────────────────────────────────────────────────────
 
 function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) {
+  // WCAG 2.2.1 (Level A) — 시간 제한이 있으면 끄거나 늘리거나 넘길 수 있어야 한다.
+  // 천천히 읽는 분이 주 사용자인 앱에서 2.6초 뒤 화면이 사라지는 건 예외에 해당하지 않는다.
+  // '계속하기' 를 눌러 언제든 넘어갈 수 있게 하고, 자동 넘김은 넉넉히 둔다.
+  // onNext 를 ref 에 담는 이유는, 인라인 화살표로 넘어와서 매 렌더 새 함수가 되면
+  // deps 때문에 타이머가 계속 리셋되기 때문이다.
+  const next = useRef(onNext);
+  next.current = onNext;
   useEffect(() => {
-    const t = setTimeout(onNext, 2600);
+    const t = setTimeout(() => next.current(), 8000);
     return () => clearTimeout(t);
-  }, [onNext]);
+  }, []);
 
   return (
     <div
@@ -465,6 +491,9 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
       <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>
         자주 시키는 주문을 저장해 두면<br />키오스크 앞에서 바로 꺼내 쓸 수 있어요
       </p>
+      <div style={{ width: "100%", marginTop: 36 }}>
+        <PrimaryBtn onClick={onNext}>계속하기</PrimaryBtn>
+      </div>
     </div>
   );
 }
@@ -524,7 +553,7 @@ function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
 let 프로필일련번호 = 0;
 const newProfileId = () => `p${Date.now()}_${++프로필일련번호}`;
 
-function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; onBack: () => void }) {
+function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: ProfileData) => void; onBack: () => void; showProgress?: boolean }) {
   const [menuName, setMenuName] = useState("");
   const [place, setPlace] = useState<PlaceType>(null);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
@@ -556,7 +585,9 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
   // 확인 창을 띄우지 않아도 되돌릴 수 있으니 되묻는 것보다 조용하고 안전하다.
   const 장소별선택 = useRef<Record<string, Record<string, string[]>>>({});
   const handlePlaceChange = (p: PlaceType) => {
-    if (p === place) return;
+    // 다시 누르면 해제한다. 아래 칩들은 재탭으로 풀리는데 장소만 안 풀리면
+    // 같은 화면 안에서 상호작용 규칙이 두 개가 된다. 라벨도 '선택'이다.
+    if (p === place) { if (place) 장소별선택.current[place] = selections; setSelections({}); setPlace(null); return; }
     if (place) 장소별선택.current[place] = selections;
     setSelections(p ? (장소별선택.current[p] ?? {}) : {});
     setPlace(p);
@@ -569,7 +600,12 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
         <div className="flex items-center">
           <BackButton onClick={onBack} />
           <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-            <ProgressBar step={4} />
+            {/*
+             * 진행 표시는 로그인 흐름(전화 1 → 인증 2 → 호칭 3 → 프로필 4)을 전제한다.
+             * 주 경로인 게스트는 앞의 셋을 건너뛰므로, 처음 프로필을 만드는 사람에게
+             * "4단계 중 4단계" 라고 읽히는 건 사실이 아니다. 게스트에게는 숨긴다.
+             */}
+            {showProgress && <ProgressBar step={4} />}
           </div>
         </div>
         <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 프로필</h1>
@@ -1087,6 +1123,22 @@ function PairingExpired({ onScan }: { onScan: () => void }) {
 function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetected: () => void }) {
   const [scanning, setScanning] = useState(true);
 
+  // 검은 화면을 덮어 놓기만 하고 role 도 포커스 가둠도 없었다.
+  // 스크린리더로는 뒤에 있는 프로필 목록과 하단 탭이 그대로 읽히고,
+  // Tab 을 누르면 보이지도 않는 곳으로 포커스가 나간다.
+  const 모달 = useRef<HTMLDivElement>(null);
+  useEffect(() => { 모달.current?.focus(); }, []);
+  const 가두기 = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { onClose(); return; }
+    if (e.key !== "Tab") return;
+    const 대상 = 모달.current?.querySelectorAll<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])");
+    if (!대상 || 대상.length === 0) return;
+    const 처음 = 대상[0];
+    const 마지막 = 대상[대상.length - 1];
+    if (e.shiftKey && document.activeElement === 처음) { e.preventDefault(); 마지막.focus(); }
+    else if (!e.shiftKey && document.activeElement === 마지막) { e.preventDefault(); 처음.focus(); }
+  };
+
   /*
    * 타이머가 둘이므로 둘 다 걷어야 한다.
    *
@@ -1109,7 +1161,16 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
   }, [onDetected]);
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col" style={{ backgroundColor: "#000" }}>
+    <div
+      ref={모달}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-label="QR 코드 스캔"
+      onKeyDown={가두기}
+      className="absolute inset-0 z-50 flex flex-col"
+      style={{ backgroundColor: "#000", outline: "none" }}
+    >
       <div className="flex items-center justify-between shrink-0" style={{ padding: `20px ${GAP.screenX}px 12px` }}>
         <AppLogo light size={24} />
         <button
@@ -1226,11 +1287,19 @@ function QrScreen({ onPaired, initialPhase = "scan" }: {
   const [phase, setPhase] = useState<"scan" | "idle" | PairingState>(initialPhase);
   const [pairing, setPairing] = useState<PairingResult | null>(null);
 
+  // 서버가 왜 실패했는지 알려 줬으면 그걸 그대로 보여 준다.
+  // 예전에는 버리고 늘 "유효하지 않은 QR입니다" 라고 했다. 서버가 죽었을 때도 그랬다.
+  const [failReason, setFailReason] = useState<string | undefined>(undefined);
   const handleScanned = () => {
     setPhase("connecting");
+    setFailReason(undefined);
     api.claimPairing("kb_demo")
       .then((r) => { setPairing(r); setPhase("connected"); })
-      .catch((e: KioBridgeError) => setPhase(e.code === "CLAIM_EXPIRED" ? "expired" : "failed"));
+      .catch((e: KioBridgeError) => {
+        if (e?.code === "CLAIM_EXPIRED") { setPhase("expired"); return; }
+        setFailReason(e?.message);
+        setPhase("failed");
+      });
   };
   const handleRescan = () => setPhase("scan");
 
@@ -1263,7 +1332,7 @@ function QrScreen({ onPaired, initialPhase = "scan" }: {
             onSelectProfile={() => onPaired(pairing.pairingId, pairing.expiresAt)}
           />
         )}
-        {phase === "failed" && <PairingFailed onScan={handleRescan} />}
+        {phase === "failed" && <PairingFailed reason={failReason} onScan={handleRescan} />}
         {phase === "expired" && <PairingExpired onScan={handleRescan} />}
       </div>
     </div>
@@ -2314,13 +2383,29 @@ export default function App() {
     return () => clearTimeout(t);
   }, [pairingExpiresAt, screen]);
 
+  // 화면이 바뀌면 포커스가 <body> 로 떨어진다. 누르던 버튼이 사라지기 때문이다.
+  // 스크린리더 사용자는 자기가 어디로 갔는지 듣지 못하고, 키보드 사용자는
+  // 문서 처음부터 다시 Tab 을 눌러야 한다. 새 화면의 첫 제목으로 포커스를 옮긴다.
+  const 화면영역 = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const 대상 = 화면영역.current?.querySelector<HTMLElement>("h1, h2, [data-screen-title]");
+    if (!대상) return;
+    대상.setAttribute("tabindex", "-1");
+    대상.focus({ preventScroll: true });
+  }, [screen, tab]);
+
   const inMain = screen === "saved";
 
   const handleTabChange = (t: MainTab) => {
-    if (t === "qr") setQrKey((k) => k + 1);
+    // 만료 안내는 만료된 그 순간 한 번만 보여 준다. 안 풀어 주면 그 뒤로
+    // QR 탭에 들어갈 때마다 지난 만료 안내부터 뜬다.
+    if (t === "qr") { setQrKey((k) => k + 1); setQrExpired(false); }
     setTab(t);
     setScreen("saved");
-    setFromQr(false);
+    // 연결이 아직 살아 있으면 주문 경로를 유지한다. 예전에는 무조건 껐더니
+    // 하단 탭으로 '내 프로필'에 가는 순간 주문 버튼이 사라졌고,
+    // QR 을 다시 찍는 것 말고는 되돌릴 방법이 없었다.
+    if (!pairingId) setFromQr(false);
   };
 
   return (
@@ -2337,6 +2422,7 @@ export default function App() {
       */}
       <div style={{ width: "100%", maxWidth: FRAME_W, height: FRAME_H }}>
         <div
+          ref={화면영역}
           className="bg-white overflow-hidden flex flex-col"
           style={{
             zoom: largeText ? LARGE_TEXT_SCALE : 1,
@@ -2368,6 +2454,7 @@ export default function App() {
           )}
           {screen === "profile" && (
             <ProfileScreen
+              showProgress={!guest}
               onNext={(p) => { addProfile(p); setScreen("saved"); setTab("menu"); }}
               onBack={() => setScreen("saved")}
             />
