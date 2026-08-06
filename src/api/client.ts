@@ -11,6 +11,29 @@ export class KioBridgeError extends Error {
   }
 }
 
+/**
+ * 앱이 백엔드에 기대하는 것. 화면은 이 네 개만 알고 있으면 된다.
+ *
+ * 주의 — 팀 API 명세서와 이름·모양이 다르다.
+ * 이 인터페이스는 백엔드 합의 전에 화면을 먼저 만들려고 정한 것이고,
+ * 실제 경로는 아래와 같다. 연동할 때는 이 네 개를 그대로 두고
+ * 구현체 안에서 아래 호출들을 조립하면 화면 코드는 건드리지 않아도 된다.
+ *
+ *   claimPairing    → POST /api/v1/sessions
+ *   requestMapping  → POST /api/v1/candidate-filters      (알레르기 등 BLOCK 후보 제거)
+ *                   → POST /api/v1/recommendations        (순위·이유·대안·확신도)
+ *   approve         → POST /api/v1/sessions/:id/submission  (저장만, 검증 X)
+ *                   → POST /api/v1/sessions/:id/validate
+ *                   → POST /api/v1/sessions/:id/execute      (검증 통과분만 실행)
+ *   getPlanStatus   → GET  /internal/simulation/evidence/{sessionId}
+ *
+ * 특히 approve 가 실제로는 제출·검증·실행 3단계다. 중간에서 실패할 수 있으므로
+ * 구현할 때 어느 단계에서 멈췄는지 사용자에게 구분해 알려야 한다.
+ *
+ * 장소별 질문 목록(domain/catalog.tsx)도 지금은 하드코딩이지만
+ * GET /api/v1/environments/{environmentId}/input-options 가 담당한다.
+ * 값은 시뮬레이션 킷 fixture 축에 맞춰 두었으므로 교체 시 모양은 같다.
+ */
 export interface KioBridgeApi {
   claimPairing(claimCode: string): Promise<PairingResult>;
   requestMapping(pairingId: string, profileId: string): Promise<MappingResponse>;
