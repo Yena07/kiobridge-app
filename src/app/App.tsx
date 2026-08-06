@@ -1036,7 +1036,7 @@ function PairingExpired({ onScan }: { onScan: () => void }) {
   );
 }
 
-function QrScannerModal({ onClose, onDetected, hideClose }: { onClose: () => void; onDetected: () => void; hideClose?: boolean }) {
+function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetected: () => void }) {
   const [scanning, setScanning] = useState(true);
 
   /*
@@ -1064,18 +1064,16 @@ function QrScannerModal({ onClose, onDetected, hideClose }: { onClose: () => voi
     <div className="absolute inset-0 z-50 flex flex-col" style={{ backgroundColor: "#000" }}>
       <div className="flex items-center justify-between shrink-0" style={{ padding: `20px ${GAP.screenX}px 12px` }}>
         <AppLogo light size={24} />
-        {!hideClose && (
-          <button
-            type="button"
-            aria-label="QR 스캔 닫기"
-            onClick={onClose}
-            style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path d="M4 4L14 14M14 4L4 14" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-          </button>
-        )}
+        <button
+          type="button"
+          aria-label="QR 스캔 닫기"
+          onClick={onClose}
+          style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4 4L14 14M14 4L4 14" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">

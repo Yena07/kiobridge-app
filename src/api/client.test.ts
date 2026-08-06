@@ -79,6 +79,18 @@ describe("등록되지 않은 프로필로는 답을 만들지 않는다", () =>
   it("없는 id 를 지워도 터지지 않는다", () => {
     expect(() => unregisterProfile("없는id")).not.toThrow();
   });
+
+  it("이미 만든 실행 계획도 함께 지운다", async () => {
+    // 계획에는 무엇을 몇 개 담았고 얼마인지가 들어 있다.
+    // 프로필만 지우고 이건 남겨 두면 '모두 지워요' 가 반쯤만 사실이 된다.
+    registerProfile(매운);
+    await api.requestMapping(PAIRING, "p1");
+    const { planId } = await api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" });
+    await expect(api.getPlanStatus(planId)).resolves.toBeDefined();
+
+    clearProfiles();
+    await expect(api.getPlanStatus(planId)).rejects.toThrow();
+  });
 });
 
 describe("장바구니는 승인한 내용과 같아야 한다", () => {
