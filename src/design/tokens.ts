@@ -7,8 +7,14 @@ export const P_LIGHT = "#EAF6EF";    // primary light bg
 export const P_DARK = "#076235";     // primary pressed
 export const ACCENT = "#0A7F45";     // 아주 드물게 쓰는 강조 (이름 호명 등)
 export const TEXT_1 = "#111111";     // heading — 본문은 검정 유지
-export const TEXT_2 = "#8A8A8E";     // subtext
-export const TEXT_3 = "#C4C4C8";     // placeholder / disabled
+// 읽어야 하는 글자는 전부 이 색을 쓴다.
+// 예전 값 #8A8A8E 는 흰 배경에서 3.44:1 로 WCAG AA(4.5:1)에 미달했다.
+// 옅은 면(SURFACE #F7F7F8) 위에서는 3.21:1 까지 떨어져서 더 나빴다.
+// #6B6B70 은 흰 배경 5.30:1, SURFACE 위 4.95:1 로 두 경우 모두 통과한다.
+export const TEXT_2 = "#6B6B70";     // subtext
+// 글자에 쓰지 않는다. 머리카락 선·점·비활성 컨트롤처럼 읽을 필요가 없는 것에만 쓴다.
+// 읽어야 하는 글자에 이 색을 쓰면 1.74:1 이라 사실상 안 보인다.
+export const TEXT_3 = "#C4C4C8";     // hairline / dot / disabled — 글자 금지
 export const BORDER = "#EDEDEF";     // hairline
 export const SURFACE = "#F7F7F8";    // 옅은 면
 export const CANVAS = "#F4F4F5";     // 입력 필드 배경
@@ -19,8 +25,12 @@ export const SUCCESS = "#0A7F45";
 export const SUCCESS_BG = "#EAF6EF";
 export const WARN = "#8A5A00";
 export const WARN_BG = "#FDF6E9";
-export const WARN_BORDER = "#EBD9B4";
-export const FAIL = "#D92D20";
+// WARN_BG 위에서 1.29:1 이라 컨트롤 경계(3:1)로 쓸 수 없어서 뺐다.
+// 다시 쓰고 싶으면 대비부터 재고 쓴다.
+// 예전 값 #D92D20 은 옅은 빨강(FAIL_BG) 위에서 4.35:1 로 AA 에 못 미쳤다.
+// "오늘은 제공되지 않아요" 같은 12px 배지가 이 조합으로 그려지므로 지나칠 수 없다.
+// #CE2A1F 는 FAIL_BG 위 4.75:1, 흰 배경 5.28:1 이고 눈으로는 거의 같은 빨강이다.
+export const FAIL = "#CE2A1F";
 export const FAIL_BG = "#FDF0EF";
 
 export const FONT = "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif";

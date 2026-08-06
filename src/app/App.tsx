@@ -5,7 +5,7 @@ import { Pictogram } from "@/design/Pictogram";
 import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, ACCENT, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
-  SUCCESS, SUCCESS_BG, WARN, WARN_BG, WARN_BORDER, FAIL, FAIL_BG,
+  SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG,
   FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES,
 } from "@/design/tokens";
 import type {
@@ -101,7 +101,11 @@ function PrimaryBtn({
         width: "100%", height: 56, borderRadius: RADIUS.button,
         fontSize: 17, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
         backgroundColor: disabled ? SURFACE : P,
-        color: disabled ? TEXT_3 : "white",
+        // 비활성 컨트롤은 WCAG 대비 규정에서 빠져 있다. 그래도 여기서는 고친다.
+        // 아직 못 누르는 버튼의 글자가 "다 채우면 무슨 일이 일어나는지"를 알려 주는 유일한 문장이라
+        // 1.62:1(#C4C4C8)로 지워 놓으면 무엇을 기다리는지 알 수 없다.
+        // 초록 알약이 회색 알약으로 바뀌는 것만으로 못 누른다는 신호는 충분하다.
+        color: disabled ? TEXT_2 : "white",
         border: "none", cursor: disabled ? "not-allowed" : "pointer",
         transition: "background-color 0.15s",
         ...extraStyle,
@@ -168,7 +172,7 @@ function SectionLabel({ text, required }: { text: string; required?: boolean }) 
   return (
     <div className="flex items-baseline gap-2 mb-3">
       <span style={{ ...TYPE.label, color: TEXT_1 }}>{text}</span>
-      <span style={{ fontSize: 12, fontWeight: 400, color: TEXT_3 }}>{required ? "필수" : "선택"}</span>
+      <span style={{ fontSize: 12, fontWeight: 400, color: TEXT_2 }}>{required ? "필수" : "선택"}</span>
     </div>
   );
 }
@@ -220,7 +224,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
             바로 시작하기
           </span>
         </PrimaryBtn>
-        <p style={{ fontSize: 13, color: TEXT_3, textAlign: "center", lineHeight: 1.7 }}>
+        <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center", lineHeight: 1.7 }}>
           가입 없이 바로 쓸 수 있어요.<br />입력한 내용은 이번 한 번만 쓰고 지워집니다
         </p>
 
@@ -290,7 +294,7 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
       </div>
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-4">
-        <p style={{ fontSize: 13, color: TEXT_3, textAlign: "center", lineHeight: 1.7 }}>
+        <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center", lineHeight: 1.7 }}>
           만 14세 이상만 가입할 수 있어요.{" "}
           <span style={{ color: TEXT_2, textDecoration: "underline" }}>개인정보처리방침</span>
         </p>
@@ -375,7 +379,7 @@ function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => voi
           >
             메시지 재전송
           </button>
-          <p style={{ fontSize: 13, color: TEXT_3, ...NUM }}>
+          <p style={{ fontSize: 13, color: TEXT_2, ...NUM }}>
             남은 시간 <span style={{ fontWeight: 600, color: timer < 30 ? FAIL : TEXT_2 }}>{mm}:{ss}</span>
           </p>
         </div>
@@ -544,7 +548,7 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
                   <div key={opt.label} style={{ marginTop: oi > 0 ? 20 : 0 }}>
                     <div className="flex items-baseline gap-2 mb-3">
                       <span style={{ fontSize: 14, fontWeight: 600, color: TEXT_1, letterSpacing: "-0.01em" }}>{opt.label}</span>
-                      <span style={{ fontSize: 12, fontWeight: 400, color: TEXT_3 }}>
+                      <span style={{ fontSize: 12, fontWeight: 400, color: TEXT_2 }}>
                         {opt.multi ? "복수 선택" : "1개 선택"}
                       </span>
                     </div>
@@ -674,19 +678,28 @@ function ProfileCard({
               width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 5,
               display: "flex", alignItems: "center", justifyContent: "center",
               backgroundColor: selected ? "white" : "transparent",
-              border: selected ? "none" : `1.5px solid ${TEXT_3}`,
+              // 안 고른 동그라미의 테두리는 "여기 고를 수 있는 게 있다"를 알리는 유일한 표시다.
+              // TEXT_3 는 옅은 면 위에서 1.62:1 이라 컨트롤 경계 기준(3:1)에 못 미쳤다.
+              border: selected ? "none" : `1.5px solid ${TEXT_2}`,
             }}
           >
             {selected && <Check size={13} strokeWidth={3} color={P} />}
           </div>
         </div>
 
+        {/*
+         * 고른 카드 위의 태그는 초록을 어둡게 눌러서 만든다.
+         * 예전에는 흰색을 14% 얹어 밝은 알약을 만들고 글자를 86% 흰색으로 썼는데,
+         * 그러면 대비가 3.35:1 이라 13px 글자 기준(4.5:1)에 못 미쳤다.
+         * 흰 글자를 100% 로 올려도 밝아진 바탕 때문에 3.94:1 에서 멈춘다.
+         * 바탕을 어둡게 하면 같은 알약 모양 그대로 6.6:1 이 나온다.
+         */}
         <div className="flex flex-wrap gap-1.5">
           {visibleTags.map((tag, i) => (
             <span key={i} style={{
               fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
-              backgroundColor: selected ? "rgba(255,255,255,0.14)" : "white",
-              color: selected ? "rgba(255,255,255,0.86)" : TEXT_2,
+              backgroundColor: selected ? "rgba(0,0,0,0.18)" : "white",
+              color: selected ? "white" : TEXT_2,
             }}>
               {tag}
             </span>
@@ -694,16 +707,17 @@ function ProfileCard({
           {overflow > 0 && (
             <span style={{
               fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
-              backgroundColor: selected ? "rgba(255,255,255,0.14)" : "white",
-              color: selected ? "rgba(255,255,255,0.86)" : TEXT_2,
+              backgroundColor: selected ? "rgba(0,0,0,0.18)" : "white",
+              color: selected ? "white" : TEXT_2,
             }}>
               +{overflow}
             </span>
           )}
         </div>
 
+        {/* 반투명 흰색(70%)은 초록 위에서 3.31:1 이라 읽히지 않는다. 흰색은 5.08:1 이다. */}
         {profile.memo && (
-          <p style={{ fontSize: 14, color: selected ? "rgba(255,255,255,0.7)" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{profile.memo}</p>
+          <p style={{ fontSize: 14, color: selected ? "white" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{profile.memo}</p>
         )}
       </label>
 
@@ -718,7 +732,8 @@ function ProfileCard({
             // 폭을 44 로 넓혀도 보이는 크기는 그대로고 누를 수 있는 데만 넓어진다.
             fontSize: 13, fontWeight: 500, minHeight: 44, minWidth: 44, padding: "6px 10px",
             background: "none", border: "none", cursor: "pointer",
-            color: selected ? "rgba(255,255,255,0.7)" : TEXT_2,
+            // 70% 흰색은 초록 위에서 3.31:1 이었다. 지우는 버튼은 흐릿하면 안 된다.
+            color: selected ? "white" : TEXT_2,
             textDecoration: "underline", textUnderlineOffset: 3,
           }}
         >
@@ -824,8 +839,9 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
             className="flex-1 flex flex-col items-center gap-1.5"
             style={{ border: "none", backgroundColor: "transparent", cursor: "pointer", minHeight: 56, padding: "12px 0 4px" }}
           >
-            <span aria-hidden="true" style={{ color: active ? P : TEXT_3, display: "flex" }}>{icon}</span>
-            <span style={{ fontSize: 12, fontWeight: active ? 600 : 400, letterSpacing: "-0.02em", color: active ? P : TEXT_3, fontFamily: FONT }}>
+            {/* 안 눌린 탭도 읽을 수 있어야 한다. TEXT_3 는 1.74:1 이라 사실상 안 보였다. */}
+            <span aria-hidden="true" style={{ color: active ? P : TEXT_2, display: "flex" }}>{icon}</span>
+            <span style={{ fontSize: 12, fontWeight: active ? 600 : 400, letterSpacing: "-0.02em", color: active ? P : TEXT_2, fontFamily: FONT }}>
               {label}
             </span>
           </button>
@@ -1062,7 +1078,12 @@ function QrScannerModal({ onClose, onDetected, hideClose }: { onClose: () => voi
       </div>
 
       <div className="shrink-0 text-center" style={{ padding: `0 ${GAP.screenX}px 40px` }}>
-        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.42)", fontFamily: FONT }}>
+        {/*
+         * 42% 흰색은 검은 바탕에서 3.95:1 이라 13px 글자 기준(4.5:1)에 못 미쳤다.
+         * 조명을 조절하라는 안내는 화면이 어두워서 안 보일 때 읽어야 하는 문장이라
+         * 특히 흐리면 안 된다. 62% 는 7.8:1 이고, 위쪽 흰 안내문(21:1)보다는 여전히 조용하다.
+         */}
+        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.62)", fontFamily: FONT }}>
           QR 코드가 잘 보이지 않으면 조명을 조절해 주세요
         </p>
       </div>
@@ -1204,7 +1225,7 @@ function AccountScreen({
             </button>
           ))}
         </div>
-        <p style={{ textAlign: "center", fontSize: 12, color: TEXT_3, marginTop: 24, marginBottom: 16 }}>버전 1.0.0</p>
+        <p style={{ textAlign: "center", fontSize: 12, color: TEXT_2, marginTop: 24, marginBottom: 16 }}>버전 1.0.0</p>
       </div>
     </div>
   );
@@ -1338,7 +1359,7 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
             <p style={{ fontSize: 14, color: TEXT_2, marginTop: 6, lineHeight: 1.65 }}>{body}</p>
           </section>
         ))}
-        <p style={{ fontSize: 13, color: TEXT_3, marginTop: 12, lineHeight: 1.7 }}>
+        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
           이 앱은 주문을 장바구니에 담는 데까지만 도와드려요. 결제는 키오스크에서 직접 하시면 돼요.
         </p>
       </div>
@@ -1359,7 +1380,7 @@ function ConfirmRow({
       <div className="flex items-center gap-2 justify-end flex-wrap" style={{ justifyContent: "flex-end" }}>
         {changed ? (
           <>
-            <span style={{ fontSize: 16, textDecoration: "line-through", color: TEXT_3 }}>{value}</span>
+            <span style={{ fontSize: 16, textDecoration: "line-through", color: TEXT_2 }}>{value}</span>
             <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: RADIUS.pill, backgroundColor: FAIL_BG, color: FAIL }}>
               {changeNote ?? "오늘은 제공되지 않아요"}
             </span>
@@ -1482,7 +1503,9 @@ function OptionCard({
           width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
           backgroundColor: selected ? "white" : "transparent",
-          border: selected ? "none" : `1.5px solid ${TEXT_3}`,
+          // 안 고른 동그라미의 테두리는 "여기 고를 수 있는 게 있다"를 알리는 유일한 표시다.
+          // TEXT_3 는 옅은 면 위에서 1.62:1 이라 컨트롤 경계 기준(3:1)에 못 미쳤다.
+          border: selected ? "none" : `1.5px solid ${TEXT_2}`,
         }}>
           {selected && <Check size={12} strokeWidth={3} color={P} />}
         </div>
@@ -1603,7 +1626,12 @@ function OrderChanged({
           onClick={() => setChecked((v) => !v)}
           style={{ display: "flex", alignItems: "center", gap: 11, minHeight: 44, border: "none", backgroundColor: "transparent", cursor: "pointer", fontFamily: FONT, padding: 0 }}
         >
-          <div aria-hidden="true" style={{ width: 22, height: 22, borderRadius: 6, border: checked ? "none" : `1.5px solid ${WARN_BORDER}`, backgroundColor: checked ? WARN : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+          {/*
+           * 안 찍힌 네모의 테두리를 WARN_BORDER 로 그리면 노란 바탕 위에서 1.29:1 이라
+           * 체크박스가 있다는 것 자체가 안 보인다. 이건 승인 조건을 사람이 직접 짚었다는
+           * 표시를 받는 칸이라 흐리면 안 된다. WARN 으로 그리면 5.5:1 이다.
+           */}
+          <div aria-hidden="true" style={{ width: 22, height: 22, borderRadius: 6, border: checked ? "none" : `1.5px solid ${WARN}`, backgroundColor: checked ? WARN : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
             {checked && <Check size={12} strokeWidth={3} color="white" />}
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, color: WARN }}>달라진 내용을 확인했어요</span>
@@ -1787,7 +1815,7 @@ function StepRow({ label, status }: { label: string; status: StepStatus }) {
         )}
       </div>
 
-      <span style={{ fontSize: 16, letterSpacing: "-0.01em", fontWeight: isActive || isDone ? 600 : 400, color: isDone ? TEXT_1 : isActive ? TEXT_1 : isFailed ? FAIL : TEXT_3 }}>
+      <span style={{ fontSize: 16, letterSpacing: "-0.01em", fontWeight: isActive || isDone ? 600 : 400, color: isDone ? TEXT_1 : isActive ? TEXT_1 : isFailed ? FAIL : TEXT_2 }}>
         {label}
       </span>
 
@@ -1875,7 +1903,7 @@ function ExecFailed({ abort, steps, onHome }: { abort: AbortInfo; steps: StepSta
       <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: 20 }}>
         <p style={{ ...TYPE.bodyBold, color: TEXT_1, marginBottom: 6 }}>{abort.userAction}</p>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginBottom: 10 }}>{abort.message}</p>
-        <p style={{ fontSize: 12, color: TEXT_3, ...NUM }}>오류 코드: {abort.code}</p>
+        <p style={{ fontSize: 12, color: TEXT_2, ...NUM }}>오류 코드: {abort.code}</p>
       </div>
 
       <StepCard statuses={steps} />
