@@ -88,6 +88,10 @@ export const mockApi: KioBridgeApi = {
     if (input.mappingResult === "changed" && !input.acknowledgedDiff) {
       throw new KioBridgeError("DIFF_NOT_ACKNOWLEDGED", "달라진 내용을 확인해 주세요", true);
     }
+    // 확신이 낮을수록 사용자가 직접 짚었다는 사실이 더 중요하다. changed 와 같은 무게로 본다.
+    if (input.mappingResult === "low_confidence" && !input.confirmedLowConfidence) {
+      throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
+    }
     await delay(600);
     const planId = `pln_${Date.now()}`;
     plans.set(planId, { startedAt: Date.now(), outcome: scenario.execution });

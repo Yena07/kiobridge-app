@@ -1689,7 +1689,13 @@ function OrderConfirmScreen({
           />
         )}
         {mapping?.result === "low_confidence" && (
-          <OrderLowConfidence item={mapping.item!} reasons={mapping.reasons} onApprove={() => approve()} onCancel={onBack} />
+          <OrderLowConfidence
+            item={mapping.item!}
+            reasons={mapping.reasons}
+            /* 사용자가 카드를 눌러 "이 메뉴가 맞다"고 짚어야만 여기까지 온다. 그 사실을 서버에도 알린다. */
+            onApprove={() => approve({ confirmedLowConfidence: true })}
+            onCancel={onBack}
+          />
         )}
       </div>
     </div>

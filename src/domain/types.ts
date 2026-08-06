@@ -85,12 +85,18 @@ export interface PairingResult {
   expiresAt: number;
 }
 
+// 승인 화면마다 사용자가 확인하는 것이 다르다. 그 사실을 여기에 실어 보낸다.
+// 서버가 승인 조건을 다시 볼 수 있어야 하므로 화면 안에만 남겨 두지 않는다.
 export interface ApproveInput {
   pairingId: string;
   profileId: string;
   mappingResult: MappingState;
+  /** clarification: 여러 후보 중 사용자가 고른 것 */
   candidateId?: string;
+  /** changed: 달라진 내용을 확인했다고 사용자가 표시한 것 */
   acknowledgedDiff?: boolean;
+  /** low_confidence: 이 메뉴가 맞다고 사용자가 직접 짚은 것 */
+  confirmedLowConfidence?: boolean;
 }
 
 export interface PlanCreated {
