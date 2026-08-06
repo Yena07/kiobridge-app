@@ -60,7 +60,8 @@ describe("buildMapping — 결과 종류", () => {
     const r = buildMapping("exact", 알레르기없음);
     const 어긋난행 = (r.item?.options ?? []).filter((o) => !o.matched);
     expect(어긋난행.map((o) => o.label)).toEqual(["형태"]);
-    expect(r.diffNote).toContain("형태");
+    // 어긋난 값(뼈)을 사용자의 말로 말한다. 라벨을 그대로 붙이지 않는다.
+    expect(r.diffNote).toContain("뼈");
     expect(r.diffNote).not.toContain("일반컵");
   });
 
@@ -288,6 +289,34 @@ describe("결제 경계", () => {
 describe("MOCK_MENU_NAME", () => {
   it("빈 문자열이 아니다", () => {
     expect(MOCK_MENU_NAME.length).toBeGreaterThan(0);
+  });
+});
+
+describe("사용자에게 읽히는 문장", () => {
+  // 이 화면의 전제는 "사용자의 말로 설명한다" 이다. 조사가 틀리거나
+  // 라벨을 그대로 이어 붙이면 기계가 찍어 낸 티가 나고 그 전제가 무너진다.
+  const 카페 = (sel: Record<string, string[]>): ProfileData => ({
+    id: "c", menuName: "커피", place: "카페", memo: "", selections: sel,
+  });
+
+  it("영문 값에도 로/으로 를 맞춘다", () => {
+    const hot = buildMapping("exact", 카페({ "음료": ["아메리카노"], "온도": ["HOT"] }));
+    const ice = buildMapping("exact", 카페({ "음료": ["아메리카노"], "온도": ["ICE"] }));
+    expect((hot.reasons ?? []).map((r) => r.text).join(" ")).toContain("HOT으로");
+    expect((ice.reasons ?? []).map((r) => r.text).join(" ")).toContain("ICE로");
+  });
+
+  it("맵기에도 받침에 맞는 조사를 쓴다", () => {
+    const r = buildMapping("exact", 땅콩알레르기);
+    expect((r.reasons ?? []).map((x) => x.text).join(" ")).toContain("매운맛으로");
+  });
+
+  it("diffNote 가 라벨을 그대로 이어 붙이지 않는다", () => {
+    // 예전에는 "형태 뼈" 처럼 나갔다. 승인 체크박스를 여는 문장이라
+    // 화면에서 가장 또렷해야 하는데 가장 기계 같았다.
+    const r = buildMapping("exact", 알레르기없음);
+    expect(r.diffNote).toContain("뼈를 고르셨는데");
+    expect(r.diffNote).not.toContain("형태 뼈");
   });
 });
 

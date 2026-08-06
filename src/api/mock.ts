@@ -81,6 +81,12 @@ const 조사 = (w: string, 받침있음: string, 받침없음: string) => {
   return (c - 0xac00) % 28 === 0 ? 받침없음 : 받침있음;
 };
 const 을를 = (w: string) => w + 조사(w, "을", "를");
+// 로/으로 는 받침 규칙이 하나 더 있어서 따로 둔다.
+// 영문 값(HOT·ICE·Tall)은 한글 코드 범위 밖이라 조사 헬퍼가 판단하지 못한다.
+// 마지막 글자가 모음이면 '로', 자음이면 '으로' 로 읽는다.
+//   HOT으로 · ICE로 · 순한맛으로
+const 로으로 = (w: string) =>
+  w + (/[a-zA-Z]$/.test(w) ? (/[aeiouAEIOU]$/.test(w) ? "로" : "으로") : 조사(w, "으로", "로"));
 const 은는 = (w: string) => w + 조사(w, "은", "는");
 const 이가 = (w: string) => w + 조사(w, "이", "가");
 const 고른값 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축]?.[0];
@@ -204,8 +210,8 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
   if (이용방식) out.push({ kind: "used", text: `${을를(이용방식)} 고르셔서 ${이가(이용방식)} 되는 메뉴만 남겼어요` });
   if (맵기) {
     out.push(고름?.맵기 === 맵기
-      ? { kind: "used", text: `맵기를 ${맵기}으로 저장해 두셔서 ${맵기} 메뉴로 맞췄어요` }
-      : { kind: "used", text: `맵기를 ${맵기}으로 저장해 두셨는데 오늘은 그 조합이 없어서 가장 가까운 걸로 골랐어요` });
+      ? { kind: "used", text: `맵기를 ${로으로(맵기)} 저장해 두셔서 ${맵기} 메뉴로 맞췄어요` }
+      : { kind: "used", text: `맵기를 ${로으로(맵기)} 저장해 두셨는데 오늘은 그 조합이 없어서 가장 가까운 걸로 골랐어요` });
   }
   if (형태) {
     out.push(고름?.형태 === 형태
@@ -217,13 +223,13 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
   const 온도 = 고른값(p, "온도");
   if (음료) {
     out.push(고름?.음료 === 음료
-      ? { kind: "used", text: `${을를(음료)} 고르셔서 ${음료}로 맞췄어요` }
+      ? { kind: "used", text: `${을를(음료)} 고르셔서 ${로으로(음료)} 맞췄어요` }
       : { kind: "used", text: `${을를(음료)} 고르셨는데 오늘은 그 메뉴가 없어서 가장 가까운 걸로 골랐어요` });
   }
   if (온도) {
     out.push(고름?.온도 === 온도
-      ? { kind: "used", text: `${온도}로 저장해 두셔서 ${온도} 메뉴로 맞췄어요` }
-      : { kind: "used", text: `${온도}로 저장해 두셨는데 오늘은 그 온도가 없어서 가장 가까운 걸로 골랐어요` });
+      ? { kind: "used", text: `${로으로(온도)} 저장해 두셔서 ${온도} 메뉴로 맞췄어요` }
+      : { kind: "used", text: `${로으로(온도)} 저장해 두셨는데 오늘은 그 온도가 없어서 가장 가까운 걸로 골랐어요` });
   }
   return out;
 }
@@ -356,7 +362,10 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
       if (진짜어긋남.length > 0) {
         return {
           result: "changed",
-          diffNote: `저장하신 주문과 달라진 점이 있어요 — ${진짜어긋남.map((o) => `${o.label} ${o.value}`).join(", ")}. 이대로 진행할까요?`,
+          // 라벨과 값을 그대로 이어 붙이면 "형태 뼈" 가 된다. 축이 둘이면 더 심해진다.
+          // 이 문장은 승인 체크박스를 여는 자리라 화면에서 가장 또렷해야 하는데
+          // 가장 기계 같았다. 이유 문장과 같은 말투로 쓴다.
+          diffNote: `저장하신 주문과 달라진 점이 있어요 — ${진짜어긋남.map((o) => `${을를(o.value)} 고르셨는데 오늘은 없어요`).join(", ")}. 이대로 진행할까요?`,
           reasons: 이유,
           item,
         };
