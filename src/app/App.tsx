@@ -974,12 +974,25 @@ function PairingExpired({ onScan }: { onScan: () => void }) {
 function QrScannerModal({ onClose, onDetected, hideClose }: { onClose: () => void; onDetected: () => void; hideClose?: boolean }) {
   const [scanning, setScanning] = useState(true);
 
+  /*
+   * 타이머가 둘이므로 둘 다 걷어야 한다.
+   *
+   * 스캐너가 떠 있는 동안에도 하단 탭은 눌린다 — 모달은 화면 영역만 덮고
+   * 하단 탭은 그 바깥에 있다. 스캔이 끝난 뒤(2.5초) 800ms 안에 사용자가
+   * 다른 탭으로 옮기면, 안쪽 타이머만 살아남아 언마운트된 뒤에 onDetected 가
+   * 실행된다. 그러면 사용자가 QR 화면을 떠난 뒤에 claimPairing 이 나간다.
+   * 화면에는 아무 표시도 안 되는데 키오스크에는 연결 요청이 남는다.
+   */
   useEffect(() => {
+    let detect: ReturnType<typeof setTimeout> | undefined;
     const t = setTimeout(() => {
       setScanning(false);
-      setTimeout(onDetected, 800);
+      detect = setTimeout(onDetected, 800);
     }, 2500);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      if (detect) clearTimeout(detect);
+    };
   }, [onDetected]);
 
   return (
