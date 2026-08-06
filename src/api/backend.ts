@@ -73,8 +73,18 @@ export interface RecommendationResult {
   requiresReconfirmation: boolean;
   /** 후보 표시 정보. 상품 ID 가 아니라 사람이 읽는 값이어야 한다. */
   display: Record<string, { displayName: string; priceText: string; imageUrl?: string }>;
-  /** 사용자가 고른 조건이 반영됐는지 항목별로. */
+  /** 사용자가 고른 조건이 반영됐는지 항목별로. 1순위 추천 기준이다. */
   matchedOptions: { label: string; value: string; matched: boolean; note?: string }[];
+  /**
+   * 후보별로 어긋나는 축의 이름. 예: { "CHICKEN-003": ["형태"] }
+   *
+   * matchedOptions 는 1순위 하나에 대한 답이라, 대안 후보를 고른 사용자에게는
+   * 쓸 수 없다. 그걸 그대로 쓰면 '매운 뼈' 를 고른 사람에게
+   * "형태: 순살, 그대로예요" 라고 말하게 된다.
+   *
+   * 없으면 화면이 후보별 불일치를 표시하지 않는다. 짐작하지 않는다.
+   */
+  unmatchedLabelsByCandidate?: Record<string, string[]>;
 }
 
 /** evidence 중 화면이 쓰는 부분. 39개 필드 전부를 화면이 알 필요는 없다. */
@@ -149,7 +159,16 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
           profileOptions: rec.matchedOptions.map((o) => ({ ...o, matched: true, note: undefined })),
           // 상품 ID 를 화면으로 내보내지 않는다. 이번 응답 안에서만 쓰는 표식으로 바꾼다.
           candidates: [rec.recommendedCandidateId!, ...rec.alternativeCandidateIds]
-            .map((id, i) => ({ candidateId: `c${i + 1}`, ...보이기(id) })),
+            .map((id, i) => ({
+              candidateId: `c${i + 1}`,
+              ...보이기(id),
+              // 서버가 후보별 불일치를 알려 주면 그대로 싣는다. 안 주면 비워 둔다.
+              // 화면은 비어 있으면 아무것도 표시하지 않는다 — 이름을 뜯어보고
+              // 짐작하는 것보다 조용한 편이 낫다.
+              ...(rec.unmatchedLabelsByCandidate?.[id]
+                ? { unmatchedLabels: rec.unmatchedLabelsByCandidate[id] }
+                : {}),
+            })),
         };
       }
       return {

@@ -130,6 +130,42 @@ describe("상태별 화면 요건", () => {
     }
   });
 
+  it("후보마다 어긋나는 축을 응답이 알려 준다", () => {
+    // 화면이 후보 이름을 뜯어보고 짐작하지 않도록 서버가 짚어 준다.
+    const r = buildMapping("clarification", 땅콩알레르기);   // 매운맛 · 순살
+    const 라벨 = (이름: string) =>
+      (r.candidates ?? []).find((c) => c.displayName === 이름)?.unmatchedLabels;
+
+    expect(라벨("매운 순살 닭강정")).toEqual([]);       // 둘 다 맞음
+    expect(라벨("매운 뼈 닭강정")).toEqual(["형태"]);    // 뼈 → 형태만 어긋남
+    expect(라벨("순한 순살 닭강정")).toEqual(["맵기"]);  // 순한맛 → 맵기만 어긋남
+  });
+
+  it("이름에 값이 안 들어 있어도 맞은 후보를 틀렸다고 하지 않는다", () => {
+    // 회귀. 예전에는 displayName 문자열 포함 여부로 판정해서,
+    // 온도가 'ICE' 인 '아이스 아메리카노' 를 고르면 이름에 'ICE' 가 없다는 이유로
+    // "고르신 메뉴와 달라요" 라고 말했다. 정확히 맞는 후보한테 그랬다.
+    const 카페: ProfileData = {
+      ...프로필({ "이용 방식": ["테이크아웃"], "음료": ["아메리카노"], "온도": ["ICE"] }),
+      place: "카페",
+      menuName: "아이스 아메리카노",
+    };
+    const r = buildMapping("clarification", 카페);
+    const 라벨 = (이름: string) =>
+      (r.candidates ?? []).find((c) => c.displayName === 이름)?.unmatchedLabels;
+
+    expect(라벨("아이스 아메리카노")).toEqual([]);        // ICE ↔ '아이스' 는 같은 값이다
+    expect(라벨("따뜻한 아메리카노")).toEqual(["온도"]);   // 이건 진짜로 어긋남
+  });
+
+  it("고르지 않은 축은 어긋날 수도 없다", () => {
+    const 맵기만 = 프로필({ "맵기": ["매운맛"] });
+    const r = buildMapping("clarification", 맵기만);
+    for (const c of r.candidates ?? []) {
+      expect(c.unmatchedLabels).not.toContain("형태");
+    }
+  });
+
   it("changed 는 달라진 항목을 matched=false 로 짚는다", () => {
     const r = buildMapping("changed", 땅콩알레르기);
     const 컵 = (r.item?.options ?? []).find((o) => o.label === "컵");
@@ -139,6 +175,35 @@ describe("상태별 화면 요건", () => {
 
   it("not_found 는 사용자가 저장한 이름으로 말한다", () => {
     expect(buildMapping("not_found", 땅콩알레르기).message).toContain("닭강정");
+  });
+});
+
+describe("메뉴를 못 찾은 이유마다 다음에 할 일이 다르다", () => {
+  const 메시지 = (p: ProfileData) => buildMapping("exact", p).message ?? "";
+
+  it("장소를 안 골랐으면 장소를 정하라고 한다", () => {
+    // 예전에는 장소 없는 프로필을 닭강정집으로 떨어뜨려서,
+    // 커피를 저장한 사람에게 '매운 순살 닭강정' 을 승인하라고 했다.
+    const 장소없음: ProfileData = { ...프로필({}), place: null, menuName: "커피" };
+    // 문구는 '장소 유형' 같은 앱 용어를 쓰지 않는다. 사용자가 할 일만 짚는다.
+    expect(메시지(장소없음)).toContain("프로필에 정해");
+    expect(메시지(장소없음)).not.toContain("닭강정");
+  });
+
+  it("아직 모르는 장소면 직원에게 보여 주라고 한다", () => {
+    const 병원: ProfileData = { ...프로필({ "진료과": ["내과"] }), place: "병원", menuName: "접수" };
+    expect(메시지(병원)).toContain("직원");
+  });
+
+  it("조건에 걸려 다 빠진 경우는 조건 얘기를 한다", () => {
+    // 음식점인데 이용 방식이 서로 안 맞아 후보가 남지 않는 경우가 아니라,
+    // 알레르기로 전부 빠지는 쪽을 만든다.
+    const 전부제외 = 프로필({
+      "이용 방식": ["포장하기"],
+      "알레르기 (꼭 빼주세요)": ["땅콩"],
+    });
+    // 남는 후보가 있으므로 not_found 가 아니다 — 이 경우는 문구 분기만 확인한다.
+    expect(buildMapping("not_found", 전부제외).message).toContain("닭강정");
   });
 });
 

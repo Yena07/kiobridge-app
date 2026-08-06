@@ -89,23 +89,31 @@ const 고른값들 = (p: ProfileData | undefined, 축: string) => p?.selections?
 const 알레르기축 = "알레르기 (꼭 빼주세요)";
 
 /**
- * 절대 조건으로 후보를 거른다. 점수를 깎는 게 아니라 목록에서 아예 뺀다.
- * 알레르기·품절·이용 불가가 여기 해당한다.
- */
-/**
  * 이 프로필이 보는 키오스크의 오늘 메뉴.
  *
  * 목록이 없는 장소는 빈 배열을 준다. 지어내지 않는다.
  * 병원에서 '매운 순살 닭강정' 을 승인하라는 화면이 뜨는 것보다
  * "이 키오스크는 아직 지원하지 않아요" 가 낫다.
  * 병원·관공서는 백엔드가 fixture 를 내려 주면 그때 채운다.
+ *
+ * 장소를 안 고른 프로필도 빈 배열이다. 예전에는 닭강정집으로 떨어뜨렸는데,
+ * 그러면 장소를 안 고른 사람에게 닭강정을 승인하라고 하게 된다.
+ * 방금 병원·관공서에서 막은 그 경로가 여기로 남아 있었다.
+ *
+ * 연동 메모: 실제로는 프로필이 아니라 QR 로 연결한 키오스크(environmentId)가
+ * 카탈로그를 정한다. 목은 붙일 서버가 없어서 프로필의 place 로 대신 고른다.
+ * 이 역전은 docs/BACKEND_INTEGRATION.md 에 적어 두었다.
  */
 const 장소별카탈로그: Partial<Record<NonNullable<PlaceType>, 후보[]>> = {
   음식점: 오늘의후보,
   카페: 카페후보,
 };
-const 카탈로그 = (p: ProfileData | undefined) => (p?.place ? (장소별카탈로그[p.place] ?? []) : 오늘의후보);
+const 카탈로그 = (p: ProfileData | undefined) => (p?.place ? (장소별카탈로그[p.place] ?? []) : []);
 
+/**
+ * 절대 조건으로 후보를 거른다. 점수를 깎는 게 아니라 목록에서 아예 뺀다.
+ * 알레르기·품절·이용 불가가 여기 해당한다.
+ */
 function 절대조건으로거르기(p: ProfileData | undefined) {
   const 알레르기 = 고른값들(p, 알레르기축);
   const 이용방식 = 고른값(p, "이용 방식");
@@ -142,20 +150,48 @@ function 절대조건으로거르기(p: ProfileData | undefined) {
   return { 남은, 뺀이유 };
 }
 
+/**
+ * 프로필의 질문과 후보가 들고 있는 값을 잇는 표.
+ * 순위·불일치 판정·확인 카드가 전부 이것 하나를 본다.
+ * 축을 늘릴 때 세 군데를 따로 고치면 언젠가 한 곳이 빠지고, 그때 화면이 거짓말한다.
+ *
+ * 무게는 순위를 가를 때만 쓴다 — 무엇을 마시느냐가 뜨거우냐 차가우냐보다 앞선다.
+ */
+const 비교축: { label: string; 값: (c: 후보) => string | undefined; 무게: number; 어긋날때: string }[] = [
+  { label: "맵기", 값: (c) => c.맵기, 무게: 2, 어긋날때: "오늘은 이 조합이 없어요" },
+  { label: "형태", 값: (c) => c.형태, 무게: 1, 어긋날때: "오늘은 이 조합이 없어요" },
+  { label: "음료", 값: (c) => c.음료, 무게: 2, 어긋날때: "오늘은 이 메뉴가 없어요" },
+  { label: "온도", 값: (c) => c.온도, 무게: 1, 어긋날때: "오늘은 이 온도가 없어요" },
+];
+
+/**
+ * 이 후보를 고르면 어긋나는 축.
+ *
+ * 후보가 실제로 들고 있는 값을 본다. 이름 문자열로 짐작하지 않는다 —
+ * '아이스 아메리카노' 는 온도가 ICE 인데 이름 어디에도 'ICE' 가 없어서,
+ * 이름으로 판단하면 정확히 맞는 후보를 "고르신 메뉴와 달라요" 라고 말하게 된다.
+ *
+ * 고르지 않은 축은 넣지 않는다. 안 고른 것은 어긋날 수도 없다.
+ */
+function 안맞는축(c: 후보, p: ProfileData | undefined): string[] {
+  return 비교축
+    .filter(({ label, 값 }) => {
+      const 고른 = 고른값(p, label);
+      return Boolean(고른) && 값(c) !== 고른;
+    })
+    .map(({ label }) => label);
+}
+
 /** 남은 후보를 사용자가 고른 축과 얼마나 맞는지로 정렬한다. */
 function 점수순(남은: 후보[], p: ProfileData | undefined) {
-  const 맵기 = 고른값(p, "맵기");
-  const 형태 = 고른값(p, "형태");
-  const 음료 = 고른값(p, "음료");
-  const 온도 = 고른값(p, "온도");
-  return [...남은].sort((a, b) => {
-    // 사용자가 고르지 않은 축은 점수에 넣지 않는다. 안 고른 것을 맞혔다고
-    // 계산하면 아무 조건도 안 맞는 후보가 1순위가 될 수 있다.
-    const s = (c: 후보) =>
-      (맵기 && c.맵기 === 맵기 ? 2 : 0) + (형태 && c.형태 === 형태 ? 1 : 0) +
-      (음료 && c.음료 === 음료 ? 2 : 0) + (온도 && c.온도 === 온도 ? 1 : 0);
-    return s(b) - s(a);
-  });
+  // 사용자가 고르지 않은 축은 점수에 넣지 않는다. 안 고른 것을 맞혔다고
+  // 계산하면 아무 조건도 안 맞는 후보가 1순위가 될 수 있다.
+  const 점수 = (c: 후보) =>
+    비교축.reduce((합, { label, 값, 무게 }) => {
+      const 고른 = 고른값(p, label);
+      return 합 + (고른 && 값(c) === 고른 ? 무게 : 0);
+    }, 0);
+  return [...남은].sort((a, b) => 점수(b) - 점수(a));
 }
 
 /** 무엇을 써서 골랐는지 사용자의 말로 적는다. 고른 적 없는 축은 말하지 않는다. */
@@ -179,30 +215,38 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
   return out;
 }
 
-/** 확인 카드에 그대로 올라가는 표. 사용자가 고른 값만 넣는다. */
+/**
+ * 확인 카드에 그대로 올라가는 표. 사용자가 고른 값만 넣는다.
+ *
+ * 고름 이 undefined 면 '아직 어느 후보인지 정해지지 않았다' 는 뜻이라
+ * 어긋남을 판단하지 않고 저장한 값만 보여 준다. clarification 이 그 경우다.
+ */
 function 확인표(p: ProfileData | undefined, 고름: 후보 | undefined): MappedOption[] {
   const 행: MappedOption[] = [];
-  // 다중 선택 축(시럽·알레르기 등)은 첫 값만 보여 주면 나머지가 조용히 사라진다.
+  const 어긋남 = new Set(고름 ? 안맞는축(고름, p) : []);
+  const 문구 = new Map(비교축.map(({ label, 어긋날때 }) => [label, 어긋날때]));
+  // 다중 선택 축(시럽 등)은 첫 값만 보여 주면 나머지가 조용히 사라진다.
   // 확인 화면이 사용자가 고른 것보다 적게 말하는 것도 거짓말이다.
-  const 넣기 = (label: string, matched: boolean, note?: string) => {
+  const 넣기 = (label: string) => {
     const vs = 고른값들(p, label);
-    if (vs.length > 0) 행.push({ label, value: vs.join(", "), matched, ...(note ? { note } : {}) });
+    if (vs.length === 0) return;
+    const matched = !어긋남.has(label);
+    행.push({ label, value: vs.join(", "), matched, ...(matched ? {} : { note: 문구.get(label) }) });
   };
   // 사용자가 고른 축만 넣는다. 장소마다 축이 다르므로 없는 항목은 자동으로 빠진다.
-  const 맞았나 = (축: string, 후보값?: string) => 후보값 === 고른값(p, 축);
-  넣기("이용 방식", true);
+  넣기("이용 방식");
   // 닭강정집
-  넣기("맵기", 맞았나("맵기", 고름?.맵기), 맞았나("맵기", 고름?.맵기) ? undefined : "오늘은 이 조합이 없어요");
-  넣기("형태", 맞았나("형태", 고름?.형태), 맞았나("형태", 고름?.형태) ? undefined : "오늘은 이 조합이 없어요");
-  넣기("컵", true);
+  넣기("맵기");
+  넣기("형태");
+  넣기("컵");
   // 카페
-  넣기("음료", 맞았나("음료", 고름?.음료), 맞았나("음료", 고름?.음료) ? undefined : "오늘은 이 메뉴가 없어요");
-  넣기("온도", 맞았나("온도", 고름?.온도), 맞았나("온도", 고름?.온도) ? undefined : "오늘은 이 온도가 없어요");
-  넣기("사이즈", true);
-  넣기("샷 추가", true);
-  넣기("시럽", true);
-  넣기("우유 변경", true);
-  넣기("수량", true);
+  넣기("음료");
+  넣기("온도");
+  넣기("사이즈");
+  넣기("샷 추가");
+  넣기("시럽");
+  넣기("우유 변경");
+  넣기("수량");
   return 행;
 }
 
@@ -228,12 +272,17 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
   // 그때 item 없이 exact/changed/low_confidence 를 돌려주면 화면이 item 을 있다고 믿고
   // 그리다가 터진다. 담을 게 없다는 건 그 자체로 not_found 이므로 그렇게 답한다.
   if (!고름 && state !== "not_found") {
-    // 애초에 그 장소의 메뉴를 모르는 경우와, 조건에 걸려 다 빠진 경우는 다르다.
-    // 사용자가 무엇을 해야 하는지가 다르므로 문장도 달라야 한다.
+    // 세 경우를 구분한다. 사용자가 다음에 할 일이 서로 다르기 때문이다.
+    //   장소를 안 골랐다     → 프로필에 장소를 정하면 된다 (사용자가 고칠 수 있다)
+    //   그 장소를 모른다     → 직원에게 도움을 청한다 (사용자가 고칠 수 없다)
+    //   조건에 걸려 다 빠졌다 → 조건을 손보면 된다
+    const 장소미정 = !profile?.place;
     const 목록없음 = 카탈로그(profile).length === 0;
     return {
       result: "not_found",
-      message: 목록없음
+      message: 장소미정
+        ? "어디에서 쓰실 건지 프로필에 정해 두시면 오늘의 메뉴에서 찾아드릴 수 있어요."
+        : 목록없음
         ? "이 종류의 키오스크는 아직 도와드리지 못해요. 직원에게 이 화면을 보여 주세요."
         : "조건에 맞는 메뉴가 오늘은 없어요. 알레르기나 이용 방식 때문에 모두 빠졌어요.",
       reasons: 목록없음 ? [] : 이유,
@@ -253,8 +302,8 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
         // 여기서는 '맞았는지' 를 판단하지 않는다. 어느 후보를 고르느냐에 따라
         // 답이 달라지기 때문이다. 1순위 기준으로 계산해 두면 c2(뼈)를 고른
         // 사용자에게 "형태: 순살, 그대로예요" 라고 말하게 된다.
-        // 화면이 고른 후보에 맞춰 다시 계산한다.
-        profileOptions: 확인표(profile, undefined).map((o) => ({ ...o, matched: true, note: undefined })),
+        // 고름 을 넘기지 않으면 확인표가 판단을 미룬다.
+        profileOptions: 확인표(profile, undefined),
         reason: `저장하신 '${profile?.menuName || MOCK_MENU_NAME}'과 비슷한 메뉴가 여러 개예요`,
         reasons: 이유,
         // candidateId 는 이번 매핑 응답에서만 쓰는 임시 표식이다.
@@ -264,6 +313,9 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
           displayName: c.name,
           priceText: 원(c.price),
           imageUrl: KIOSK_MENU_PHOTOS[c.name],
+          // 이 후보를 고르면 어떤 조건이 어긋나는지 응답이 알려 준다.
+          // 화면이 이름을 뜯어보고 짐작하지 않아도 되게.
+          unmatchedLabels: 안맞는축(c, profile),
         })),
       };
 

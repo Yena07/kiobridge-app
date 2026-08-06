@@ -286,7 +286,9 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
             value={formatted}
             onChange={handleChange}
             placeholder="전화번호 입력"
-            autoFocus
+            // 적을 게 이 칸 하나뿐인 화면이다. 화면 전환 포커스가 제목이 아니라
+            // 여기로 오도록 표시해 둔다 (App 의 화면영역 효과).
+            data-autofocus
             style={{
               flex: 1, minWidth: 0, fontSize: 19, fontWeight: 600, color: TEXT_1, fontFamily: FONT,
               letterSpacing: "-0.02em", border: "none", outline: "none",
@@ -378,7 +380,7 @@ function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => voi
               value={digit}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKey(i, e)}
-              autoFocus={i === 0}
+              {...(i === 0 ? { "data-autofocus": true } : {})}
               style={{
                 width: 44, height: 52, textAlign: "center",
                 fontSize: 22, fontWeight: 600, fontFamily: FONT, ...NUM,
@@ -452,7 +454,7 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="예: 할머니, 김씨"
-          autoFocus
+          data-autofocus
           style={{
             width: "100%", marginTop: 36, textAlign: "center",
             fontSize: 22, fontWeight: 600, color: TEXT_1, fontFamily: FONT, letterSpacing: "-0.02em",
@@ -472,14 +474,12 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
 // ─── Greeting ─────────────────────────────────────────────────────────────────
 
 function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) {
-  // WCAG 2.2.1 (Level A) — 시간 제한이 있으면 끄거나 늘리거나 넘길 수 있어야 한다.
-  // 천천히 읽는 분이 주 사용자인 앱에서 2.6초 뒤 화면이 사라지는 건 예외에 해당하지 않는다.
-  // '계속하기' 를 눌러 언제든 넘어갈 수 있게 하고, 자동 넘김은 넉넉히 둔다.
-  // onNext 를 ref 에 담는 이유는, 인라인 화살표로 넘어와서 매 렌더 새 함수가 되면
-  // deps 때문에 타이머가 계속 리셋되기 때문이다.
-  // 자동 넘김을 아예 없앴다. 8초로 늘리는 것으로는 부족하다 —
-  // WCAG 2.2.1 은 끄거나 늘리거나 넘길 수 있을 것을 요구하는데,
-  // 자동으로 넘어가면 '머무를' 수가 없다. 사용자가 누를 때 넘어간다.
+  // 자동 넘김이 없다. 사용자가 '계속하기' 를 누를 때만 넘어간다.
+  //
+  // 예전에는 2.6초 뒤 저절로 사라졌고, 그다음엔 8초로 늘렸다. 둘 다 부족하다 —
+  // WCAG 2.2.1(Level A)은 시간 제한을 끄거나 늘리거나 넘길 수 있을 것을 요구하는데,
+  // 자동으로 넘어가면 늘리는 것도 끄는 것도 안 되고 '머무를' 수가 없다.
+  // 천천히 읽는 분이 주 사용자인 앱에서 읽던 화면이 사라지는 건 예외에 해당하지 않는다.
 
   return (
     <div
@@ -779,10 +779,17 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
 
 // ─── Saved Profiles ───────────────────────────────────────────────────────────
 
-/** 눈에는 안 보이지만 포커스와 스크린리더에는 남아 있어야 하는 요소. */
+/**
+ * 눈에는 안 보이지만 포커스와 스크린리더에는 남아 있어야 하는 요소.
+ *
+ * opacity:0 이나 visibility:hidden 으로 숨기지 않는다. opacity 는 그 요소에 그린
+ * 포커스 표시까지 같이 지우고, visibility:hidden 은 포커스를 아예 못 받게 만든다.
+ * clip 은 오래된 방법이고 clipPath 가 그 자리를 대신하는 중이라 둘 다 둔다.
+ */
 const SR_ONLY: React.CSSProperties = {
   position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
-  overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+  overflow: "hidden", clip: "rect(0,0,0,0)", clipPath: "inset(50%)",
+  whiteSpace: "nowrap", border: 0,
 };
 
 function ProfileCard({
@@ -1656,7 +1663,9 @@ function ConfirmCard({ children, badge, badgeTone = "success", photo }: {
     ? { bg: SUCCESS_BG, fg: SUCCESS, icon: "checkCircle" as const }
     : badgeTone === "caution"
       ? { bg: WARN_BG, fg: WARN, icon: "warning" as const }
-      : { bg: SURFACE, fg: TEXT_2, icon: "notePencil" as const };
+      // neutral 의 바탕을 SURFACE 로 두면 카드 바탕과 같은 색이라 띠가 배경에 묻힌다.
+      // 배지로 읽히지 않으면 배지가 아니다. CANVAS 는 한 톤 어두워서 경계가 보인다.
+      : { bg: CANVAS, fg: TEXT_2, icon: "notePencil" as const };
   return (
     <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
       {/* 키오스크가 오늘 걸어 둔 메뉴 사진. 담기 전 마지막 확인 화면이라 크게 둔다.
@@ -1741,16 +1750,19 @@ function InfoBox({ children, variant = "warn" }: { children: React.ReactNode; va
  * 브라우저 기본으로 동작하고, 우리가 유지할 코드도 줄어든다.
  * 프로필 목록(SavedProfilesScreen)이 같은 이유로 이미 이렇게 되어 있다.
  *
- * role="button" 으로 쓰는 자리(low_confidence 의 '이게 맞아요' 짚기)는
- * 선택지 하나를 켰다 껐다 하는 것이라 라디오가 아니다. 그때는 button 그대로 둔다.
+ * 예전에는 role="button" 분기도 있었다. low_confidence 에서 '이게 맞아요' 를
+ * 짚는 자리였는데, 확인 카드와 같은 메뉴를 카드 모양으로 두 번 그리게 되어
+ * CheckRow 로 옮겼다. 이제 이 컴포넌트는 라디오 하나만 한다.
+ *
+ * groupName 은 필수다. 기본값을 두면 화면에 라디오 그룹이 둘 이상일 때
+ * 서로 다른 질문의 선택지가 조용히 한 그룹으로 묶인다.
  */
 function OptionCard({
-  name, price, selected, onClick, role = "radio", photo, groupName,
+  name, price, selected, onClick, photo, groupName,
 }: {
   name: string; price: string; selected: boolean; onClick: () => void;
-  role?: "radio" | "button"; photo?: string | null; groupName?: string;
+  photo?: string | null; groupName: string;
 }) {
-  const radio = role === "radio";
   const [포커스, set포커스] = useState(false);
   const 속: React.ReactNode = (
     <>
@@ -1782,36 +1794,24 @@ function OptionCard({
     transition: "background-color 0.15s",
   } as const;
 
-  if (!radio) {
-    return (
-      <button type="button" aria-pressed={selected} aria-label={`${name}, ${price}`} onClick={onClick} style={겉모양}>
-        {속}
-      </button>
-    );
-  }
-
   return (
     <label style={{
       ...겉모양, position: "relative", margin: 0,
       // 포커스는 숨은 input 이 받지만 표시는 이 라벨이 한다.
-      // opacity:0 인 요소에 outline 을 그리면 그 outline 도 같이 투명해진다.
       // 화살표 키를 살리려다 포커스 표시를 잃으면 안 된다.
       outline: 포커스 ? `3px solid ${P}` : "none",
       outlineOffset: 2,
     }}>
-      {/*
-       * 눈에는 안 보이지만 지우지 않는다. 화살표 이동과 그룹 의미는 이 요소가 만든다.
-       * opacity 대신 clip 으로 숨긴다 — opacity:0 은 포커스 표시까지 지운다.
-       */}
+      {/* 눈에는 안 보이지만 지우지 않는다. 화살표 이동과 그룹 의미는 이 요소가 만든다. */}
       <input
         type="radio"
-        name={groupName ?? "option"}
+        name={groupName}
         checked={selected}
         onChange={onClick}
         onFocus={() => set포커스(true)}
         onBlur={() => set포커스(false)}
         aria-label={`${name}, ${price}`}
-        style={{ position: "absolute", width: 1, height: 1, margin: 0, padding: 0, border: 0, clip: "rect(0 0 0 0)", clipPath: "inset(50%)", overflow: "hidden", whiteSpace: "nowrap" }}
+        style={SR_ONLY}
       />
       {속}
     </label>
@@ -1839,10 +1839,6 @@ function OrderExact({
   );
 }
 
-// 메뉴 이름에 드러나는 축. '매운 뼈 닭강정' 이면 맵기와 형태를 이름으로 알 수 있다.
-// 이름에 안 나오는 축(컵·수량·이용 방식)은 후보를 바꿔도 그대로이므로 판단하지 않는다.
-const 이름에드러나는축 = ["맵기", "형태", "음료", "온도"];
-
 function OrderClarification({
   candidates, reason, reasons, options, onApprove, onCancel,
 }: {
@@ -1865,20 +1861,18 @@ function OrderClarification({
        * 저장해 둔 조건을 고르기 전에 먼저 보여 준다.
        *
        * '그대로예요' 라고 단정하지 않는다. 후보마다 맞는 축이 다르기 때문이다.
-       * 예를 들어 형태를 '순살' 로 저장했는데 '매운 뼈 닭강정' 을 고르면 형태는
-       * 안 맞는다. 고른 후보의 이름에서 그 축을 확인해 안 맞는 행을 표시한다.
-       * 아무것도 안 고른 동안에는 판단하지 않고 저장한 값만 보여 준다.
+       * 형태를 '순살' 로 저장했는데 '매운 뼈 닭강정' 을 고르면 형태는 안 맞는다.
+       *
+       * 어긋나는 축은 응답이 알려 준다(unmatchedLabels). 이름을 뜯어보고
+       * 짐작하지 않는다 — '아이스 아메리카노' 는 온도가 ICE 인데 이름 어디에도
+       * 'ICE' 가 없어서, 이름으로 판단하면 정확히 맞는 후보를 틀렸다고 말한다.
+       * 서버가 알려 주지 않으면 아무 표시도 하지 않는다.
        */}
       {options && options.length > 0 && (
         <ConfirmCard badge="저장하신 조건" badgeTone="neutral">
           {options.map((o) => {
             const 고른후보 = selected !== null ? candidates[selected] : undefined;
-            // '매운맛' 은 이름에 '매운' 으로 나온다. 어미를 떼고 본다.
-            // 안 떼면 '매운 뼈 닭강정' 을 고른 사람에게 맵기가 다르다고 거짓말한다.
-            const 어간 = o.value.replace(/맛$/, "");
-            const 안맞음 = 고른후보 && 이름에드러나는축.includes(o.label)
-              ? !고른후보.displayName.includes(어간)
-              : false;
+            const 안맞음 = 고른후보?.unmatchedLabels?.includes(o.label) ?? false;
             return (
               <ConfirmRow
                 key={o.label}
@@ -1895,9 +1889,6 @@ function OrderClarification({
         {candidates.map((c, i) => (
           <OptionCard
             key={c.candidateId}
-            role="radio"
-            // 그룹 이름을 명시한다. 기본값을 쓰면 화면에 라디오 그룹이 둘 이상일 때
-            // 서로 다른 질문의 선택지가 한 그룹으로 묶여 버린다.
             groupName="후보"
             selected={selected === i}
             name={c.displayName}
@@ -2523,6 +2514,23 @@ export default function App() {
     });
   };
 
+  /**
+   * 서버에 남은 것까지 지운다.
+   *
+   * 실패를 삼키지 않는다. 개인정보를 지웠다는 약속이라 안 지워졌으면 그렇게 말해야 한다.
+   * 재시도도 자기 자신을 부르므로 두 번째·세 번째 실패도 조용히 넘어가지 않는다.
+   */
+  const 서버까지지우기 = (): void => {
+    api.forgetAll().catch((e: KioBridgeError) => {
+      set확인대기({
+        title: "일부를 지우지 못했어요",
+        body: `${e?.message ?? "서버에 남은 정보를 지우지 못했어요"}. 화면에서는 지워졌지만 서버에는 남아 있을 수 있어요.`,
+        confirmLabel: "다시 시도",
+        run: 서버까지지우기,
+      });
+    });
+  };
+
   // 연결이 끝나면 어느 화면에 있든 되돌린다.
   // 실행 중일 때는 건드리지 않는다. 이미 키오스크가 움직이고 있는데 화면만
   // 되돌리면 사용자는 무슨 일이 일어난 건지 알 수 없다. 그 화면은 자기 상태를
@@ -2547,12 +2555,30 @@ export default function App() {
 
   // 화면이 바뀌면 포커스가 <body> 로 떨어진다. 누르던 버튼이 사라지기 때문이다.
   // 스크린리더 사용자는 자기가 어디로 갔는지 듣지 못하고, 키보드 사용자는
-  // 문서 처음부터 다시 Tab 을 눌러야 한다. 새 화면의 첫 제목으로 포커스를 옮긴다.
+  // 문서 처음부터 다시 Tab 을 눌러야 한다.
+  //
+  // 적을 게 하나뿐인 화면(전화번호·호칭·인증번호)에서는 그 칸으로 보낸다.
+  // 이 효과가 없던 때는 input 의 autoFocus 가 그 일을 했는데, autoFocus 는
+  // 커밋 단계라 부모 useEffect 보다 먼저 실행된다. 제목으로만 옮기면
+  // autoFocus 를 덮어써서 휴대폰 키보드가 안 올라오고, 어르신은 칸을 한 번 더
+  // 눌러야 한다. 스크린리더에는 input 의 라벨이 읽히므로 잃는 것도 없다.
+  //
+  // 적을 게 없는 화면에서는 첫 제목으로 보내 "여기가 어디인지" 부터 들려준다.
   const 화면영역 = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const 대상 = 화면영역.current?.querySelector<HTMLElement>("h1, h2, [data-screen-title]");
+    const 뿌리 = 화면영역.current;
+    if (!뿌리) return;
+    // data-autofocus 로 표시한다. React 는 autoFocus prop 을 DOM 속성으로 남기지 않고
+    // 커밋 때 focus() 를 직접 부르므로, [autofocus] 로는 찾을 수 없다.
+    const 대상 =
+      뿌리.querySelector<HTMLElement>("[data-autofocus]") ??
+      뿌리.querySelector<HTMLElement>("h1, h2, [data-screen-title]");
     if (!대상) return;
-    대상.setAttribute("tabindex", "-1");
+    // 제목은 원래 포커스를 못 받는 요소라 한 번만 열어 준다.
+    // 탭 순서에는 들어가지 않도록 -1 로 둔다.
+    if (!대상.hasAttribute("tabindex") && !(대상 instanceof HTMLInputElement) && !(대상 instanceof HTMLTextAreaElement)) {
+      대상.setAttribute("tabindex", "-1");
+    }
     대상.focus({ preventScroll: true });
   }, [screen, tab]);
 
@@ -2683,17 +2709,7 @@ export default function App() {
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
-                  //
-                  // 실패를 삼키지 않는다. 개인정보를 지웠다는 약속이라
-                  // 안 지워졌으면 그렇게 말해야 한다.
-                  api.forgetAll().catch((e: KioBridgeError) => {
-                    set확인대기({
-                      title: "일부를 지우지 못했어요",
-                      body: `${e?.message ?? "서버에 남은 정보를 지우지 못했어요"}. 화면에서는 지워졌지만 서버에는 남아 있을 수 있어요. 잠시 뒤 다시 시도해 주세요.`,
-                      confirmLabel: "다시 시도",
-                      run: () => { void api.forgetAll(); },
-                    });
-                  });
+                  서버까지지우기();
                   setProfiles([]); setName(""); setPhone("");
                   setOrderProfile(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가

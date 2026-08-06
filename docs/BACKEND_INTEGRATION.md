@@ -36,13 +36,34 @@
 
 `createHttpBackend` 가 `AbortController` 로 15초에 끊고 `TIMEOUT` 코드를 올립니다. 서버가 더 오래 걸리는 경로가 있으면 알려 주세요.
 
-응답 모양은 같은 파일의 타입(`RecommendationResult`, `EvidenceSummary`)을 보시면 됩니다. **`src/api/backend.test.ts` 에 명세대로 응답하는 가짜 백엔드가 있으니 그걸 실제 응답 예시로 쓰셔도 됩니다.** 테스트 12개가 조립이 맞는지 검사합니다.
+응답 모양은 같은 파일의 타입(`RecommendationResult`, `EvidenceSummary`)을 보시면 됩니다. **`src/api/backend.test.ts` 에 명세대로 응답하는 가짜 백엔드가 있으니 그걸 실제 응답 예시로 쓰셔도 됩니다.** 테스트 17개가 조립이 맞는지 검사합니다.
 
 ### 두 곳만 봐 주시면 됩니다
 
 **① `evidence` 는 요약해서 주세요.** 39개 필드를 화면이 다 알 필요는 없습니다. `EvidenceSummary` 는 `state`(running/cart_ready/aborted) · `reachedStep` · `cart` · `abort` 넷뿐입니다. `EvidenceSummaryService` 가 이 모양으로 내려 주면 됩니다.
 
 **② `display` 에 사람이 읽는 값을 넣어 주세요.** 후보 표시 이름·가격입니다. 상품 ID 는 화면으로 나가면 안 되는데, 이름이 없으면 보여 줄 게 없습니다.
+
+**③ `unmatchedLabelsByCandidate` 를 채워 주시면 좋습니다** (선택).
+
+후보가 여러 개일 때(`clarification`) 화면은 사용자가 저장해 둔 조건표를 함께 보여 줍니다. 어떤 후보를 고르느냐에 따라 **어긋나는 축이 달라집니다** — 형태를 '순살' 로 저장한 사람이 '매운 뼈 닭강정' 을 고르면 형태가 안 맞습니다.
+
+`matchedOptions` 는 1순위 하나에 대한 답이라 이 자리에 쓸 수 없습니다. 그대로 쓰면 대안을 고른 사용자에게 "형태: 순살, 그대로예요" 라고 말하게 됩니다.
+
+```jsonc
+"unmatchedLabelsByCandidate": {
+  "CHICKEN-001": [],           // 다 맞음
+  "CHICKEN-003": ["형태"]       // 형태만 어긋남
+}
+```
+
+**안 주셔도 됩니다.** 없으면 화면이 후보별 불일치를 아예 표시하지 않습니다. 짐작하지 않는 쪽을 기본으로 두었습니다 — 예전에 후보 이름 문자열로 추측했더니, 온도가 `ICE` 인 '아이스 아메리카노' 를 고른 사용자에게 이름에 `ICE` 가 없다는 이유로 "달라요" 라고 말한 적이 있습니다.
+
+### 카탈로그는 키오스크가 정합니다 — 목은 반대로 되어 있습니다
+
+목(`src/api/mock.ts`)은 붙일 서버가 없어서 **프로필의 `place`** 로 후보 목록을 고릅니다(음식점 → 닭강정, 카페 → 커피). 실제로는 **QR 로 연결한 키오스크(`environmentId`)** 가 정합니다.
+
+지금 `createApi(backend, environmentId = "chicken-store")` 로 고정되어 있습니다. 페어링 응답(`createSession`)이 그 세션의 `environmentId` 를 돌려주면 거기서 받아 쓰도록 바꾸겠습니다. **`createSession` 응답에 `environmentId` 를 넣어 주실 수 있는지 알려 주세요.**
 
 ### `approve` 는 3단계라는 걸 화면도 압니다
 

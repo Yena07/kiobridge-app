@@ -71,6 +71,36 @@ describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
   });
 });
 
+describe("후보별 불일치는 서버가 알려 준 것만 쓴다", () => {
+  const 애매 = (over = {}) => 기본추천({
+    alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true, ...over,
+  });
+
+  it("서버가 알려 주면 표식 순서에 맞춰 실어 준다", async () => {
+    const r = await 매핑(가짜백엔드({}, 애매({
+      unmatchedLabelsByCandidate: { "CHICKEN-003": ["형태"] },
+    })));
+    expect(r.candidates?.find((c) => c.candidateId === "c1")?.unmatchedLabels).toBeUndefined();
+    expect(r.candidates?.find((c) => c.candidateId === "c2")?.unmatchedLabels).toEqual(["형태"]);
+    // 상품 ID 는 여전히 새어 나가지 않는다.
+    expect(JSON.stringify(r.candidates)).not.toContain("CHICKEN-");
+  });
+
+  it("서버가 안 알려 주면 비워 둔다 — 짐작하지 않는다", async () => {
+    // matchedOptions 는 1순위 하나에 대한 답이라 대안 후보에는 쓸 수 없다.
+    // 그걸 돌려 쓰면 '매운 뼈' 를 고른 사람에게 "형태: 순살, 그대로예요" 라고 말하게 된다.
+    const r = await 매핑(가짜백엔드({}, 애매({
+      matchedOptions: [{ label: "형태", value: "순살", matched: false, note: "없어요" }],
+    })));
+    for (const c of r.candidates ?? []) {
+      expect(c.unmatchedLabels).toBeUndefined();
+    }
+    // 저장한 조건 자체는 그대로 보여 준다. 판단만 안 할 뿐이다.
+    expect(r.profileOptions?.map((o) => o.label)).toEqual(["형태"]);
+    expect(r.profileOptions?.every((o) => o.matched)).toBe(true);
+  });
+});
+
 describe("상품 ID 를 화면으로 내보내지 않는다", () => {
   it("후보 표식은 c1·c2 형태다", async () => {
     const r = await 매핑(가짜백엔드({}, 기본추천({
