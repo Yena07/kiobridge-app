@@ -49,6 +49,18 @@ const 오늘의후보: 후보[] = [
 ];
 
 const 원 = (n: number) => n.toLocaleString("ko-KR") + "원";
+
+// 이유 문장은 사용자에게 그대로 읽히는 글이다. "뼈을 고르셨는데" 처럼 조사가 틀리면
+// 기계가 찍어 낸 티가 나고, 사용자의 말로 설명한다는 이 화면의 전제가 무너진다.
+// 마지막 글자에 받침이 있으면 앞의 조사를, 없으면 뒤의 조사를 쓴다.
+const 조사 = (w: string, 받침있음: string, 받침없음: string) => {
+  const c = w.charCodeAt(w.length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return 받침없음;   // 한글이 아니면 받침 없는 쪽
+  return (c - 0xac00) % 28 === 0 ? 받침없음 : 받침있음;
+};
+const 을를 = (w: string) => w + 조사(w, "을", "를");
+const 은는 = (w: string) => w + 조사(w, "은", "는");
+const 이가 = (w: string) => w + 조사(w, "이", "가");
 const 고른값 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축]?.[0];
 const 고른값들 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축] ?? [];
 
@@ -66,20 +78,27 @@ function 절대조건으로거르기(p: ProfileData | undefined) {
 
   for (const c of 오늘의후보) {
     if (c.품절) {
-      뺀이유.push({ kind: "excluded", text: `${c.name}은 지금 팔지 않아서 뺐어요` });
+      뺀이유.push({ kind: "excluded", text: `${은는(c.name)} 지금 팔지 않아서 뺐어요` });
       continue;
     }
     const 걸린알레르기 = (c.알레르기 ?? []).filter((a) => 알레르기.includes(a));
     if (걸린알레르기.length > 0) {
       뺀이유.push({
         kind: "excluded",
-        text: `${걸린알레르기.join("·")} 알레르기를 알려주셔서 ${c.name}은 뺐어요`,
+        text: `${걸린알레르기.join("·")} 알레르기를 알려주셔서 ${은는(c.name)} 뺐어요`,
       });
       continue;
     }
-    // 전용 메뉴는 이용 방식이 다르면 애초에 담을 수 없다.
-    if (c.이용방식 && 이용방식 && c.이용방식 !== 이용방식) {
-      뺀이유.push({ kind: "excluded", text: `${c.name}은 ${c.이용방식}만 돼서 뺐어요` });
+    // 전용 메뉴는 그 이용 방식이 아니면 담을 수 없다.
+    // 사용자가 이용 방식을 안 골랐으면 담을 수 있다고 장담할 수 없으므로 이때도 뺀다.
+    // 남겨 두면 아무 조건도 안 맞는 전용 메뉴가 1순위로 올라올 수 있다.
+    if (c.이용방식 && c.이용방식 !== 이용방식) {
+      뺀이유.push({
+        kind: "excluded",
+        text: 이용방식
+          ? `${은는(c.name)} ${c.이용방식}만 돼서 뺐어요`
+          : `${은는(c.name)} ${c.이용방식}일 때만 돼서, 이용 방식을 아직 안 정하셔서 뺐어요`,
+      });
       continue;
     }
     남은.push(c);
@@ -104,7 +123,7 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
   const 맵기 = 고른값(p, "맵기");
   const 형태 = 고른값(p, "형태");
 
-  if (이용방식) out.push({ kind: "used", text: `${이용방식}를 고르셔서 ${이용방식}가 되는 메뉴만 남겼어요` });
+  if (이용방식) out.push({ kind: "used", text: `${을를(이용방식)} 고르셔서 ${이가(이용방식)} 되는 메뉴만 남겼어요` });
   if (맵기) {
     out.push(고름?.맵기 === 맵기
       ? { kind: "used", text: `맵기를 ${맵기}으로 저장해 두셔서 ${맵기} 메뉴로 맞췄어요` }
@@ -112,8 +131,8 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
   }
   if (형태) {
     out.push(고름?.형태 === 형태
-      ? { kind: "used", text: `${형태}을 고르셔서 ${형태} 메뉴로 맞췄어요` }
-      : { kind: "used", text: `${형태}을 고르셨는데 오늘은 그 조합이 없어서 가장 가까운 걸로 골랐어요` });
+      ? { kind: "used", text: `${을를(형태)} 고르셔서 ${형태} 메뉴로 맞췄어요` }
+      : { kind: "used", text: `${을를(형태)} 고르셨는데 오늘은 그 조합이 없어서 가장 가까운 걸로 골랐어요` });
   }
   return out;
 }
@@ -151,6 +170,17 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
     options: 확인표(profile, 고름),
   };
 
+  // 절대 조건에 다 걸려서 담을 수 있는 게 하나도 안 남을 수 있다.
+  // 그때 item 없이 exact/changed/low_confidence 를 돌려주면 화면이 item 을 있다고 믿고
+  // 그리다가 터진다. 담을 게 없다는 건 그 자체로 not_found 이므로 그렇게 답한다.
+  if (!고름 && state !== "not_found") {
+    return {
+      result: "not_found",
+      message: "조건에 맞는 메뉴가 오늘은 없어요. 알레르기나 이용 방식 때문에 모두 빠졌어요.",
+      reasons: 이유,
+    };
+  }
+
   switch (state) {
     case "exact":
       return { result: "exact", reasons: 이유, item };
@@ -178,14 +208,18 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
 
     case "changed": {
       // 달라진 점은 지어내지 않는다. 사용자가 고른 값 중 하나를 실제로 못 맞췄다고 표시한다.
-      const 컵 = 고른값(profile, "컵");
-      const options = 확인표(profile, 고름).map((o) =>
-        o.label === "컵" ? { ...o, matched: false, note: "오늘은 제공되지 않아요" } : o,
+      // '컵'을 고정으로 짚으면 컵을 안 고른 프로필에서는 달라진 행이 하나도 안 생긴다.
+      // 그러면 화면은 "달라진 내용을 확인했어요" 체크를 요구하면서 무엇이 달라졌는지
+      // 한 줄도 못 보여 준다. 컵이 있으면 컵을, 없으면 첫 번째 행을 짚는다.
+      const 표 = 확인표(profile, 고름);
+      const 짚을행 = 표.find((o) => o.label === "컵") ?? 표[0];
+      const options = 표.map((o) =>
+        o === 짚을행 ? { ...o, matched: false, note: "오늘은 제공되지 않아요" } : o,
       );
       return {
         result: "changed",
-        diffNote: 컵
-          ? `저장하신 주문과 달라진 점이 있어요 — ${컵} 옵션이 빠졌어요. 이대로 진행할까요?`
+        diffNote: 짚을행
+          ? `저장하신 주문과 달라진 점이 있어요 — ${짚을행.value} 옵션이 빠졌어요. 이대로 진행할까요?`
           : "저장하신 주문과 달라진 점이 있어요. 이대로 진행할까요?",
         reasons: 이유,
         item: item && { ...item, options },

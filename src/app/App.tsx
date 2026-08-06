@@ -1750,8 +1750,13 @@ function OrderConfirmScreen({
 
         {!mapping && error && <OutlineBtn onClick={onBack}>프로필 다시 보기</OutlineBtn>}
 
-        {mapping?.result === "exact" && (
-          <OrderExact item={mapping.item!} reasons={mapping.reasons} onApprove={() => approve()} onCancel={onBack} />
+        {/*
+         * item 이 없으면 그리지 않는다. 예전에는 mapping.item! 로 있다고 단정했는데,
+         * 조건에 다 걸려 후보가 하나도 안 남으면 undefined 가 들어와 화면이 터진다.
+         * 목은 이제 그 경우를 not_found 로 답하지만, 화면이 서버를 믿고 단정할 이유는 없다.
+         */}
+        {mapping?.result === "exact" && mapping.item && (
+          <OrderExact item={mapping.item} reasons={mapping.reasons} onApprove={() => approve()} onCancel={onBack} />
         )}
         {mapping?.result === "clarification" && (
           <OrderClarification
@@ -1763,18 +1768,18 @@ function OrderConfirmScreen({
           />
         )}
         {mapping?.result === "not_found" && <OrderNotFound message={mapping.message} onCancel={onBack} />}
-        {mapping?.result === "changed" && (
+        {mapping?.result === "changed" && mapping.item && (
           <OrderChanged
-            item={mapping.item!}
+            item={mapping.item}
             diffNote={mapping.diffNote}
             reasons={mapping.reasons}
             onApprove={() => approve({ acknowledgedDiff: true })}
             onCancel={onBack}
           />
         )}
-        {mapping?.result === "low_confidence" && (
+        {mapping?.result === "low_confidence" && mapping.item && (
           <OrderLowConfidence
-            item={mapping.item!}
+            item={mapping.item}
             reasons={mapping.reasons}
             /* 사용자가 카드를 눌러 "이 메뉴가 맞다"고 짚어야만 여기까지 온다. 그 사실을 서버에도 알린다. */
             onApprove={() => approve({ confirmedLowConfidence: true })}

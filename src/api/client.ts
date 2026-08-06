@@ -54,6 +54,17 @@ export const unregisterProfile = (id: string): void => {
 };
 export const clearProfiles = (): void => {
   profiles.clear();
+  // 진행 중이던 매핑 세션도 같이 지운다. 프로필은 지웠는데 그 프로필로 만든
+  // 답이 서버에 남아 있으면 "모두 지워요" 가 여전히 사실이 아니다.
+  sessions.clear();
+};
+
+// 목이 흉내 내는 응답 지연. 시연에서는 실제로 기다리는 편이 자연스럽지만
+// (연결 중·찾는 중 화면이 한순간에 지나가면 무슨 일이 일어났는지 안 보인다),
+// 테스트에서는 순수한 대기라 0 으로 낮춘다. setScenario 와 같은 시연용 손잡이다.
+let delays = { pairing: 1800, mapping: 1300, approve: 600 };
+export const setMockDelays = (patch: Partial<typeof delays>): void => {
+  delays = { ...delays, ...patch };
 };
 
 // ─── Mock 구현 ────────────────────────────────────────────────────────────────
@@ -71,11 +82,14 @@ function buildAbortedSteps(): StepStatus[] {
   return STEPS.map((_, i) => (i < ABORT_STEP ? "done" : i === ABORT_STEP ? "failed" : "waiting"));
 }
 
+// 서버가 이 페어링에 뭐라고 답했는지. 승인 검사의 기준이 된다.
+const sessions = new Map<string, { result: MappingState; candidateIds: string[] }>();
+
 const plans = new Map<string, { startedAt: number; outcome: Scenario["execution"] }>();
 
 export const mockApi: KioBridgeApi = {
   async claimPairing(claimCode) {
-    await delay(1800);
+    await delay(delays.pairing);
     if (scenario.pairing === "failed") {
       throw new KioBridgeError("CLAIM_INVALID", "유효하지 않은 QR입니다", false);
     }
@@ -90,27 +104,54 @@ export const mockApi: KioBridgeApi = {
   },
 
   async requestMapping(_pairingId, profileId) {
-    await delay(1300);
+    await delay(delays.mapping);
+    // 등록되지 않은 프로필로는 답을 만들지 않는다. undefined 를 그대로 넘기면
+    // 사용자가 고른 적 없는 임의 메뉴가 승인 화면까지 올라간다.
+    // 지운 프로필로 조회하는 경우도 여기서 걸린다.
+    const profile = profiles.get(profileId);
+    if (!profile) {
+      throw new KioBridgeError("PROFILE_NOT_FOUND", "프로필을 찾을 수 없어요", false);
+    }
     // 응답 내용은 전부 이 프로필에서 나온다. 시나리오 스위치는 결과의 '종류'만 고른다.
-    return buildMapping(scenario.mapping, profiles.get(profileId));
+    const res = buildMapping(scenario.mapping, profile);
+    // 서버가 자기가 뭐라고 답했는지 기억해 둔다. 이게 없으면 승인 검사에서
+    // 클라이언트가 보낸 mappingResult 를 믿어야 하고, candidateId 가 실제로
+    // 우리가 준 후보인지도 확인할 수 없다.
+    sessions.set(_pairingId, {
+      result: res.result,
+      candidateIds: (res.candidates ?? []).map((c) => c.candidateId),
+    });
+    return res;
   },
 
   async approve(input) {
     // 서버도 승인 조건을 다시 검증한다. 프론트 가드만 믿지 않는다.
-    if (input.mappingResult === "not_found") {
+    // 기준은 클라이언트가 보낸 값이 아니라 우리가 방금 답한 내용이다.
+    const session = sessions.get(input.pairingId);
+    if (!session) {
+      throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
+    }
+    const result = session.result;
+    if (result === "not_found") {
       throw new KioBridgeError("MENU_NOT_FOUND", "담을 수 있는 메뉴가 없어요", false);
     }
-    if (input.mappingResult === "clarification" && !input.candidateId) {
-      throw new KioBridgeError("CANDIDATE_REQUIRED", "메뉴를 선택해 주세요", true);
+    if (result === "clarification") {
+      if (!input.candidateId) {
+        throw new KioBridgeError("CANDIDATE_REQUIRED", "메뉴를 선택해 주세요", true);
+      }
+      // 우리가 주지 않은 후보를 담아 달라고 하면 거절한다.
+      if (!session.candidateIds.includes(input.candidateId)) {
+        throw new KioBridgeError("CANDIDATE_UNKNOWN", "선택한 메뉴를 찾을 수 없어요", true);
+      }
     }
-    if (input.mappingResult === "changed" && !input.acknowledgedDiff) {
+    if (result === "changed" && !input.acknowledgedDiff) {
       throw new KioBridgeError("DIFF_NOT_ACKNOWLEDGED", "달라진 내용을 확인해 주세요", true);
     }
     // 확신이 낮을수록 사용자가 직접 짚었다는 사실이 더 중요하다. changed 와 같은 무게로 본다.
-    if (input.mappingResult === "low_confidence" && !input.confirmedLowConfidence) {
+    if (result === "low_confidence" && !input.confirmedLowConfidence) {
       throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
     }
-    await delay(600);
+    await delay(delays.approve);
     const planId = `pln_${Date.now()}`;
     plans.set(planId, { startedAt: Date.now(), outcome: scenario.execution });
     return { planId };
