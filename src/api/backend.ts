@@ -107,7 +107,7 @@ export const LOW_CONFIDENCE = 0.7;
 
 export function createApi(backend: Backend, environmentId = "chicken-store"): KioBridgeApi {
   // 세션 하나에 대해 서버가 뭐라고 답했는지. 승인 검사와 실행 조회의 기준이 된다.
-  const 세션 = new Map<string, { rec: RecommendationResult; result: MappingResponse["result"] }>();
+  const 세션 = new Map<string, { rec: RecommendationResult; result: MappingResponse["result"]; executed?: boolean }>();
 
   const 판정 = (r: RecommendationResult): MappingResponse["result"] => {
     if (!r.recommendedCandidateId) return "not_found";
@@ -143,7 +143,10 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         ...제외.map((e) => ({ kind: "excluded" as const, text: e.explanation })),
       ];
 
+      // 서버가 display 를 빠뜨리면 이름 없는 후보가 화면에 뜬다.
+      // 빈칸을 보여 주느니 그 후보를 빼는 게 낫다.
       const 보이기 = (id: string) => rec.display[id];
+      const 보일수있나 = (id: string) => Boolean(rec.display[id]?.displayName);
       const 고름 = rec.recommendedCandidateId ? 보이기(rec.recommendedCandidateId) : undefined;
 
       if (result === "not_found") {
@@ -159,6 +162,7 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
           profileOptions: rec.matchedOptions.map((o) => ({ ...o, matched: true, note: undefined })),
           // 상품 ID 를 화면으로 내보내지 않는다. 이번 응답 안에서만 쓰는 표식으로 바꾼다.
           candidates: [rec.recommendedCandidateId!, ...rec.alternativeCandidateIds]
+            .filter(보일수있나)
             .map((id, i) => ({
               candidateId: `c${i + 1}`,
               ...보이기(id),
@@ -213,6 +217,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
       if (!v.valid) {
         throw new KioBridgeError("VALIDATION_FAILED", v.errors?.[0] ?? "계획을 검증하지 못했어요", false);
       }
+      // 실행은 세션당 한 번이다. 두 번 나가면 키오스크에 두 번 담긴다.
+      // 화면이 연타를 막지만 서버 쪽에서도 막아 둔다.
+      if (s.executed) {
+        throw new KioBridgeError("ALREADY_APPROVED", "이미 담았어요", false);
+      }
+      s.executed = true;
       const { planId } = await backend.execute(input.pairingId);
       // 실행 조회는 sessionId 기준이므로 화면이 들고 다닐 값에 함께 실어 둔다.
       return { planId: `${input.pairingId}::${planId}` };
@@ -287,7 +297,13 @@ export function createHttpBackend(baseUrl: string): Backend {
     }
     // 204 만 막으면 부족하다. 본문 없이 200 을 주는 서버도 있고 그때 json() 이 터진다.
     const 본문 = await res.text();
-    return (본문 ? JSON.parse(본문) : undefined) as T;
+    if (!본문) return undefined as T;
+    try {
+      return JSON.parse(본문) as T;
+    } catch {
+      // 파싱 실패가 그대로 올라가면 화면이 SyntaxError 를 사용자에게 보여 준다.
+      throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
+    }
   };
   const 보내기 = <T>(path: string, body: unknown) =>
     부르기<T>(path, { method: "POST", body: JSON.stringify(body) });
@@ -296,9 +312,9 @@ export function createHttpBackend(baseUrl: string): Backend {
     createSession: (i) => 보내기("/api/v1/sessions", i),
     filterCandidates: (i) => 보내기("/api/v1/candidate-filters", i),
     recommend: (i) => 보내기("/api/v1/recommendations", i),
-    submit: (id, s) => 보내기(`/api/v1/sessions/${id}/submission`, s),
-    validate: (id) => 보내기(`/api/v1/sessions/${id}/validate`, {}),
-    execute: (id) => 보내기(`/api/v1/sessions/${id}/execute`, {}),
-    getEvidence: (id) => 부르기(`/internal/simulation/evidence/${id}`),
+    submit: (id, s) => 보내기(`/api/v1/sessions/${encodeURIComponent(id)}/submission`, s),
+    validate: (id) => 보내기(`/api/v1/sessions/${encodeURIComponent(id)}/validate`, {}),
+    execute: (id) => 보내기(`/api/v1/sessions/${encodeURIComponent(id)}/execute`, {}),
+    getEvidence: (id) => 부르기(`/internal/simulation/evidence/${encodeURIComponent(id)}`),
   };
 }

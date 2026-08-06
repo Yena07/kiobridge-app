@@ -218,6 +218,34 @@ describe("forgetAll", () => {
   });
 });
 
+describe("changed 는 확인 표시를 받아야 넘어간다", () => {
+  it("확인 표시가 없으면 실행하지 않는다", async () => {
+    const execute = vi.fn(async () => ({ planId: "pln_1" }));
+    const b = 가짜백엔드({ execute }, 기본추천({
+      matchedOptions: [{ label: "컵", value: "종이컵", matched: false }],
+    }));
+    const api = createApi(b);
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    await expect(
+      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "changed" }),
+    ).rejects.toThrow();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("같은 세션에서 두 번 실행하지 않는다", async () => {
+    const execute = vi.fn(async () => ({ planId: "pln_1" }));
+    const api = createApi(가짜백엔드({ execute }));
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    await api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" });
+    await expect(
+      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" }),
+    ).rejects.toThrow();
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
   it("cart_ready 는 모든 단계를 done 으로 만든다", async () => {
     const api = createApi(가짜백엔드());

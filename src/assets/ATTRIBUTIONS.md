@@ -16,6 +16,32 @@ CC BY-SA 는 저작자 표시 · 라이선스 링크 · 변경 여부 표시를 
 - 원본: https://github.com/phosphor-icons/core
 - 받은 경로: https://unpkg.com/@phosphor-icons/core/assets/duotone/{name}-duotone.svg
 
+MIT 는 저작권 고지와 허가문 전문을 함께 배포할 것을 요구한다. 아래가 그 전문이다.
+
+```
+MIT License
+
+Copyright (c) 2023 Phosphor Icons
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 사용 중인 17개:
 bank, check-circle, clock-countdown, coffee, fork-knife, hand-pointing,
 hands-clapping, hospital, magnifying-glass, note-pencil, qr-code, receipt,

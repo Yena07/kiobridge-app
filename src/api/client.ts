@@ -121,6 +121,9 @@ function buildAbortedSteps(): StepStatus[] {
 
 // 서버가 이 페어링에 뭐라고 답했는지. 승인 검사의 기준이 된다.
 const sessions = new Map<string, {
+  profileId: string;
+  expiresAt: number;
+  approved: boolean;
   result: MappingState;
   candidateIds: string[];
   item?: { displayName: string; priceText: string };
@@ -161,6 +164,11 @@ export const mockApi: KioBridgeApi = {
     // 클라이언트가 보낸 mappingResult 를 믿어야 하고, candidateId 가 실제로
     // 우리가 준 후보인지도 확인할 수 없다.
     sessions.set(_pairingId, {
+      profileId,
+      // 목은 페어링을 따로 들고 있지 않으므로 매핑 시점부터 5분으로 둔다.
+      // 실제 client 에서는 서버가 준 만료 시각을 쓴다.
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      approved: false,
       result: res.result,
       candidateIds: (res.candidates ?? []).map((c) => c.candidateId),
       // 승인 결과로 장바구니를 만들려면 무엇을 담기로 했는지도 알아야 한다.
@@ -182,6 +190,20 @@ export const mockApi: KioBridgeApi = {
     const session = sessions.get(input.pairingId);
     if (!session) {
       throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
+    }
+    // 매핑을 요청한 프로필과 승인하는 프로필이 같아야 한다.
+    // 다르면 A 로 찾아 놓고 B 를 담는 게 된다.
+    if (session.profileId !== input.profileId) {
+      throw new KioBridgeError("PROFILE_MISMATCH", "메뉴를 다시 찾아 주세요", true);
+    }
+    // 끝난 연결로는 승인할 수 없다. 화면이 막고 있지만 서버도 다시 본다.
+    if (session.expiresAt <= Date.now()) {
+      throw new KioBridgeError("CLAIM_EXPIRED", "연결 시간이 지났어요", true);
+    }
+    // 같은 매핑으로 두 번 담지 않는다. 연타나 재전송으로 두 개가 담기면
+    // 사용자는 한 번 승인하고 두 개를 받는다.
+    if (session.approved) {
+      throw new KioBridgeError("ALREADY_APPROVED", "이미 담았어요", false);
     }
     const result = session.result;
     if (result === "not_found") {
@@ -209,6 +231,7 @@ export const mockApi: KioBridgeApi = {
     if (!담을것) {
       throw new KioBridgeError("MENU_NOT_FOUND", "담을 수 있는 메뉴가 없어요", false);
     }
+    session.approved = true;
     const planId = `pln_${Date.now()}`;
     plans.set(planId, {
       startedAt: Date.now(),
@@ -221,8 +244,8 @@ export const mockApi: KioBridgeApi = {
   },
 
   async forgetAll() {
+    // clearProfiles 가 profiles·sessions·plans 를 모두 비운다.
     clearProfiles();
-    plans.clear();
   },
 
   async getPlanStatus(planId) {

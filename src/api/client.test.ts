@@ -270,6 +270,26 @@ describe("승인 검사 — 서버가 자기 답을 기준으로 본다", () => 
     ).rejects.toThrow();
   });
 
+  it("매핑한 프로필과 다른 프로필로는 승인할 수 없다", async () => {
+    // A 로 찾아 놓고 B 를 담는 걸 막는다.
+    registerProfile(매운);
+    registerProfile(순한);
+    await api.requestMapping(PAIRING, "p1");
+    await expect(
+      api.approve({ pairingId: PAIRING, profileId: "p2", mappingResult: "exact" }),
+    ).rejects.toThrow();
+  });
+
+  it("같은 매핑으로 두 번 담을 수 없다", async () => {
+    // 연타나 재전송으로 두 개가 담기면 한 번 승인하고 두 개를 받는다.
+    registerProfile(매운);
+    await api.requestMapping(PAIRING, "p1");
+    await api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" });
+    await expect(
+      api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" }),
+    ).rejects.toThrow();
+  });
+
   it("클라이언트가 mappingResult 를 속여도 서버 판단을 따른다", async () => {
     // 화면이 changed 를 받았는데 exact 라고 보내며 확인 표시를 빼면 통과해서는 안 된다.
     setScenario({ mapping: "changed" });

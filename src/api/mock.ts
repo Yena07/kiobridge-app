@@ -212,6 +212,19 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
       ? { kind: "used", text: `${을를(형태)} 고르셔서 ${형태} 메뉴로 맞췄어요` }
       : { kind: "used", text: `${을를(형태)} 고르셨는데 오늘은 그 조합이 없어서 가장 가까운 걸로 골랐어요` });
   }
+  // 카페 축도 같이 말한다. 빼 두면 카페 사용자는 왜 이 메뉴가 나왔는지 못 듣는다.
+  const 음료 = 고른값(p, "음료");
+  const 온도 = 고른값(p, "온도");
+  if (음료) {
+    out.push(고름?.음료 === 음료
+      ? { kind: "used", text: `${을를(음료)} 고르셔서 ${음료}로 맞췄어요` }
+      : { kind: "used", text: `${을를(음료)} 고르셨는데 오늘은 그 메뉴가 없어서 가장 가까운 걸로 골랐어요` });
+  }
+  if (온도) {
+    out.push(고름?.온도 === 온도
+      ? { kind: "used", text: `${온도}로 저장해 두셔서 ${온도} 메뉴로 맞췄어요` }
+      : { kind: "used", text: `${온도}로 저장해 두셨는데 오늘은 그 온도가 없어서 가장 가까운 걸로 골랐어요` });
+  }
   return out;
 }
 
@@ -289,7 +302,13 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
     };
   }
 
-  switch (state) {
+  // 못 맞춘 조건이 있는데 exact 로 내보내면 사용자가 확인할 기회 없이 지나간다.
+  // 시나리오 스위치가 exact 를 고르더라도, 실제로 어긋난 게 있으면 changed 로 답한다.
+  // 결과 종류는 스위치가 고르지만 '맞았는지' 는 데이터가 정한다.
+  const 못맞춘게있나 = (item?.options ?? []).some((o) => !o.matched);
+  const 실제상태: MappingState = state === "exact" && 못맞춘게있나 ? "changed" : state;
+
+  switch (실제상태) {
     case "exact":
       return { result: "exact", reasons: 이유, item };
 
@@ -331,7 +350,10 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
       // 그러면 화면은 "달라진 내용을 확인했어요" 체크를 요구하면서 무엇이 달라졌는지
       // 한 줄도 못 보여 준다. 컵이 있으면 컵을, 없으면 첫 번째 행을 짚는다.
       const 표 = 확인표(profile, 고름);
-      const 짚을행 = 표.find((o) => o.label === "컵") ?? 표[0];
+      // 이용 방식은 절대 조건으로 이미 걸렀다. 그걸 "오늘은 안 돼요" 라고 짚으면
+      // "포장이 되는 메뉴만 남겼어요" 라는 이유와 정면으로 모순된다.
+      const 짚을수있는 = 표.filter((o) => o.label !== "이용 방식");
+      const 짚을행 = 짚을수있는.find((o) => o.label === "컵") ?? 짚을수있는[0];
       const options = 표.map((o) =>
         o === 짚을행 ? { ...o, matched: false, note: "오늘은 제공되지 않아요" } : o,
       );

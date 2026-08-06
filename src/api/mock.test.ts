@@ -1,5 +1,9 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// CWD 에 기대면 다른 디렉터리에서 돌릴 때 조용히 0개를 훑고 통과한다.
+const SRC = join(dirname(fileURLToPath(import.meta.url)), "..");
 import { describe, expect, it } from "vitest";
 import type { MappingState, ProfileData } from "@/domain/types";
 import { MOCK_CART, MOCK_MENU_NAME, buildMapping } from "./mock";
@@ -241,7 +245,7 @@ describe("결제 경계", () => {
         for (const w of 금지) if (내용.includes(w)) 걸린것.push(`${경로}: ${w}`);
       }
     };
-    훑기("src");
+    훑기(SRC);
     expect(걸린것).toEqual([]);
   });
 
@@ -259,7 +263,7 @@ describe("결제 경계", () => {
         if (readFileSync(경로, "utf8").includes(금지표현)) 걸린것.push(경로);
       }
     };
-    훑기("src");
+    훑기(SRC);
     expect(걸린것).toEqual([]);
   });
 });

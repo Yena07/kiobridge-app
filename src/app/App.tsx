@@ -248,13 +248,13 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
 
 // ─── Phone ────────────────────────────────────────────────────────────────────
 
+// 실제 번호가 아닌 것이 눈에 보이는 시연용 값. 010-0000-0000 은 실제로
+// 쓰이지 않는 번호라 누구의 것도 아니다.
+const DEMO_PHONE = "01000000000";
+
 function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBack: () => void }) {
-  const [phone, setPhone] = useState("");
+  const [phone] = useState(DEMO_PHONE);
   const formatted = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/[^0-9]/g, "");
-    if (raw.length <= 11) setPhone(raw);
-  };
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
@@ -275,20 +275,22 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
           <span style={{ ...TYPE.bodyBold, color: TEXT_1, backgroundColor: CANVAS, padding: "10px 16px", borderRadius: RADIUS.pill, flexShrink: 0 }}>
             +82
           </span>
+          {/*
+           * 실제 번호를 받지 않는다. 심사 규칙이 실제 개인정보 수집을 금지하고,
+           * 가상·합성 데이터만 허용한다.
+           *
+           * 자동완성을 끄는 것만으로는 부족하다 — 사용자가 자기 번호를 직접
+           * 칠 수 있고, 그러면 실제 번호가 앱에 들어온다. 시연용 번호를 미리
+           * 채우고 읽기 전용으로 둔다. 칠 게 없으니 자동완성도 필요 없고,
+           * 손 떨리는 분이 11자리를 치는 부담도 사라진다.
+           */}
           <input
             id="phone-input"
             type="tel"
             inputMode="numeric"
-            // 자동완성을 막지 않는다. 인증이 끝나면 바로 버리므로 막는다고
-            // 더 안전해지지 않고, 손 떨리는 분에게 11자리를 손으로 치게 하는
-            // 비용만 남는다. 이 앱의 주 사용자에게는 그게 더 큰 문제다.
-            autoComplete="tel"
+            readOnly
+            aria-readonly="true"
             value={formatted}
-            onChange={handleChange}
-            placeholder="전화번호 입력"
-            // 적을 게 이 칸 하나뿐인 화면이다. 화면 전환 포커스가 제목이 아니라
-            // 여기로 오도록 표시해 둔다 (App 의 화면영역 효과).
-            data-autofocus
             style={{
               flex: 1, minWidth: 0, fontSize: 19, fontWeight: 600, color: TEXT_1, fontFamily: FONT,
               letterSpacing: "-0.02em", border: "none", outline: "none",
@@ -300,7 +302,7 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-4">
         <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center", lineHeight: 1.7 }}>
-          만 14세 이상만 가입할 수 있어요.{" "}
+          시연용 번호가 미리 채워져 있어요. 실제 번호는 받지 않습니다.{" "}
           <span style={{ color: TEXT_2, textDecoration: "underline" }}>개인정보처리방침</span>
         </p>
         <PrimaryBtn onClick={() => phone.length === 11 && onNext(phone)} disabled={phone.length < 11}>
@@ -944,8 +946,11 @@ function SavedProfilesScreen({
       if (selectedId !== null) setSelectedId(null);
       return;
     }
+    // 목록이 실제로 바뀌었을 때만 따라간다. selectedId 를 의존 항목에 넣어 두면
+    // 삭제 확인창을 띄웠다가 취소해도 이 이펙트가 다시 돌면서 선택이 옮겨진다.
     if (!profiles.some((p) => p.id === selectedId)) setSelectedId(profiles[0].id);
-  }, [profiles, selectedId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles]);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -1210,7 +1215,10 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
       clearTimeout(t);
       if (detect) clearTimeout(detect);
     };
-  }, [onDetected]);
+    // onDetected 는 인라인 화살표로 넘어와 매 렌더 새 함수가 된다.
+    // 의존 항목에 두면 타이머가 계속 리셋되어 스캔이 끝나지 않을 수 있다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
@@ -1592,8 +1600,8 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
       body: "실제 이름·주소·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
     },
     {
-      title: "전화번호를 넣으셨다면",
-      body: "'전화번호로 로그인'을 고르신 경우에만 번호를 받아요. 문자 인증에만 쓰고 인증이 끝나면 바로 지워요. 저장해 두지 않습니다. 로그인 없이 쓰시면 번호를 아예 받지 않아요.",
+      title: "전화번호는 어떻게 하나요",
+      body: "실제 전화번호는 받지 않아요. 로그인 화면에는 시연용 번호가 미리 채워져 있고 고칠 수 없어요. 그 값도 인증이 끝나면 바로 지웁니다.",
     },
     {
       title: "키오스크에 넘기는 것",
@@ -2718,7 +2726,9 @@ export default function App() {
                   setPairingId(null); setPairingExpiresAt(null); setFromQr(false);
                 },
               })}
-              onProfiles={() => { setTab("menu"); setFromQr(false); }}
+              // 연결이 살아 있으면 주문 경로를 끊지 않는다. 하단 탭과 같은 판단이다.
+              // 끊으면 QR 을 다시 찍는 것 말고 되돌릴 방법이 없다.
+              onProfiles={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
               onA11y={() => setScreen("a11y")}
               onPrivacy={() => setScreen("privacy")}
             />
