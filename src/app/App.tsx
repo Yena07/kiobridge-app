@@ -1121,7 +1121,15 @@ function QrScreen({ onPaired }: { onPaired: (pairingId: string) => void }) {
         <AppLogo size={26} />
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: 0 }} role="status" aria-live="polite">
+      {/*
+       * overflow-hidden 이 아니라 overflow-y-auto 다.
+       * 이 안의 패널들(연결중·연결됨·실패·만료)은 아래 버튼을 mt-auto 로 바닥에 붙인다.
+       * 그릇이 hidden 이면 내용이 커졌을 때 그 버튼이 잘려 나가고, 스크롤도 안 되니
+       * 손으로는 닿을 방법이 없어진다. 앱이 주는 큰 글씨(1.18배)까지는 넘치지 않지만
+       * 사용자가 브라우저·OS 글씨 크기를 더 키우면 1.6배 근처부터 넘친다(측정값 102px).
+       * auto 로 두면 넘칠 때만 스크롤이 생기고, 넘치지 않으면 지금과 똑같이 보인다.
+       */}
+      <div className="flex-1 flex flex-col overflow-y-auto" style={{ minHeight: 0 }} role="status" aria-live="polite">
         {phase === "connecting" && <PairingConnecting />}
         {phase === "connected" && pairing && (
           <PairingConnected
