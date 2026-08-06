@@ -290,6 +290,9 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
             inputMode="numeric"
             readOnly
             aria-readonly="true"
+            // 고칠 수 없는 칸에서 탭이 한 번 멈출 이유가 없다.
+            // 값은 아래 안내 문구가 대신 알려 준다.
+            tabIndex={-1}
             value={formatted}
             style={{
               flex: 1, minWidth: 0, fontSize: 19, fontWeight: 600, color: TEXT_1, fontFamily: FONT,
@@ -957,8 +960,9 @@ function SavedProfilesScreen({
       if (selectedId !== null) setSelectedId(null);
       return;
     }
-    // 목록이 실제로 바뀌었을 때만 따라간다. selectedId 를 의존 항목에 넣어 두면
-    // 삭제 확인창을 띄웠다가 취소해도 이 이펙트가 다시 돌면서 선택이 옮겨진다.
+    // 목록이 실제로 바뀌었을 때만 따라간다.
+    // 지워진 프로필이 골라져 있었으면 첫 번째로 옮긴다. 삭제를 취소한 경우에는
+    // profiles 가 그대로라 이 이펙트가 돌지 않으므로 선택도 움직이지 않는다.
     if (!profiles.some((p) => p.id === selectedId)) setSelectedId(profiles[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profiles]);
@@ -993,13 +997,11 @@ function SavedProfilesScreen({
                 profile={profile}
                 selected={selectedId === profile.id}
                 onSelect={() => setSelectedId(profile.id)}
-                onDelete={() => {
-                  onDeleteProfile(profile.id);
-                  if (selectedId === profile.id) {
-                    const remaining = profiles.filter((p) => p.id !== profile.id);
-                    setSelectedId(remaining[0]?.id ?? null);
-                  }
-                }}
+                // 선택을 여기서 옮기지 않는다. onDeleteProfile 은 이제 확인창만
+                // 열고 아직 지우지 않는데, 여기서 옮기면 대답도 하기 전에 선택이
+                // 움직이고 '그대로 두기' 를 눌러도 돌아오지 않는다.
+                // 실제로 지워진 뒤의 선택 이동은 아래 useEffect 가 맡는다.
+                onDelete={() => onDeleteProfile(profile.id)}
               />
             ))}
           </fieldset>

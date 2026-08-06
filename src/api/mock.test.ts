@@ -43,8 +43,25 @@ const 모든상태: MappingState[] = ["exact", "clarification", "not_found", "ch
 const 이유문구 = (r: ReturnType<typeof buildMapping>) => (r.reasons ?? []).map((x) => x.text);
 
 describe("buildMapping — 결과 종류", () => {
-  it.each(모든상태)("%s 상태는 같은 result 를 돌려준다", (state) => {
+  it.each(모든상태)("%s 상태는 같은 result 를 돌려준다 (어긋난 게 없을 때)", (state) => {
+    // 어긋난 게 있으면 exact 는 changed 로 승격된다. 이 프로필은 다 맞는다.
     expect(buildMapping(state, 땅콩알레르기).result).toBe(state);
+  });
+
+  it("어긋난 게 있으면 exact 를 골라도 changed 로 답한다", () => {
+    // 순한맛+뼈 조합은 오늘 메뉴에 없다.
+    const r = buildMapping("exact", 알레르기없음);
+    expect(r.result).toBe("changed");
+  });
+
+  it("어긋난 게 있으면 없는 불일치를 지어내지 않는다", () => {
+    // 예전에는 진짜 불일치가 있어도 시연용 경로를 타서 멀쩡한 '컵' 에
+    // "빠졌어요" 를 붙이고 그걸 대표 사유로 내세웠다.
+    const r = buildMapping("exact", 알레르기없음);
+    const 어긋난행 = (r.item?.options ?? []).filter((o) => !o.matched);
+    expect(어긋난행.map((o) => o.label)).toEqual(["형태"]);
+    expect(r.diffNote).toContain("형태");
+    expect(r.diffNote).not.toContain("일반컵");
   });
 
   it("프로필이 없어도 터지지 않는다", () => {
