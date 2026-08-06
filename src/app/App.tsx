@@ -1997,16 +1997,33 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
     steps: STEPS.map(() => "waiting"),
   });
 
+  // 폴링이 실패했을 때 사용자에게 보여 줄 말. null 이면 아직 문제가 없다는 뜻이다.
+  const [pollError, setPollError] = useState<string | null>(null);
+
   useEffect(() => {
-    if (status.state !== "running") return;
+    if (status.state !== "running" || pollError) return;
     let alive = true;
+    // 한 번 삐끗한 것과 정말 끊긴 것은 다르다. 잠깐의 실패로 겁주지 않되,
+    // 계속 실패하면 반드시 알린다. 예전에는 catch(() => {}) 로 전부 버려서
+    // 상태가 영원히 running 에 머물고 "담고 있어요" 스피너가 끝나지 않았다.
+    // 사용자는 실패한 줄도 모르고 빠져나갈 버튼도 없었다.
+    let 연속실패 = 0;
+    const 한계 = 5;
     const poll = () => {
-      api.getPlanStatus(planId).then((s) => { if (alive) setStatus(s); }).catch(() => {});
+      api.getPlanStatus(planId)
+        .then((s) => { if (alive) { 연속실패 = 0; setStatus(s); } })
+        .catch((e: KioBridgeError) => {
+          if (!alive) return;
+          연속실패 += 1;
+          if (연속실패 >= 한계) {
+            setPollError(e?.message || "진행 상황을 확인할 수 없어요");
+          }
+        });
     };
     poll();
     const timer = setInterval(poll, POLL_MS);
     return () => { alive = false; clearInterval(timer); };
-  }, [planId, status.state]);
+  }, [planId, status.state, pollError]);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -2021,7 +2038,30 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
         role="status"
         aria-live={status.state === "aborted" ? "assertive" : "polite"}
       >
-        {status.state === "running" && <ExecInProgress statuses={status.steps} />}
+        {/*
+         * 확인이 안 되는 것과 실패한 것은 다르다. 키오스크가 어떻게 됐는지 모르는
+         * 상황이므로 "중단됐다"고 단정하지 않는다. 다만 사용자를 스피너 앞에
+         * 세워 두지 않고, 지금 무슨 상황인지와 나갈 길을 준다.
+         */}
+        {status.state === "running" && pollError && (
+          <div className="flex flex-col flex-1" style={{ padding: `32px 0 24px` }}>
+            <StatusHero
+              mark={<Pictogram name="warning" size={64} color={WARN} />}
+              title={<>진행 상황을<br />확인할 수 없어요</>}
+              desc={pollError}
+            />
+            <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: WARN_BG, marginTop: 32 }}>
+              <p style={{ ...TYPE.caption, color: TEXT_1 }}>
+                <strong style={{ fontWeight: 600 }}>키오스크 화면을 직접 확인해 주세요.</strong>{" "}
+                담겼을 수도 있고 아닐 수도 있어요. 잘 모르겠으면 직원에게 이 화면을 보여 주세요.
+              </p>
+            </div>
+            <div className="mt-auto" style={{ paddingTop: 24 }}>
+              <PrimaryBtn onClick={onHome}>처음으로</PrimaryBtn>
+            </div>
+          </div>
+        )}
+        {status.state === "running" && !pollError && <ExecInProgress statuses={status.steps} />}
         {status.state === "cart_ready" && status.cart && (
           <ExecSuccess cart={status.cart} steps={status.steps} onHome={onHome} />
         )}
