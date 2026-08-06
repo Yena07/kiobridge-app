@@ -1,28 +1,44 @@
 # 프론트엔드 ↔ 백엔드 연동 메모
 
-팀 API 명세서를 프론트엔드 코드와 대조한 결과입니다. **연동 전에 맞춰야 할 것**을 정리했습니다.
+**연동 코드는 이미 다 짜여 있습니다.** 백엔드는 `Backend` 인터페이스 하나만 채우면 되고, 화면 코드는 한 줄도 바뀌지 않습니다.
 
-## 1. 프론트가 가정한 계약이 명세와 다릅니다
+## 붙이는 방법 — 한 줄입니다
 
-화면은 `src/api/client.ts` 의 `KioBridgeApi` 네 개만 알고 있습니다.
+```ts
+// src/api/client.ts 마지막 줄
+- export const api: KioBridgeApi = mockApi;
++ export const api = createApi(createHttpBackend("https://<서버주소>"));
+```
 
-| 프론트 함수 | 실제 호출해야 하는 경로 |
+`createHttpBackend` 는 `src/api/backend.ts` 에 있고, 명세서의 경로를 그대로 `fetch` 합니다. 서버 주소만 넣으면 됩니다.
+
+## 백엔드가 맞춰 줘야 하는 것
+
+`src/api/backend.ts` 의 `Backend` 인터페이스가 명세서와 1:1 입니다.
+
+| 메서드 | 경로 |
 | --- | --- |
-| `claimPairing(claimCode)` | `POST /api/v1/sessions` |
-| `requestMapping(pairingId, profileId)` | `POST /api/v1/candidate-filters` → `POST /api/v1/recommendations` |
-| `approve(input)` | `POST /sessions/:id/submission` → `/validate` → `/execute` |
-| `getPlanStatus(planId)` | `GET /internal/simulation/evidence/{sessionId}` |
+| `createSession` | `POST /api/v1/sessions` |
+| `filterCandidates` | `POST /api/v1/candidate-filters` |
+| `recommend` | `POST /api/v1/recommendations` |
+| `submit` | `POST /api/v1/sessions/:id/submission` |
+| `validate` | `POST /api/v1/sessions/:id/validate` |
+| `execute` | `POST /api/v1/sessions/:id/execute` |
+| `getEvidence` | `GET /internal/simulation/evidence/{sessionId}` |
 
-**화면 코드는 안 바꿔도 됩니다.** `client.ts` 의 `export const api = mockApi` 를 실제 구현으로 바꾸면서, 그 구현 안에서 위 호출들을 조립하면 됩니다.
+응답 모양은 같은 파일의 타입(`RecommendationResult`, `EvidenceSummary`)을 보시면 됩니다. **`src/api/backend.test.ts` 에 명세대로 응답하는 가짜 백엔드가 있으니 그걸 실제 응답 예시로 쓰셔도 됩니다.** 테스트 12개가 조립이 맞는지 검사합니다.
 
-### 특히 `approve` 를 주의해야 합니다
+### 두 곳만 봐 주시면 됩니다
 
-프론트는 승인을 **한 번의 호출**로 가정했는데, 실제로는 **제출 → 검증 → 실행 3단계**입니다.
+**① `evidence` 는 요약해서 주세요.** 39개 필드를 화면이 다 알 필요는 없습니다. `EvidenceSummary` 는 `state`(running/cart_ready/aborted) · `reachedStep` · `cart` · `abort` 넷뿐입니다. `EvidenceSummaryService` 가 이 모양으로 내려 주면 됩니다.
 
-- `submission` 은 "검증 X, 저장만"
-- `validate` 를 통과한 계획만 `execute` 됩니다
+**② `display` 에 사람이 읽는 값을 넣어 주세요.** 후보 표시 이름·가격입니다. 상품 ID 는 화면으로 나가면 안 되는데, 이름이 없으면 보여 줄 게 없습니다.
 
-중간 단계에서 실패할 수 있으므로, 구현할 때 **어느 단계에서 멈췄는지 구분해서** 화면에 넘겨 주세요. 지금 프론트는 `KioBridgeError.code` 로 구분합니다.
+### `approve` 는 3단계라는 걸 화면도 압니다
+
+`submit` → `validate` → `execute` 순서로 부르고, **검증에 실패하면 실행하지 않고** 사유를 화면까지 올립니다(`VALIDATION_FAILED`). 테스트로 순서와 이 동작을 잠가 두었습니다.
+
+`validate` 응답에 `errors[0]` 를 넣어 주시면 그 문장이 사용자에게 그대로 보입니다.
 
 ## 2. 질문 목록이 겹칩니다 — 조율이 필요합니다
 
