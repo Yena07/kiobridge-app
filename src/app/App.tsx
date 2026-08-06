@@ -469,6 +469,54 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
   );
 }
 
+/**
+ * 되돌릴 수 없는 동작 앞에서만 띄운다.
+ * 장소를 바꾸는 것처럼 되돌릴 수 있는 일에는 쓰지 않는다 — 매번 물으면
+ * 사람은 읽지 않고 누르게 되고, 정작 위험할 때도 그냥 누른다.
+ * 지금 이걸 쓰는 곳은 프로필 삭제와 '이 기기에서 정보 지우기' 둘뿐이다.
+ */
+function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
+  title: string; body: string; confirmLabel: string;
+  onConfirm: () => void; onCancel: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col justify-end" style={{ backgroundColor: "rgba(0,0,0,0.45)" }}>
+      <div
+        ref={ref}
+        tabIndex={-1}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-body"
+        style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: `28px ${GAP.screenX}px 24px`, outline: "none" }}
+      >
+        <h2 id="confirm-title" style={{ ...TYPE.title, color: TEXT_1, margin: 0 }}>{title}</h2>
+        <p id="confirm-body" style={{ ...TYPE.body, color: TEXT_2, marginTop: 10 }}>{body}</p>
+        <div style={{ marginTop: 24 }}>
+          {/* 지우는 쪽을 기본으로 두지 않는다. 취소가 더 누르기 쉬운 자리에 있어야 한다. */}
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{ width: "100%", minHeight: 52, borderRadius: RADIUS.button, backgroundColor: FAIL, color: "white", border: "none", cursor: "pointer", ...TYPE.bodyBold, fontFamily: FONT }}
+          >
+            {confirmLabel}
+          </button>
+          <div style={{ height: 10 }} />
+          <OutlineBtn onClick={onCancel}>그대로 두기</OutlineBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Profile Form ─────────────────────────────────────────────────────────────
 
 // 프로필 id. 사람이 읽을 값이 아니고 서버로도 나가지 않는 화면 내부 표식이다.
@@ -1423,6 +1471,10 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
       body: "실제 이름·주소·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
     },
     {
+      title: "전화번호를 넣으셨다면",
+      body: "'전화번호로 로그인'을 고르신 경우에만 번호를 받아요. 다음에도 저장한 조건을 불러오기 위한 것이고, 이 기기 안에만 있다가 '이 기기에서 정보 지우기'를 누르면 함께 사라져요. 로그인 없이 쓰시면 번호를 받지 않아요.",
+    },
+    {
       title: "키오스크에 넘기는 것",
       body: "QR로 연결할 때는 이번 주문에만 쓰는 짧은 연결 표만 오가요. 시간이 지나면 저절로 만료돼요.",
     },
@@ -2213,6 +2265,8 @@ export default function App() {
   const [profiles, setProfiles] = useState<ProfileData[]>(MOCK_PROFILES);
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
+  // 되돌릴 수 없는 동작은 물어보고 실행한다. null 이면 물어볼 게 없다는 뜻이다.
+  const [확인대기, set확인대기] = useState<{ title: string; body: string; confirmLabel: string; run: () => void } | null>(null);
   const [pairingId, setPairingId] = useState<string | null>(null);
   // 만료 시각을 루트가 들고 있어야 한다. 예전에는 QrScreen 안에만 있어서
   // 프로필을 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
@@ -2226,8 +2280,16 @@ export default function App() {
   const addProfile = (p: ProfileData) => setProfiles((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
   const deleteProfile = (id: string) => {
-    unregisterProfile(id);
-    setProfiles((prev) => prev.filter((p) => p.id !== id));
+    const 이름 = profiles.find((p) => p.id === id)?.menuName ?? "이 프로필";
+    set확인대기({
+      title: `'${이름}'을 지울까요?`,
+      body: "지우면 되돌릴 수 없어요. 저장해 두신 조건이 함께 사라져요.",
+      confirmLabel: "지우기",
+      run: () => {
+        unregisterProfile(id);
+        setProfiles((prev) => prev.filter((p) => p.id !== id));
+      },
+    });
   };
 
   // 연결이 끝나면 어느 화면에 있든 되돌린다.
@@ -2355,12 +2417,21 @@ export default function App() {
               }}
               onLogin={() => { setGuest(false); setScreen("phone"); }}
               // 저장된 정보를 지우는 길. 프로필까지 함께 비운다.
-              onClearLocal={() => {
-                // "지금까지 입력한 내용을 모두 지워요" 라고 했으면 목에 올린 사본도 지운다.
-                clearProfiles();
-                setProfiles([]); setName(""); setPhone("");
-                setOrderProfile(null); setPlanId(null);
-              }}
+              onClearLocal={() => set확인대기({
+                title: "이 기기에서 정보를 지울까요?",
+                body: "저장한 프로필과 호칭, 전화번호가 모두 사라져요. 되돌릴 수 없어요.",
+                confirmLabel: "모두 지우기",
+                run: () => {
+                  // "지금까지 입력한 내용을 모두 지워요" 라고 했으면 목에 올린 사본도 지운다.
+                  clearProfiles();
+                  setProfiles([]); setName(""); setPhone("");
+                  setOrderProfile(null); setPlanId(null);
+                  // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가
+                  // 터지면서 QR 만료 화면으로 튕겨 나간다. 방금 다 지웠는데 왜 그러는지
+                  // 사용자는 알 수 없다.
+                  setPairingId(null); setPairingExpiresAt(null); setFromQr(false);
+                },
+              })}
               onProfiles={() => { setTab("menu"); setFromQr(false); }}
               onA11y={() => setScreen("a11y")}
               onPrivacy={() => setScreen("privacy")}
@@ -2380,6 +2451,17 @@ export default function App() {
 
         {inMain && (
           <BottomNav tab={tab} onChange={handleTabChange} />
+        )}
+
+        {/* 되돌릴 수 없는 동작을 묻는 자리. 폰 프레임 안에 뜬다. */}
+        {확인대기 && (
+          <ConfirmSheet
+            title={확인대기.title}
+            body={확인대기.body}
+            confirmLabel={확인대기.confirmLabel}
+            onConfirm={() => { 확인대기.run(); set확인대기(null); }}
+            onCancel={() => set확인대기(null)}
+          />
         )}
         </div>
       </div>

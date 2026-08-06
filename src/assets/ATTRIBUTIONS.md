@@ -16,10 +16,13 @@ CC BY-SA 는 저작자 표시 · 라이선스 링크 · 변경 여부 표시를 
 - 원본: https://github.com/phosphor-icons/core
 - 받은 경로: https://unpkg.com/@phosphor-icons/core/assets/duotone/{name}-duotone.svg
 
-사용 중인 19개:
-bank, buildings, caret-left, check-circle, clock-countdown, coffee, fork-knife,
-hand-pointing, hands-clapping, hospital, magnifying-glass, note-pencil, qr-code,
-receipt, shopping-cart-simple, squares-four, user-circle, warning, x-circle
+사용 중인 17개:
+bank, check-circle, clock-countdown, coffee, fork-knife, hand-pointing,
+hands-clapping, hospital, magnifying-glass, note-pencil, qr-code, receipt,
+shopping-cart-simple, squares-four, user-circle, warning, x-circle
+
+`index.ts` 에는 buildings, caret-left 도 들어 있지만 화면에서 쓰지 않는다.
+MIT 라 남겨 두어도 고지 의무에 어긋나지 않지만, 숫자는 실제와 맞춘다.
 
 `src/assets/icons/index.ts` 는 위 SVG 파일들을 문자열로 옮겨 담은 자동 생성 파일이다.
 아이콘을 추가하면 SVG 를 받은 뒤 index.ts 를 다시 만들어야 한다.
