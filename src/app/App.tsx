@@ -461,6 +461,11 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
 
 // ─── Profile Form ─────────────────────────────────────────────────────────────
 
+// 프로필 id. 사람이 읽을 값이 아니고 서버로도 나가지 않는 화면 내부 표식이다.
+// 시각은 사람이 만든 순서를 알아보기 쉬워서 남기고, 뒤에 카운터를 붙여 충돌을 막는다.
+let 프로필일련번호 = 0;
+const newProfileId = () => `p${Date.now()}_${++프로필일련번호}`;
+
 function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; onBack: () => void }) {
   const [menuName, setMenuName] = useState("");
   const [place, setPlace] = useState<PlaceType>(null);
@@ -478,7 +483,17 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
     });
   };
 
-  const handlePlaceChange = (p: PlaceType) => { setPlace(p); setSelections({}); };
+  // 장소를 바꾼다고 고른 것을 버리지 않는다. 예전에는 setSelections({}) 라
+  // 손이 미끄러져 장소를 잘못 누르면 채워 둔 답이 경고도 없이 전부 사라졌다.
+  // 장소마다 따로 기억해 두면, 잘못 눌러도 도로 누르면 그대로 돌아온다.
+  // 확인 창을 띄우지 않아도 되돌릴 수 있으니 되묻는 것보다 조용하고 안전하다.
+  const 장소별선택 = useRef<Record<string, Record<string, string[]>>>({});
+  const handlePlaceChange = (p: PlaceType) => {
+    if (p === place) return;
+    if (place) 장소별선택.current[place] = selections;
+    setSelections(p ? (장소별선택.current[p] ?? {}) : {});
+    setPlace(p);
+  };
   const options = place ? DETAIL_OPTIONS[place] : [];
 
   return (
@@ -593,7 +608,9 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
           </p>
         )}
         <PrimaryBtn
-          onClick={() => onNext({ id: Date.now().toString(), menuName, place, selections, memo })}
+          // Date.now() 만 쓰면 같은 밀리초에 두 개를 만들 때 id 가 겹친다.
+          // 겹치면 프로필 하나를 지울 때 다른 하나도 같이 사라진다.
+          onClick={() => onNext({ id: newProfileId(), menuName, place, selections, memo })}
           disabled={!menuName.trim()}
         >
           저장하고 시작하기
@@ -754,6 +771,17 @@ function SavedProfilesScreen({
   showOrder?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(profiles[0]?.id ?? null);
+
+  // 목록이 바뀌면 고른 것도 따라가야 한다. 초기값에 갇혀 있으면
+  // 전부 지웠다가 새로 만들었을 때 아무것도 안 골라진 채로 남고,
+  // '이 프로필로 주문하기'가 계속 잠겨서 빠져나갈 방법이 없어진다.
+  useEffect(() => {
+    if (profiles.length === 0) {
+      if (selectedId !== null) setSelectedId(null);
+      return;
+    }
+    if (!profiles.some((p) => p.id === selectedId)) setSelectedId(profiles[0].id);
+  }, [profiles, selectedId]);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -1099,8 +1127,33 @@ function QrScannerModal({ onClose, onDetected, hideClose }: { onClose: () => voi
   );
 }
 
+// 스캔을 그만뒀을 때 돌아오는 자리. 예전에는 이 화면이 없어서 스캔 창에
+// 닫기 버튼을 숨겨 두었고(hideClose), 한번 들어가면 하단 탭으로 빠져나가는 것 말고는
+// 나올 방법이 없었다. 그만두는 것도 사용자가 할 수 있어야 하는 선택이다.
+function PairingIdle({ onScan }: { onScan: () => void }) {
+  return (
+    <div className="flex flex-col flex-1" style={{ padding: `32px ${GAP.screenX}px 24px` }}>
+      <StatusHero
+        mark={<Pictogram name="qrCode" size={64} color={TEXT_2} />}
+        title={<>QR 코드를<br />찍어 주세요</>}
+        desc="키오스크 화면이나 기계에 붙어 있어요"
+      />
+
+      <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
+        <p style={{ ...TYPE.caption, color: TEXT_1 }}>
+          찍지 않아도 <strong style={{ fontWeight: 600 }}>내 프로필</strong>에서 저장한 조건을 먼저 확인할 수 있어요
+        </p>
+      </div>
+
+      <div className="mt-auto" style={{ paddingTop: 24 }}>
+        <QrScanButton onScan={onScan} />
+      </div>
+    </div>
+  );
+}
+
 function QrScreen({ onPaired }: { onPaired: (pairingId: string) => void }) {
-  const [phase, setPhase] = useState<"scan" | PairingState>("scan");
+  const [phase, setPhase] = useState<"scan" | "idle" | PairingState>("scan");
   const [pairing, setPairing] = useState<PairingResult | null>(null);
 
   const handleScanned = () => {
@@ -1112,7 +1165,7 @@ function QrScreen({ onPaired }: { onPaired: (pairingId: string) => void }) {
   const handleRescan = () => setPhase("scan");
 
   if (phase === "scan") {
-    return <QrScannerModal onClose={() => {}} hideClose onDetected={handleScanned} />;
+    return <QrScannerModal onClose={() => setPhase("idle")} onDetected={handleScanned} />;
   }
 
   return (
@@ -1130,6 +1183,7 @@ function QrScreen({ onPaired }: { onPaired: (pairingId: string) => void }) {
        * auto 로 두면 넘칠 때만 스크롤이 생기고, 넘치지 않으면 지금과 똑같이 보인다.
        */}
       <div className="flex-1 flex flex-col overflow-y-auto" style={{ minHeight: 0 }} role="status" aria-live="polite">
+        {phase === "idle" && <PairingIdle onScan={handleRescan} />}
         {phase === "connecting" && <PairingConnecting />}
         {phase === "connected" && pairing && (
           <PairingConnected
