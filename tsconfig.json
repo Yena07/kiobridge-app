@@ -1,0 +1,42 @@
+{
+  // 심사 전에 타입 오류를 잡기 위한 설정. `npx tsc --noEmit` 로 확인한다.
+  // 빌드는 Vite 가 하고 tsc 는 검사만 한다(noEmit).
+  //
+  // include 에 화면 코드(src/app · src/api · src/domain · src/design)만 넣는다.
+  // src/app/components/ui/* 는 Figma Make 가 만들어 둔 shadcn 사본이라 App.tsx 가
+  // 참조하는 것만 딸려 들어온다.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": [
+    "src/app/**/*.ts",
+    "src/app/**/*.tsx",
+    "src/api/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/domain/**/*.tsx",
+    "src/design/**/*.ts",
+    "src/design/**/*.tsx",
+    "src/main.tsx"
+  ]
+}

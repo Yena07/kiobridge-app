@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vercel/
+.DS_Store
+*.log
+
+# Figma Make 편집기 부산물
+ai_chat.json
+canvas.fig
+make_binary_files/
+blob_store/
+
+# 작업 중 만든 임시 산출물 (Figma 바이너리 디코딩 · 코드 추출본)
+_png/
+_extracted/
+_extracted_manifest.txt

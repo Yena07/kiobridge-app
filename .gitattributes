@@ -1,0 +1,5 @@
+# 팀원이 macOS/Windows 를 섞어 써도 줄바꿈 때문에 diff 가 튀지 않게 한다.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.fig binary
