@@ -95,9 +95,11 @@ describe("후보별 불일치는 서버가 알려 준 것만 쓴다", () => {
     for (const c of r.candidates ?? []) {
       expect(c.unmatchedLabels).toBeUndefined();
     }
-    // 저장한 조건 자체는 그대로 보여 준다. 판단만 안 할 뿐이다.
+    // 저장한 조건은 그대로 보여 준다. 서버가 준 matched 도 그대로 쓴다.
+    // 예전에는 전부 true 로 덮었는데, 그러면 안 맞는 축이 있다는 사실이
+    // 어느 후보를 고르든 사라진다.
     expect(r.profileOptions?.map((o) => o.label)).toEqual(["형태"]);
-    expect(r.profileOptions?.every((o) => o.matched)).toBe(true);
+    expect(r.profileOptions?.[0].matched).toBe(false);
   });
 });
 

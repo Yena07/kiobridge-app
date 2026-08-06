@@ -68,6 +68,7 @@ export const FOCUS_STYLES = `
 
   button:focus-visible,
   input:focus-visible,
+  textarea:focus-visible,
   [role="radio"]:focus-visible,
   [role="checkbox"]:focus-visible,
   [tabindex]:focus-visible {
@@ -87,6 +88,13 @@ export const FOCUS_STYLES = `
      감싼 span 크기에 맞춰 늘어나도록 여기서 한 번만 정해 준다. */
   [data-pictogram] > svg { width: 100%; height: 100%; display: block; }
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    /* iteration-count 를 안 막으면 무한 반복 애니메이션이 0.01ms 마다 계속 돈다.
+       느려 보이지만 않을 뿐 멈추지는 않아서, 어지럼을 느끼는 분에게는 그대로다. */
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
   }
 `;

@@ -107,7 +107,15 @@ export const LOW_CONFIDENCE = 0.7;
 
 export function createApi(backend: Backend, environmentId = "chicken-store"): KioBridgeApi {
   // 세션 하나에 대해 서버가 뭐라고 답했는지. 승인 검사와 실행 조회의 기준이 된다.
-  const 세션 = new Map<string, { rec: RecommendationResult; result: MappingResponse["result"]; executed?: boolean }>();
+  // 페어링 만료 시각. 승인 때 끝난 연결인지 다시 보려면 필요하다.
+  const 만료 = new Map<string, number>();
+  const 세션 = new Map<string, {
+    rec: RecommendationResult;
+    result: MappingResponse["result"];
+    profileId: string;
+    expiresAt: number;
+    executed?: boolean;
+  }>();
 
   const 판정 = (r: RecommendationResult): MappingResponse["result"] => {
     if (!r.recommendedCandidateId) return "not_found";
@@ -124,6 +132,7 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
   return {
     async claimPairing(claimCode) {
       const s = await backend.createSession({ environmentId, claimCode });
+      만료.set(s.sessionId, s.expiresAt);
       const out: PairingResult = { pairingId: s.sessionId, kioskName: s.kioskName, expiresAt: s.expiresAt };
       return out;
     },
@@ -134,7 +143,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         environmentId, profileId, survivingCandidateIds: filtered.survivingCandidateIds,
       });
       const result = 판정(rec);
-      세션.set(pairingId, { rec, result });
+      세션.set(pairingId, {
+        rec, result, profileId,
+        // 페어링을 안 거치고 바로 매핑을 부르는 경우는 없어야 하지만,
+        // 없으면 만료를 알 수 없으므로 0 으로 두어 승인에서 막힌다.
+        expiresAt: 만료.get(pairingId) ?? 0,
+      });
 
       // 무엇을 왜 뺐는지는 후보 필터와 추천 양쪽에서 온다. 둘 다 사용자에게 보여 준다.
       const 제외 = [...filtered.excluded, ...rec.excludedCandidates];
@@ -159,7 +173,9 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
           // 목에만 넣고 여기를 빼면, 실서버로 바꾸는 순간 조건표가 다시 통째로
           // 사라진다. 사용자는 포장인지 종이컵인지 못 보고 승인하게 된다.
           // '맞았는지' 는 판단하지 않는다 — 어느 후보를 고르느냐에 따라 달라진다.
-          profileOptions: rec.matchedOptions.map((o) => ({ ...o, matched: true, note: undefined })),
+          // 서버가 준 matched 를 그대로 쓴다. 전부 true 로 덮으면
+          // 어느 후보를 고르든 안 맞는 축이 있다는 사실이 사라진다.
+          profileOptions: rec.matchedOptions,
           // 상품 ID 를 화면으로 내보내지 않는다. 이번 응답 안에서만 쓰는 표식으로 바꾼다.
           candidates: [rec.recommendedCandidateId!, ...rec.alternativeCandidateIds]
             .filter(보일수있나)
@@ -175,10 +191,15 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
             })),
         };
       }
+      // 이름 없는 후보는 화면에 그릴 수 없다. item 없이 exact 를 보내면
+      // 사용자는 빈 화면 앞에서 승인 버튼을 누르게 된다. 담을 게 없다고 답한다.
+      if (!고름?.displayName) {
+        return { result: "not_found", reasons, message: "담을 수 있는 메뉴가 없어요" };
+      }
       return {
         result, reasons,
         ...(result === "changed" ? { diffNote: "저장하신 주문과 달라진 점이 있어요. 이대로 진행할까요?" } : {}),
-        item: 고름 && { ...고름, options: rec.matchedOptions },
+        item: { ...고름, options: rec.matchedOptions },
       };
     },
 
@@ -186,6 +207,13 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
     async approve(input: ApproveInput): Promise<PlanCreated> {
       const s = 세션.get(input.pairingId);
       if (!s) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
+      // client.ts 와 같은 검사를 여기서도 한다. 한쪽만 막으면 구현을 바꿀 때 샌다.
+      if (s.profileId !== input.profileId) {
+        throw new KioBridgeError("PROFILE_MISMATCH", "메뉴를 다시 찾아 주세요", true);
+      }
+      if (s.expiresAt <= Date.now()) {
+        throw new KioBridgeError("CLAIM_EXPIRED", "연결 시간이 지났어요", true);
+      }
 
       // 승인 조건은 서버가 답한 내용을 기준으로 본다. 클라이언트가 보낸 값을 믿지 않는다.
       if (s.result === "not_found") throw new KioBridgeError("MENU_NOT_FOUND", "담을 수 있는 메뉴가 없어요", false);
@@ -200,7 +228,11 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
       // 우리가 준 표식인지 반드시 확인한다. 예전에는 숫자로 바꾸기만 해서
       // c99 는 undefined 를 제출했고, cabc·c0 는 조용히 1순위로 되돌아갔다.
       // 사용자가 고르지 않은 메뉴가 담긴다는 뜻이다.
-      const 후보목록 = [s.rec.recommendedCandidateId!, ...s.rec.alternativeCandidateIds];
+      // 응답에서 걸러낸 후보(display 없음)를 빼고 센다.
+      // 화면이 본 c1·c2·c3 은 걸러진 뒤의 순서라, 여기서 원본 순서로 세면
+      // 사용자가 고르지 않은 메뉴가 제출된다.
+      const 후보목록 = [s.rec.recommendedCandidateId!, ...s.rec.alternativeCandidateIds]
+        .filter((id) => Boolean(s.rec.display[id]?.displayName));
       let candidateId = s.rec.recommendedCandidateId;
       if (input.candidateId) {
         const m = /^c(\d+)$/.exec(input.candidateId);
@@ -211,19 +243,31 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         candidateId = 후보목록[순번];
       }
 
-      // 제출 → 검증 → 실행. 어느 단계에서 멈췄는지 구분해서 알린다.
-      await backend.submit(input.pairingId, { ...input, candidateId });
-      const v = await backend.validate(input.pairingId);
-      if (!v.valid) {
-        throw new KioBridgeError("VALIDATION_FAILED", v.errors?.[0] ?? "계획을 검증하지 못했어요", false);
-      }
       // 실행은 세션당 한 번이다. 두 번 나가면 키오스크에 두 번 담긴다.
-      // 화면이 연타를 막지만 서버 쪽에서도 막아 둔다.
+      //
+      // 검사와 확정 사이에 await 가 있으면 안 된다. 예전에는 submit·validate 를
+      // 기다린 뒤에 검사해서, 동시에 들어온 승인 두 건이 모두 통과하고 둘 다
+      // 실행됐다. 사용자는 한 번 승인하고 두 개를 받는다.
+      // 첫 await 전에 표시하고, 실패하면 되돌린다.
       if (s.executed) {
         throw new KioBridgeError("ALREADY_APPROVED", "이미 담았어요", false);
       }
       s.executed = true;
-      const { planId } = await backend.execute(input.pairingId);
+
+      let planId: string;
+      try {
+        // 제출 → 검증 → 실행. 어느 단계에서 멈췄는지 구분해서 알린다.
+        await backend.submit(input.pairingId, { ...input, candidateId });
+        const v = await backend.validate(input.pairingId);
+        if (!v.valid) {
+          throw new KioBridgeError("VALIDATION_FAILED", v.errors?.[0] ?? "계획을 검증하지 못했어요", false);
+        }
+        ({ planId } = await backend.execute(input.pairingId));
+      } catch (e) {
+        // 실행에 이르지 못했으면 다시 시도할 수 있어야 한다.
+        s.executed = false;
+        throw e;
+      }
       // 실행 조회는 sessionId 기준이므로 화면이 들고 다닐 값에 함께 실어 둔다.
       return { planId: `${input.pairingId}::${planId}` };
     },
@@ -234,6 +278,7 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
       // 서버에 지우기 경로가 있으면 함께 부른다. 없으면 이 계층 것만 지운다.
       const ids = [...세션.keys()];
       세션.clear();
+      만료.clear();
       if (backend.forgetSession) {
         await Promise.all(ids.map((id) => backend.forgetSession!(id)));
       }
@@ -297,7 +342,12 @@ export function createHttpBackend(baseUrl: string): Backend {
     }
     // 204 만 막으면 부족하다. 본문 없이 200 을 주는 서버도 있고 그때 json() 이 터진다.
     const 본문 = await res.text();
-    if (!본문) return undefined as T;
+    // 204 는 본문이 없는 게 정상이다. 그 외에 비어 있으면 서버가 뭔가 잘못한 것이고,
+    // undefined 를 넘기면 호출부가 한참 뒤에서 터진다. 여기서 말한다.
+    if (!본문) {
+      if (res.status === 204) return undefined as T;
+      throw new KioBridgeError("EMPTY_RESPONSE", "서버가 빈 답을 보냈어요", true);
+    }
     try {
       return JSON.parse(본문) as T;
     } catch {

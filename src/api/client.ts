@@ -89,6 +89,7 @@ export const clearProfiles = (): void => {
   // 진행 중이던 매핑 세션도 같이 지운다. 프로필은 지웠는데 그 프로필로 만든
   // 답이 서버에 남아 있으면 "모두 지워요" 가 여전히 사실이 아니다.
   sessions.clear();
+  pairings.clear();
   // 실행 계획도 지운다. 여기에는 무엇을 몇 개 담았고 얼마인지가 들어 있다.
   // 세션만 지우고 이건 남겨 두면 같은 약속을 반쯤만 지키는 셈이다.
   plans.clear();
@@ -119,6 +120,9 @@ function buildAbortedSteps(): StepStatus[] {
   return STEPS.map((_, i) => (i < ABORT_STEP ? "done" : i === ABORT_STEP ? "failed" : "waiting"));
 }
 
+// 발급한 페어링과 그 만료 시각. 매핑·승인에서 이 세션이 진짜인지 본다.
+const pairings = new Map<string, number>();
+
 // 서버가 이 페어링에 뭐라고 답했는지. 승인 검사의 기준이 된다.
 const sessions = new Map<string, {
   profileId: string;
@@ -142,15 +146,20 @@ export const mockApi: KioBridgeApi = {
     if (scenario.pairing === "expired") {
       throw new KioBridgeError("CLAIM_EXPIRED", "연결 시간이 지났어요", true);
     }
-    return {
-      pairingId: `pr_${claimCode}_${Date.now()}`,
-      kioskName: "OO분식 1번 키오스크",
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
+    const pairingId = `pr_${claimCode}_${Date.now()}`;
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    pairings.set(pairingId, expiresAt);
+    return { pairingId, kioskName: "OO분식 1번 키오스크", expiresAt };
   },
 
-  async requestMapping(_pairingId, profileId) {
+  async requestMapping(pairingId, profileId) {
     await delay(delays.mapping);
+    // 페어링을 거치지 않은 pairingId 로는 매핑하지 않는다. 실제 서버는
+    // 세션을 모르면 거절한다. 목이 아무 값이나 받아 주면 화면이 그 경로를
+    // 안 막아도 여기서 통과해 버린다.
+    if (!pairings.has(pairingId)) {
+      throw new KioBridgeError("PAIRING_NOT_FOUND", "키오스크와 다시 연결해 주세요", true);
+    }
     // 등록되지 않은 프로필로는 답을 만들지 않는다. undefined 를 그대로 넘기면
     // 사용자가 고른 적 없는 임의 메뉴가 승인 화면까지 올라간다.
     // 지운 프로필로 조회하는 경우도 여기서 걸린다.
@@ -163,11 +172,9 @@ export const mockApi: KioBridgeApi = {
     // 서버가 자기가 뭐라고 답했는지 기억해 둔다. 이게 없으면 승인 검사에서
     // 클라이언트가 보낸 mappingResult 를 믿어야 하고, candidateId 가 실제로
     // 우리가 준 후보인지도 확인할 수 없다.
-    sessions.set(_pairingId, {
+    sessions.set(pairingId, {
       profileId,
-      // 목은 페어링을 따로 들고 있지 않으므로 매핑 시점부터 5분으로 둔다.
-      // 실제 client 에서는 서버가 준 만료 시각을 쓴다.
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      expiresAt: pairings.get(pairingId)!,
       approved: false,
       result: res.result,
       candidateIds: (res.candidates ?? []).map((c) => c.candidateId),
@@ -226,6 +233,11 @@ export const mockApi: KioBridgeApi = {
       throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
     }
     await delay(delays.approve);
+    // 후보를 고르는 화면이 아닌데 candidateId 가 오면 무언가 어긋난 것이다.
+    // 조용히 1순위로 되돌리면 사용자가 고른 것과 다른 게 담길 수 있다.
+    if (input.candidateId && result !== "clarification") {
+      throw new KioBridgeError("CANDIDATE_UNEXPECTED", "메뉴를 다시 찾아 주세요", true);
+    }
     // 사용자가 고른 후보가 있으면 그것이 담기는 것이다.
     const 담을것 = (input.candidateId && session.byId[input.candidateId]) || session.item;
     if (!담을것) {

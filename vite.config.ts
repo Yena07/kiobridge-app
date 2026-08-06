@@ -1,5 +1,10 @@
 import { defineConfig } from 'vite'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+// package.json 의 type 이 module 이라 __dirname 이 없다.
+// 지금은 vite 가 CJS 로 트랜스파일해서 우연히 도는 것이고, 설정을 바꾸면 터진다.
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 

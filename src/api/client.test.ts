@@ -17,7 +17,9 @@ const 프로필 = (id: string, selections: Record<string, string[]>): ProfileDat
 const 매운 = 프로필("p1", { "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"] });
 const 순한 = 프로필("p2", { "이용 방식": ["포장하기"], "맵기": ["순한맛"], "형태": ["순살"] });
 
-const PAIRING = "pr_test";
+// 페어링을 거치지 않은 세션으로는 매핑할 수 없다. 실제 흐름대로 먼저 받는다.
+let PAIRING = "";
+const 페어링 = async () => { PAIRING = (await api.claimPairing("kb")).pairingId; return PAIRING; };
 const 이유 = async (id: string) =>
   ((await api.requestMapping(PAIRING, id)).reasons ?? []).map((r) => r.text).join("\n");
 
@@ -27,6 +29,10 @@ beforeEach(() => {
   setMockDelays({ pairing: 0, mapping: 0, approve: 0, step: 1 });
   clearProfiles();
   setScenario({ pairing: "connected", mapping: "exact", execution: "cart_ready" });
+});
+
+beforeEach(async () => {
+  await 페어링();
 });
 
 describe("프로필 등록", () => {

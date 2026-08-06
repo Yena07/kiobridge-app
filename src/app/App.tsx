@@ -252,7 +252,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
 // 쓰이지 않는 번호라 누구의 것도 아니다.
 const DEMO_PHONE = "01000000000";
 
-function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBack: () => void }) {
+function PhoneScreen({ onNext, onBack, onPrivacy }: { onNext: (phone: string) => void; onBack: () => void; onPrivacy: () => void }) {
   const [phone] = useState(DEMO_PHONE);
   const formatted = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
   return (
@@ -306,7 +306,15 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-4">
         <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center", lineHeight: 1.7 }}>
           시연용 번호가 미리 채워져 있어요. 실제 번호는 받지 않습니다.{" "}
-          <span style={{ color: TEXT_2, textDecoration: "underline" }}>개인정보처리방침</span>
+          {/* 밑줄만 그어 두고 눌리지 않으면 링크처럼 보이는 장식일 뿐이다.
+              무엇을 받고 무엇을 안 받는지 적어 둔 화면이 이미 있으므로 거기로 보낸다. */}
+          <button
+            type="button"
+            onClick={onPrivacy}
+            style={{ color: TEXT_2, textDecoration: "underline", background: "none", border: "none", padding: "6px 2px", minHeight: 44, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}
+          >
+            개인정보처리방침
+          </button>
         </p>
         <PrimaryBtn onClick={() => phone.length === 11 && onNext(phone)} disabled={phone.length < 11}>
           인증번호 받기
@@ -2140,6 +2148,17 @@ function OrderConfirmScreen({
             onCancel={onBack}
           />
         )}
+        {/*
+         * 상태는 왔는데 그 상태가 요구하는 필드가 없는 경우.
+         * 예전에는 조건이 거짓이 되어 본문이 통째로 비었고, 사용자는
+         * 무슨 일이 일어났는지도 나갈 방법도 알 수 없었다.
+         */}
+        {(mapping?.result === "exact" || mapping?.result === "changed" || mapping?.result === "low_confidence") && !mapping.item && (
+          <div className="flex flex-col gap-4">
+            <InfoBox>메뉴 정보를 불러오지 못했어요. 키오스크 화면을 직접 확인해 주세요.</InfoBox>
+            <OutlineBtn onClick={onBack}>프로필 다시 보기</OutlineBtn>
+          </div>
+        )}
         {mapping?.result === "low_confidence" && mapping.item && (
           <OrderLowConfidence
             item={mapping.item}
@@ -2406,6 +2425,24 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
             </div>
           </div>
         )}
+        {status.state === "aborted" && !status.abort && (
+          <div className="flex flex-col flex-1" style={{ padding: `32px 0 24px` }}>
+            <StatusHero
+              mark={<Pictogram name="warning" size={64} color={WARN} />}
+              title={<>안전을 위해<br />중단되었습니다</>}
+              desc="자세한 이유를 불러오지 못했어요"
+            />
+            <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: WARN_BG, marginTop: 32 }}>
+              <p style={{ ...TYPE.caption, color: TEXT_1 }}>
+                <strong style={{ fontWeight: 600 }}>키오스크는 건드리지 않아도 돼요.</strong>{" "}
+                직원에게 이 화면을 보여 주세요.
+              </p>
+            </div>
+            <div className="mt-auto" style={{ paddingTop: 24 }}>
+              <PrimaryBtn onClick={onHome}>처음으로</PrimaryBtn>
+            </div>
+          </div>
+        )}
         {status.state === "aborted" && status.abort && (
           <ExecFailed abort={status.abort} steps={status.steps} onHome={onHome} />
         )}
@@ -2654,7 +2691,11 @@ export default function App() {
             />
           )}
           {screen === "phone" && (
-            <PhoneScreen onNext={(p) => { setPhone(p); setScreen("otp"); }} onBack={() => setScreen("welcome")} />
+            <PhoneScreen
+              onNext={(p) => { setPhone(p); setScreen("otp"); }}
+              onBack={() => setScreen("welcome")}
+              onPrivacy={() => setScreen("privacy")}
+            />
           )}
           {screen === "otp" && (
             <OtpScreen

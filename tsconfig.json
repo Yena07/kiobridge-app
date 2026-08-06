@@ -6,6 +6,7 @@
   // src/app/components/ui/* 는 Figma Make 가 만들어 둔 shadcn 사본이라 App.tsx 가
   // 참조하는 것만 딸려 들어온다.
   "compilerOptions": {
+    "types": ["node"],
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
