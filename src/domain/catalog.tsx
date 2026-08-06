@@ -12,31 +12,47 @@ export const DETAIL_OPTIONS: Record<string, DetailOption[]> = {
     { label: "시럽", multi: true, choices: ["바닐라", "헤이즐넛", "카라멜", "시럽 없음"] },
     { label: "우유 변경", multi: false, choices: ["일반 우유", "오트밀크", "두유", "저지방"] },
   ],
+  // 아래 세 곳의 질문과 선택지는 공식 시뮬레이션 킷의 option-groups.json 을 그대로 따른다.
+  // 사용자가 고른 조건이 실제로 후보를 가르는 축이어야 하기 때문이다.
+  // fixture 에 없는 축(드라이브스루·버거 세트·사이드 변경 등)을 화면에만 두면
+  // 어르신은 골랐는데 결과는 아무것도 달라지지 않는, 물어만 보고 버리는 질문이 된다.
+  //
+  // 메뉴 이름은 여기 두지 않는다. 프로필 화면 맨 위의 자유 입력(menuName)으로 받는다.
+  // 사용자가 부르는 이름("닭강정")과 오늘 화면의 이름("매운 순살 닭강정")을 맞추는 건
+  // 매핑의 일이지 앱이 목록에서 고르게 할 일이 아니다.
   음식점: [
-    { label: "서비스 모드", multi: false, choices: ["매장", "포장", "드라이브스루"] },
-    { label: "메뉴", multi: false, choices: ["닭강정", "불고기버거 세트", "치즈버거 세트", "치킨버거 세트"] },
-    { label: "맵기", multi: false, choices: ["순한맛", "보통", "매운맛"] },
-    { label: "형태", multi: false, choices: ["순살", "뼈"] },
+    // chicken-store: SERVICE_TYPE / SPICY_LEVEL / BONE_TYPE / CUP / QUANTITY
+    { label: "이용 방식", multi: false, choices: ["먹고 가기", "포장하기"] },
+    { label: "맵기", multi: false, choices: ["순한맛", "보통맛", "매운맛"] },
+    { label: "형태", multi: false, choices: ["뼈", "순살"] },
+    // 컵은 '추가 옵션' 다중선택 안에 묻어 두지 않는다. fixture 에서 독립된 축이고,
+    // 확인 카드에 반드시 보여야 하는 다섯 항목 중 하나라 따로 묻는다.
+    { label: "컵", multi: false, choices: ["종이컵", "일반컵"] },
     { label: "수량", multi: false, choices: ["1개", "2개", "3개"] },
-    { label: "사이드 변경", multi: false, choices: ["기본 후렌치후라이", "어니언링으로 변경", "샐러드로 변경"] },
-    { label: "음료 변경", multi: false, choices: ["콜라", "사이다로 변경", "제로콜라로 변경"] },
-    { label: "추가 옵션", multi: true, choices: ["종이컵", "피클 빼기", "양파 빼기", "소스 추가"] },
-    // 알레르기는 선호가 아니라 절대 조건이다. 겹치는 메뉴는 순위를 낮추는 게 아니라 아예 뺀다.
+    // 알레르기는 option-group 이 아니라 사람에 대한 절대 조건이라 fixture 축과 맞추지 않는다.
+    // 겹치는 메뉴는 순위를 낮추는 게 아니라 후보에서 아예 뺀다.
+    // 오늘 이 가게에서 실제로 걸리는 건 땅콩뿐이지만, 나머지를 지우면
+    // 새우 알레르기가 있는 사람이 그 사실을 말할 방법이 사라진다.
     { label: "알레르기 (꼭 빼주세요)", multi: true, choices: ["땅콩", "대두", "우유", "계란", "밀", "새우"] },
   ],
   // 접수·안내 범위만 허용. 증상·진단·치료 관련 항목은 두지 않는다.
+  // hospital: VISIT_TYPE / APPOINTMENT / DEPARTMENT / SUPPORT
   병원: [
-    { label: "접수 유형", multi: false, choices: ["초진", "재진"] },
-    { label: "예약 여부", multi: false, choices: ["예약", "당일"] },
-    { label: "진료과", multi: false, choices: ["내과", "정형외과", "피부과", "안과", "이비인후과"] },
-    { label: "인증 수단", multi: false, choices: ["신분증", "건강보험증", "모바일 인증", "예약 바코드"] },
+    { label: "방문 유형", multi: false, choices: ["초진", "재진", "건강검진", "검사"] },
+    { label: "예약 여부", multi: false, choices: ["예약 있음", "예약 없음"] },
+    // '미정'을 선택지로 남겨 둔다. 어느 과인지 모르는 사람에게 앱이 대신 정해 주지 않고,
+    // 진료과가 정해지지 않은 채로도 받아 주는 안내 경로로 보낸다.
+    { label: "진료과", multi: false, choices: ["내과", "정형외과", "영상의학과", "건강검진센터", "미정 (안내 필요)"] },
+    // 이 축이 없으면 접근성 지원이 필요한 사람과 아닌 사람의 결과가 같아진다.
+    { label: "접근성 지원", multi: false, choices: ["지원 없음", "큰 글씨", "청각 지원", "직원 도움"] },
   ],
+  // 이용자격·법적 수급 가능성은 판단하지 않는다. 업무 선택과 절차 안내만 한다.
+  // public-office: CATEGORY / AUTH_METHOD
   관공서: [
-    { label: "발급 방식", multi: true, choices: ["본인 수령", "대리 수령", "즉시 발급", "우편 발송"] },
-    { label: "민원 종류", multi: false, choices: ["주민등록등본", "주민등록초본", "가족관계증명서", "인감증명서"] },
-    { label: "발급 부수", multi: false, choices: ["1부", "2부", "3부", "5부"] },
-    { label: "주민번호 뒷자리", multi: false, choices: ["표시", "미표시"] },
-    { label: "언어", multi: false, choices: ["국문", "영문"] },
+    { label: "민원 분야", multi: false, choices: ["주민등록", "가족관계", "건강보험", "지방세", "직원 상담"] },
+    // 지금 가진 인증수단으로 이 기계에서 진행이 되는지만 본다. 자격 판단이 아니다.
+    // 안 되는 후보는 점수를 깎는 게 아니라 후보에서 뺀다(AUTH_METHOD_UNAVAILABLE).
+    { label: "인증 방식", multi: false, choices: ["모바일 인증", "신분증 인증", "직원 확인"] },
   ],
 };
 
@@ -64,8 +80,8 @@ export const MOCK_PROFILES: ProfileData[] = [
     menuName: "닭강정",
     place: "음식점",
     selections: {
-      "서비스 모드": ["포장"], "메뉴": ["닭강정"], "맵기": ["매운맛"],
-      "형태": ["순살"], "수량": ["1개"], "추가 옵션": ["종이컵"],
+      "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"],
+      "컵": ["종이컵"], "수량": ["1개"],
       "알레르기 (꼭 빼주세요)": ["땅콩"],
     },
     memo: "",
@@ -79,10 +95,15 @@ export const MOCK_PROFILES: ProfileData[] = [
   },
   {
     id: "3",
-    menuName: "불고기버거 세트",
+    menuName: "닭강정",
     place: "음식점",
-    selections: { "서비스 모드": ["포장"], "메뉴": ["불고기버거 세트"], "추가 옵션": ["피클 빼기", "양파 빼기"] },
-    memo: "",
+    // 같은 가게, 다른 사람의 조건. 첫 번째 프로필과 모든 축이 반대라
+    // 저장한 조건이 결과를 실제로 바꾼다는 걸 목록에서 바로 보여 준다.
+    selections: {
+      "이용 방식": ["먹고 가기"], "맵기": ["순한맛"], "형태": ["뼈"],
+      "컵": ["일반컵"], "수량": ["2개"],
+    },
+    memo: "매운 건 못 드세요",
   },
 ];
 

@@ -28,12 +28,12 @@ const KIOSK_MENU_PHOTOS: Record<string, string> = {
 export const MOCK_MENU_NAME = "닭강정";
 
 // 사용자가 저장해 둔 조건. 아래 이유 문장들이 이 값에서 나온다.
-const 저장한조건 = { 이용방식: "포장", 맵기: "매운맛", 형태: "순살", 컵: "종이컵", 알레르기: "땅콩" };
+const 저장한조건 = { 이용방식: "포장하기", 맵기: "매운맛", 형태: "순살", 컵: "종이컵", 알레르기: "땅콩" };
 
 // 이 주문에서 실제로 쓴 사용자 정보와, 무엇을 왜 뺐는지.
 // "AI가 골랐습니다" 같은 문장은 설명이 아니므로 쓰지 않는다.
 const 기본이유: MappingResponse["reasons"] = [
-  { kind: "used", text: `${저장한조건.이용방식}을 고르셔서 ${저장한조건.이용방식}이 되는 메뉴만 남겼어요` },
+  { kind: "used", text: `${저장한조건.이용방식}를 고르셔서 포장이 되는 메뉴만 남겼어요` },
   { kind: "used", text: `맵기를 ${저장한조건.맵기}으로 저장해 두셔서 ${저장한조건.맵기} 메뉴를 먼저 보여드려요` },
   { kind: "used", text: `${저장한조건.형태}을 고르셔서 뼈 없는 메뉴로 맞췄어요` },
   { kind: "excluded", text: `${저장한조건.알레르기} 알레르기를 알려주셔서 땅콩 토핑 닭강정은 뺐어요` },
@@ -49,10 +49,10 @@ export const MOCK_MAPPING: Record<MappingState, MappingResponse> = {
       priceText: "6,000원",
       imageUrl: KIOSK_MENU_PHOTOS["매운 순살 닭강정"],
       options: [
-        { label: "이용 방식", value: "포장", matched: true },
+        { label: "이용 방식", value: "포장하기", matched: true },
         { label: "맵기", value: "매운맛", matched: true },
         { label: "형태", value: "순살", matched: true },
-        { label: "추가 옵션", value: "종이컵", matched: true },
+        { label: "컵", value: "종이컵", matched: true },
         { label: "수량", value: "1개", matched: true },
       ],
     },
@@ -82,10 +82,10 @@ export const MOCK_MAPPING: Record<MappingState, MappingResponse> = {
       priceText: "6,000원",
       imageUrl: KIOSK_MENU_PHOTOS["매운 순살 닭강정"],
       options: [
-        { label: "이용 방식", value: "포장", matched: true },
+        { label: "이용 방식", value: "포장하기", matched: true },
         { label: "맵기", value: "매운맛", matched: true },
         { label: "형태", value: "순살", matched: true },
-        { label: "추가 옵션", value: "종이컵", matched: false, note: "오늘은 제공되지 않아요" },
+        { label: "컵", value: "종이컵", matched: false, note: "오늘은 제공되지 않아요" },
         { label: "수량", value: "1개", matched: true },
       ],
     },
@@ -98,10 +98,10 @@ export const MOCK_MAPPING: Record<MappingState, MappingResponse> = {
       priceText: "6,000원",
       imageUrl: KIOSK_MENU_PHOTOS["매운 순살 닭강정"],
       options: [
-        { label: "이용 방식", value: "포장", matched: true },
+        { label: "이용 방식", value: "포장하기", matched: true },
         { label: "맵기", value: "매운맛", matched: true },
         { label: "형태", value: "순살", matched: true },
-        { label: "추가 옵션", value: "종이컵", matched: true },
+        { label: "컵", value: "종이컵", matched: true },
         { label: "수량", value: "1개", matched: true },
       ],
     },
