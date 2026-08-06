@@ -3,8 +3,8 @@
 // P 는 흰 글씨 대비 5.08:1 로 WCAG AA 를 통과하는 값이다. 더 밝은 초록(#03C75A 등)은
 // 2.25:1 밖에 안 나와서 고령 사용자 기준에 미달하므로 쓰지 않는다.
 export const P = "#0A7F45";          // primary (CTA, 선택 상태)
-export const P_LIGHT = "#EAF6EF";    // primary light bg
-export const P_DARK = "#076235";     // primary pressed
+// P_LIGHT / P_DARK 는 지웠다. 쓰는 곳이 한 곳도 없었다.
+// 눌린 상태는 지금 배경색 전환으로 표현하고 있어서 별도 값이 필요하지 않다.
 export const ACCENT = "#0A7F45";     // 아주 드물게 쓰는 강조 (이름 호명 등)
 export const TEXT_1 = "#111111";     // heading — 본문은 검정 유지
 // 읽어야 하는 글자는 전부 이 색을 쓴다.
@@ -15,6 +15,11 @@ export const TEXT_2 = "#6B6B70";     // subtext
 // 글자에 쓰지 않는다. 머리카락 선·점·비활성 컨트롤처럼 읽을 필요가 없는 것에만 쓴다.
 // 읽어야 하는 글자에 이 색을 쓰면 1.74:1 이라 사실상 안 보인다.
 export const TEXT_3 = "#C4C4C8";     // hairline / dot / disabled — 글자 금지
+// 아래 둘은 App.tsx 에 직접 적혀 있던 값이다. 대비는 각각 8.2:1, 6.5:1 로 통과하지만
+// 색이 토큰 밖에 흩어져 있으면 이 파일이 팔레트의 기준이라는 말이 사실이 아니게 된다.
+// 보이는 색은 그대로 두고 이름만 여기로 가져왔다.
+export const TEXT_BTN = "#4A4A4F";   // 테두리 버튼 글자
+export const TEXT_CHIP = "#4E5968";  // 안 고른 칩 글자
 export const BORDER = "#EDEDEF";     // hairline
 export const SURFACE = "#F7F7F8";    // 옅은 면
 export const CANVAS = "#F4F4F5";     // 입력 필드 배경

@@ -5,7 +5,7 @@ import { Pictogram } from "@/design/Pictogram";
 import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, ACCENT, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
-  SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG,
+  SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
   FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES,
 } from "@/design/tokens";
 import type {
@@ -125,7 +125,7 @@ function OutlineBtn({ children, onClick }: { children: React.ReactNode; onClick?
         width: "100%", height: 56, borderRadius: RADIUS.button,
         fontSize: 17, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
         backgroundColor: SURFACE,
-        color: "#4A4A4F",
+        color: TEXT_BTN,
         border: "none",
         cursor: "pointer",
         transition: "background-color 0.15s",
@@ -157,7 +157,7 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
         minHeight: 44, padding: "10px 16px", borderRadius: RADIUS.pill,
         fontSize: 15, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.01em",
         backgroundColor: selected ? P : CANVAS,
-        color: selected ? "white" : "#4E5968",
+        color: selected ? "white" : TEXT_CHIP,
         border: "none",
         cursor: "pointer",
         transition: "all 0.15s",
@@ -645,7 +645,7 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
                   fontSize: 16, fontWeight: 500, fontFamily: FONT, letterSpacing: "-0.01em",
                   border: "none",
                   backgroundColor: place === label ? P : CANVAS,
-                  color: place === label ? "white" : "#4E5968",
+                  color: place === label ? "white" : TEXT_CHIP,
                   transition: "background-color 0.15s",
                 }}
               >
@@ -1676,28 +1676,27 @@ function InfoBox({ children, variant = "warn" }: { children: React.ReactNode; va
 }
 
 // 후보 선택 카드 — 선택되면 카드 전체가 검게 반전된다. 테두리로 상태를 표시하지 않는다.
+/**
+ * role="radio" 를 흉내 낸 button 이었다. 스크린리더는 "라디오, 3개 중 1번째" 라고
+ * 읽어 주는데 사용자가 화살표를 누르면 아무 일도 일어나지 않았다. roving tabindex 도
+ * 키 핸들러도 없었기 때문이다.
+ *
+ * 흉내 내는 대신 진짜 <input type="radio"> 를 쓴다. 화살표 이동·그룹 안 단일 포커스가
+ * 브라우저 기본으로 동작하고, 우리가 유지할 코드도 줄어든다.
+ * 프로필 목록(SavedProfilesScreen)이 같은 이유로 이미 이렇게 되어 있다.
+ *
+ * role="button" 으로 쓰는 자리(low_confidence 의 '이게 맞아요' 짚기)는
+ * 선택지 하나를 켰다 껐다 하는 것이라 라디오가 아니다. 그때는 button 그대로 둔다.
+ */
 function OptionCard({
-  name, price, selected, onClick, role = "radio", photo,
+  name, price, selected, onClick, role = "radio", photo, groupName,
 }: {
-  name: string; price: string; selected: boolean; onClick: () => void; role?: "radio" | "button"; photo?: string | null;
+  name: string; price: string; selected: boolean; onClick: () => void;
+  role?: "radio" | "button"; photo?: string | null; groupName?: string;
 }) {
   const radio = role === "radio";
-  return (
-    <button
-      type="button"
-      role={radio ? "radio" : undefined}
-      aria-checked={radio ? selected : undefined}
-      aria-pressed={radio ? undefined : selected}
-      aria-label={`${name}, ${price}`}
-      onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-        padding: "17px 20px", borderRadius: RADIUS.card, cursor: "pointer", fontFamily: FONT,
-        border: "none", width: "100%",
-        backgroundColor: selected ? P : SURFACE,
-        transition: "background-color 0.15s",
-      }}
-    >
+  const 속: React.ReactNode = (
+    <>
       <span className="flex items-center gap-3" style={{ minWidth: 0 }}>
         {photo && <img src={photo} alt="" aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />}
         <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1, textAlign: "left" }}>{name}</span>
@@ -1715,7 +1714,38 @@ function OptionCard({
           {selected && <Check size={12} strokeWidth={3} color={P} />}
         </div>
       </div>
-    </button>
+    </>
+  );
+
+  const 겉모양 = {
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+    padding: "17px 20px", borderRadius: RADIUS.card, cursor: "pointer", fontFamily: FONT,
+    border: "none", width: "100%",
+    backgroundColor: selected ? P : SURFACE,
+    transition: "background-color 0.15s",
+  } as const;
+
+  if (!radio) {
+    return (
+      <button type="button" aria-pressed={selected} aria-label={`${name}, ${price}`} onClick={onClick} style={겉모양}>
+        {속}
+      </button>
+    );
+  }
+
+  return (
+    <label style={{ ...겉모양, position: "relative", margin: 0 }}>
+      {/* 눈에는 안 보이지만 지우지 않는다. 화살표 이동과 그룹 의미는 이 요소가 만든다. */}
+      <input
+        type="radio"
+        name={groupName ?? "option"}
+        checked={selected}
+        onChange={onClick}
+        aria-label={`${name}, ${price}`}
+        style={{ position: "absolute", opacity: 0, width: 1, height: 1, margin: 0, pointerEvents: "none" }}
+      />
+      {속}
+    </label>
   );
 }
 
@@ -1775,6 +1805,9 @@ function OrderClarification({
           <OptionCard
             key={c.candidateId}
             role="radio"
+            // 그룹 이름을 명시한다. 기본값을 쓰면 화면에 라디오 그룹이 둘 이상일 때
+            // 서로 다른 질문의 선택지가 한 그룹으로 묶여 버린다.
+            groupName="후보"
             selected={selected === i}
             name={c.displayName}
             price={c.priceText}
