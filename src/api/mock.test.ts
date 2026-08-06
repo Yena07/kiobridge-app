@@ -197,3 +197,25 @@ describe("MOCK_MENU_NAME", () => {
     expect(MOCK_MENU_NAME.length).toBeGreaterThan(0);
   });
 });
+
+describe("장소가 다르면 다른 카탈로그를 본다", () => {
+  const 카페프로필 = (): ProfileData => ({
+    id: "cafe1", menuName: "아이스 아메리카노", place: "카페", memo: "",
+    selections: { "이용 방식": ["테이크아웃"], "음료": ["아메리카노"], "온도": ["ICE"], "사이즈": ["Tall"] },
+  });
+
+  it("카페 프로필에 닭강정을 답으로 주지 않는다", () => {
+    const r = buildMapping("exact", 카페프로필());
+    expect(r.item?.displayName ?? "").not.toContain("닭강정");
+  });
+
+  it("카페 프로필에는 카페 메뉴를 준다", () => {
+    const r = buildMapping("exact", 카페프로필());
+    expect(r.item?.displayName).toContain("아메리카노");
+  });
+
+  it("음식점 프로필은 그대로 닭강정을 준다", () => {
+    const r = buildMapping("exact", 땅콩알레르기);
+    expect(r.item?.displayName).toContain("닭강정");
+  });
+});
