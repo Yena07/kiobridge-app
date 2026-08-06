@@ -124,6 +124,22 @@ describe("장바구니는 승인한 내용과 같아야 한다", () => {
     expect(Number(s.cart!.totalText.replace(/[^0-9]/g, ""))).toBe(단가 * 2);
   });
 
+  it("후보를 고르는 화면에서도 수량이 지켜진다", async () => {
+    // clarification 은 item 을 주지 않는다. 예전에는 수량을 그 item 에서 꺼내서
+    // 3개를 저장해 둔 사람이 조용히 1개를 받았다. 경고도 없었다.
+    setScenario({ mapping: "clarification" });
+    registerProfile(프로필("p4", { "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"], "수량": ["3개"] }));
+    const m = await api.requestMapping(PAIRING, "p4");
+    const 고른것 = m.candidates![0];
+    const { planId } = await api.approve({
+      pairingId: PAIRING, profileId: "p4", mappingResult: "clarification", candidateId: 고른것.candidateId,
+    });
+    const s = await 담길때까지(planId);
+    const 단가 = Number(고른것.priceText.replace(/[^0-9]/g, ""));
+    expect(s.cart?.itemCountText).toBe("3개");
+    expect(Number(s.cart!.totalText.replace(/[^0-9]/g, ""))).toBe(단가 * 3);
+  });
+
   it("여러 후보에서 고른 것이 그대로 담긴다", async () => {
     setScenario({ mapping: "clarification" });
     registerProfile(매운);

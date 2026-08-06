@@ -158,7 +158,11 @@ export const mockApi: KioBridgeApi = {
       // 화면이 보여 준 값과 결과 화면의 값이 어긋나면 안 되기 때문이다.
       item: res.item && { displayName: res.item.displayName, priceText: res.item.priceText },
       byId: Object.fromEntries((res.candidates ?? []).map((c) => [c.candidateId, { displayName: c.displayName, priceText: c.priceText }])),
-      수량: res.item?.options.find((o) => o.label === "수량")?.value,
+      // 수량은 응답이 아니라 프로필에서 읽는다.
+      // 응답의 item 에서 꺼내면 clarification 처럼 item 이 없는 상태에서 undefined 가 되고,
+      // buildCart 가 조용히 1개로 떨어뜨린다. 3개를 저장해 둔 사람이 1개를 받는다.
+      // 수량은 사용자가 고른 값이지 서버가 정하는 값이 아니다.
+      수량: profile.selections?.["수량"]?.[0],
     });
     return res;
   },

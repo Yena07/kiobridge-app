@@ -2037,6 +2037,17 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
     return () => { alive = false; clearInterval(timer); };
   }, [planId, status.state, pollError]);
 
+  // 서버가 계속 running 을 돌려주면 폴링은 성공이라 pollError 가 켜지지 않는다.
+  // 키오스크가 멈췄는데 세션은 살아 있는 경우가 그렇다. 그러면 사용자는
+  // "잠시만 기다려 주세요. 화면을 닫지 마세요." 앞에 영원히 갇힌다.
+  // 실행 화면에는 하단 탭도 뒤로 가기도 없어서 나갈 방법이 아예 없다.
+  // 5단계 × 1.4초면 7초면 끝나는 일이라, 90초를 넘기면 뭔가 잘못된 것이다.
+  useEffect(() => {
+    if (status.state !== "running" || pollError) return;
+    const t = setTimeout(() => setPollError("시간이 오래 걸리고 있어요"), 90_000);
+    return () => clearTimeout(t);
+  }, [status.state, pollError]);
+
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
@@ -2076,6 +2087,29 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
         {status.state === "running" && !pollError && <ExecInProgress statuses={status.steps} />}
         {status.state === "cart_ready" && status.cart && (
           <ExecSuccess cart={status.cart} steps={status.steps} onHome={onHome} />
+        )}
+        {/*
+         * 담기는 끝났는데 내역이 안 온 경우. cart 는 옵셔널이라 서버가 빠뜨릴 수 있다.
+         * 예전에는 아무것도 안 그려서 흰 화면에 갇혔다. 이 화면에는 하단 탭이 없어
+         * 나갈 방법도 없었다. 내역을 지어내지 않고, 끝났다는 사실과 나갈 길만 준다.
+         */}
+        {status.state === "cart_ready" && !status.cart && (
+          <div className="flex flex-col flex-1" style={{ padding: `32px 0 24px` }}>
+            <StatusHero
+              mark={<Pictogram name="checkCircle" size={64} color={SUCCESS} />}
+              title={<>장바구니에<br />담았어요</>}
+              desc="담긴 내역을 불러오지 못했어요"
+            />
+            <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
+              <p style={{ ...TYPE.caption, color: TEXT_1 }}>
+                <strong style={{ fontWeight: 600 }}>키오스크 화면에서 장바구니를 확인해 주세요.</strong>{" "}
+                결제는 키오스크에서 직접 하시면 돼요.
+              </p>
+            </div>
+            <div className="mt-auto" style={{ paddingTop: 24 }}>
+              <PrimaryBtn onClick={onHome}>처음으로</PrimaryBtn>
+            </div>
+          </div>
         )}
         {status.state === "aborted" && status.abort && (
           <ExecFailed abort={status.abort} steps={status.steps} onHome={onHome} />
