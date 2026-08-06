@@ -1162,8 +1162,13 @@ function PairingIdle({ onScan }: { onScan: () => void }) {
   );
 }
 
-function QrScreen({ onPaired }: { onPaired: (pairingId: string) => void }) {
-  const [phase, setPhase] = useState<"scan" | "idle" | PairingState>("scan");
+function QrScreen({ onPaired, initialPhase = "scan" }: {
+  onPaired: (pairingId: string, expiresAt: number) => void;
+  // 연결이 만료돼서 되돌아온 경우에는 스캐너가 아니라 만료 안내부터 보여 준다.
+  // 스캐너로 바로 보내면 사용자는 자기가 왜 여기 왔는지 알 수 없다.
+  initialPhase?: "scan" | "expired";
+}) {
+  const [phase, setPhase] = useState<"scan" | "idle" | PairingState>(initialPhase);
   const [pairing, setPairing] = useState<PairingResult | null>(null);
 
   const handleScanned = () => {
@@ -1200,7 +1205,7 @@ function QrScreen({ onPaired }: { onPaired: (pairingId: string) => void }) {
             kioskName={pairing.kioskName}
             expiresAt={pairing.expiresAt}
             onExpire={() => setPhase("expired")}
-            onSelectProfile={() => onPaired(pairing.pairingId)}
+            onSelectProfile={() => onPaired(pairing.pairingId, pairing.expiresAt)}
           />
         )}
         {phase === "failed" && <PairingFailed onScan={handleRescan} />}
@@ -2168,6 +2173,12 @@ export default function App() {
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
   const [pairingId, setPairingId] = useState<string | null>(null);
+  // 만료 시각을 루트가 들고 있어야 한다. 예전에는 QrScreen 안에만 있어서
+  // 프로필을 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
+  // 그러면 이미 끝난 연결로 승인까지 진행되고, 화면은 아무 말도 하지 않는다.
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
+  // 만료 때문에 QR 화면으로 되돌아왔는지. 되돌아왔으면 안내부터 띄운다.
+  const [qrExpired, setQrExpired] = useState(false);
   const [orderProfile, setOrderProfile] = useState<ProfileData | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
 
@@ -2177,6 +2188,28 @@ export default function App() {
     unregisterProfile(id);
     setProfiles((prev) => prev.filter((p) => p.id !== id));
   };
+
+  // 연결이 끝나면 어느 화면에 있든 되돌린다.
+  // 실행 중일 때는 건드리지 않는다. 이미 키오스크가 움직이고 있는데 화면만
+  // 되돌리면 사용자는 무슨 일이 일어난 건지 알 수 없다. 그 화면은 자기 상태를
+  // 폴링으로 따로 관리한다.
+  useEffect(() => {
+    if (!pairingExpiresAt || screen === "execution") return;
+    const 남은 = pairingExpiresAt - Date.now();
+    const 되돌리기 = () => {
+      setPairingId(null);
+      setPairingExpiresAt(null);
+      setOrderProfile(null);
+      setFromQr(false);
+      setScreen("saved");
+      setTab("qr");
+      setQrExpired(true);
+      setQrKey((k) => k + 1);
+    };
+    if (남은 <= 0) { 되돌리기(); return; }
+    const t = setTimeout(되돌리기, 남은);
+    return () => clearTimeout(t);
+  }, [pairingExpiresAt, screen]);
 
   const inMain = screen === "saved";
 
@@ -2239,7 +2272,8 @@ export default function App() {
           {inMain && tab === "qr" && (
             <QrScreen
               key={qrKey}
-              onPaired={(id) => { setPairingId(id); setFromQr(true); setTab("menu"); }}
+              initialPhase={qrExpired ? "expired" : "scan"}
+              onPaired={(id, exp) => { setPairingId(id); setPairingExpiresAt(exp); setQrExpired(false); setFromQr(true); setTab("menu"); }}
             />
           )}
           {inMain && tab === "menu" && (
@@ -2266,7 +2300,7 @@ export default function App() {
               planId={planId}
               onHome={() => {
                 setScreen("saved"); setFromQr(false);
-                setPlanId(null); setOrderProfile(null); setPairingId(null);
+                setPlanId(null); setOrderProfile(null); setPairingId(null); setPairingExpiresAt(null);
               }}
             />
           )}
