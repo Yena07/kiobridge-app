@@ -714,7 +714,9 @@ function ProfileCard({
           aria-label={`${profile.menuName} 프로필 삭제`}
           onClick={onDelete}
           style={{
-            fontSize: 13, fontWeight: 500, minHeight: 44, padding: "6px 4px",
+            // 높이만 44 였고 폭이 30 이었다. 밑줄은 글자에만 걸리므로
+            // 폭을 44 로 넓혀도 보이는 크기는 그대로고 누를 수 있는 데만 넓어진다.
+            fontSize: 13, fontWeight: 500, minHeight: 44, minWidth: 44, padding: "6px 10px",
             background: "none", border: "none", cursor: "pointer",
             color: selected ? "rgba(255,255,255,0.7)" : TEXT_2,
             textDecoration: "underline", textUnderlineOffset: 3,
