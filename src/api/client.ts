@@ -43,9 +43,17 @@ export const setScenario = (patch: Partial<Scenario>): void => {
 // 목 구현에는 그 저장소가 없어서, 앱이 주문에 쓸 프로필을 여기에 등록해 둔다.
 // 등록하지 않으면 requestMapping 이 사용자가 고른 적 없는 조건을 답으로 돌려주게 된다.
 // 실제 client 로 교체할 때 이 맵과 registerProfile 은 함께 사라진다.
+// 지우는 경로를 같이 둔다. 화면의 '이 기기에서 정보 지우기'는 "모두 지워요"라고
+// 약속하는데, 여기 사본이 남으면 그 문장이 사실이 아니게 된다.
 const profiles = new Map<string, ProfileData>();
 export const registerProfile = (profile: ProfileData): void => {
   profiles.set(profile.id, profile);
+};
+export const unregisterProfile = (id: string): void => {
+  profiles.delete(id);
+};
+export const clearProfiles = (): void => {
+  profiles.clear();
 };
 
 // ─── Mock 구현 ────────────────────────────────────────────────────────────────

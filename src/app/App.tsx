@@ -14,7 +14,7 @@ import type {
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
-import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, type Scenario } from "@/api/client";
+import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, unregisterProfile, clearProfiles, type Scenario } from "@/api/client";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
 const FRAME_W = 384;
@@ -2063,7 +2063,11 @@ export default function App() {
   const [planId, setPlanId] = useState<string | null>(null);
 
   const addProfile = (p: ProfileData) => setProfiles((prev) => [...prev, p]);
-  const deleteProfile = (id: string) => setProfiles((prev) => prev.filter((p) => p.id !== id));
+  // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
+  const deleteProfile = (id: string) => {
+    unregisterProfile(id);
+    setProfiles((prev) => prev.filter((p) => p.id !== id));
+  };
 
   const inMain = screen === "saved";
 
@@ -2168,6 +2172,8 @@ export default function App() {
               onLogin={() => { setGuest(false); setScreen("phone"); }}
               // 저장된 정보를 지우는 길. 프로필까지 함께 비운다.
               onClearLocal={() => {
+                // "지금까지 입력한 내용을 모두 지워요" 라고 했으면 목에 올린 사본도 지운다.
+                clearProfiles();
                 setProfiles([]); setName(""); setPhone("");
                 setOrderProfile(null); setPlanId(null);
               }}
