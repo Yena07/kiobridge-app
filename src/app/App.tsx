@@ -14,7 +14,7 @@ import type {
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
-import { api, POLL_MS, KioBridgeError, getScenario, setScenario, type Scenario } from "@/api/client";
+import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, type Scenario } from "@/api/client";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
 const FRAME_W = 384;
@@ -2134,7 +2134,9 @@ export default function App() {
               profiles={profiles}
               onAddProfile={() => { setScreen("profile"); }}
               onDeleteProfile={deleteProfile}
-              onOrder={(p) => { setOrderProfile(p); setScreen("order-confirm"); }}
+              // 매핑을 요청하기 전에 이 프로필을 서버가 찾을 수 있게 등록한다.
+              // 실서비스에서는 프로필 저장 시점에 서버로 올라가고 이 줄은 사라진다.
+              onOrder={(p) => { registerProfile(p); setOrderProfile(p); setScreen("order-confirm"); }}
               showOrder={fromQr}
             />
           )}

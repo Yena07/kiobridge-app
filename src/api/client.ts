@@ -1,7 +1,7 @@
 import type {
-  ApproveInput, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, StepStatus,
+  ApproveInput, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
-import { MOCK_CART, MOCK_MAPPING } from "@/api/mock";
+import { MOCK_CART, buildMapping } from "@/api/mock";
 import { STEPS } from "@/domain/catalog";
 
 export class KioBridgeError extends Error {
@@ -39,6 +39,15 @@ export const setScenario = (patch: Partial<Scenario>): void => {
   scenario = { ...scenario, ...patch };
 };
 
+// 실제 백엔드는 profileId 를 받아 자기 저장소에서 프로필을 찾는다.
+// 목 구현에는 그 저장소가 없어서, 앱이 주문에 쓸 프로필을 여기에 등록해 둔다.
+// 등록하지 않으면 requestMapping 이 사용자가 고른 적 없는 조건을 답으로 돌려주게 된다.
+// 실제 client 로 교체할 때 이 맵과 registerProfile 은 함께 사라진다.
+const profiles = new Map<string, ProfileData>();
+export const registerProfile = (profile: ProfileData): void => {
+  profiles.set(profile.id, profile);
+};
+
 // ─── Mock 구현 ────────────────────────────────────────────────────────────────
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -72,9 +81,10 @@ export const mockApi: KioBridgeApi = {
     };
   },
 
-  async requestMapping(_pairingId, _profileId) {
+  async requestMapping(_pairingId, profileId) {
     await delay(1300);
-    return MOCK_MAPPING[scenario.mapping];
+    // 응답 내용은 전부 이 프로필에서 나온다. 시나리오 스위치는 결과의 '종류'만 고른다.
+    return buildMapping(scenario.mapping, profiles.get(profileId));
   },
 
   async approve(input) {
