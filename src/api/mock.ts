@@ -192,6 +192,11 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
     case "clarification":
       return {
         result: "clarification",
+        // 후보 이름·가격만 보내면 사용자는 포장인지 종이컵인지 몇 개인지
+        // 한 번도 못 보고 승인을 누르게 된다. 어느 후보를 고르든 사용자가
+        // 고른 조건은 같으므로, 그 표를 함께 실어 화면이 보여 줄 수 있게 한다.
+        // displayName·priceText 는 아직 정해지지 않았으므로 비워 둔다.
+        item: 고름 && { displayName: "", priceText: "", options: 확인표(profile, 고름) },
         reason: `저장하신 '${profile?.menuName || MOCK_MENU_NAME}'과 비슷한 메뉴가 여러 개예요`,
         reasons: 이유,
         // candidateId 는 이번 매핑 응답에서만 쓰는 임시 표식이다.

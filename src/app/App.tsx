@@ -10,7 +10,7 @@ import {
 } from "@/design/tokens";
 import type {
   Screen, MainTab, PlaceType, PairingState, StepStatus, ProfileData, PairingResult,
-  MappingResponse, MappedItem, MappingCandidate, ApproveInput, RecommendationReason,
+  MappingResponse, MappedItem, MappedOption, MappingCandidate, ApproveInput, RecommendationReason,
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
@@ -1741,11 +1741,13 @@ function OrderExact({
 }
 
 function OrderClarification({
-  candidates, reason, reasons, onApprove, onCancel,
+  candidates, reason, reasons, options, onApprove, onCancel,
 }: {
   candidates: MappingCandidate[];
   reason?: string;
   reasons?: RecommendationReason[];
+  /** 사용자가 고른 조건. 어느 후보를 고르든 같으므로 함께 보여 준다. */
+  options?: MappedOption[];
   onApprove: (candidateId: string) => void;
   onCancel: () => void;
 }) {
@@ -1756,6 +1758,18 @@ function OrderClarification({
         <h2 style={{ ...TYPE.title, color: TEXT_1 }}>혹시 이 중<br />어떤 메뉴인가요?</h2>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8 }}>{reason}</p>
       </div>
+      {/*
+       * 후보 이름·가격만 보여 주면 사용자는 포장인지 종이컵인지 몇 개인지
+       * 한 번도 못 보고 승인을 누른다. 메뉴만 다르고 나머지 조건은 같으므로
+       * 고르기 전에 먼저 보여 준다.
+       */}
+      {options && options.length > 0 && (
+        <ConfirmCard badge="아래 조건은 그대로예요">
+          {options.map((o) => (
+            <ConfirmRow key={o.label} label={o.label} value={o.value} changed={!o.matched} changeNote={o.note} />
+          ))}
+        </ConfirmCard>
+      )}
       <div className="flex flex-col gap-2" role="radiogroup" aria-label="비슷한 메뉴 후보">
         {candidates.map((c, i) => (
           <OptionCard
@@ -1862,6 +1876,20 @@ function OrderLowConfidence({
         <h2 style={{ ...TYPE.title, color: TEXT_1 }}>이 메뉴가 맞는지<br />확실하지 않아요</h2>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8 }}>맞다면 선택해 주세요</p>
       </div>
+      {/*
+       * 예전에는 이름과 가격만 보여 줬다. 확신이 낮으면서 조건도 못 맞춘 경우
+       * 못 맞췄다는 사실이 화면에서 통째로 사라졌다 — 가장 조심해야 하는 상황에서
+       * 정보가 가장 적었다. exact 와 같은 확인 카드를 그대로 쓴다.
+       * 사용자는 포장인지 종이컵인지 몇 개인지 다 보고 나서 짚는다.
+       */}
+      <ConfirmCard badge="확실하지 않아요" photo={item.imageUrl}>
+        <ConfirmRow label="상품" value={item.displayName} />
+        {item.options.map((o) => (
+          <ConfirmRow key={o.label} label={o.label} value={o.value} changed={!o.matched} changeNote={o.note ?? "오늘은 이 조합이 없어요"} />
+        ))}
+        <ConfirmRow label="가격" value={item.priceText} large />
+      </ConfirmCard>
+      <InfoBox variant="info">시스템이 정확하게 찾지 못했어요. 위 내용을 확인하고 맞으면 아래에서 짚어 주세요.</InfoBox>
       <OptionCard
         role="button"
         selected={selected}
@@ -1870,7 +1898,6 @@ function OrderLowConfidence({
         photo={item.imageUrl}
         onClick={() => setSelected((v) => !v)}
       />
-      <InfoBox variant="info">시스템이 정확하게 찾지 못했어요. 직접 확인해 주세요.</InfoBox>
       <ReasonList reasons={reasons} />
       {!selected && (
         <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2 }}>메뉴를 선택하면 승인할 수 있어요</p>
@@ -1960,6 +1987,7 @@ function OrderConfirmScreen({
             candidates={mapping.candidates ?? []}
             reason={mapping.reason}
             reasons={mapping.reasons}
+            options={mapping.item?.options}
             onApprove={(candidateId) => approve({ candidateId })}
             onCancel={onBack}
           />
