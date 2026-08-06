@@ -22,6 +22,12 @@ export interface DetailOption {
   label: string;
   multi: boolean;
   choices: string[];
+  /**
+   * 다중 선택 안에서 혼자만 골라야 하는 값. 예: '시럽 없음'.
+   * '바닐라'와 '시럽 없음'을 같이 고를 수 있으면 앱이 무엇을 주문해야 할지 알 수 없고,
+   * 사용자도 자기가 무엇을 시켰는지 알 수 없다.
+   */
+  exclusive?: string[];
 }
 
 // ─── API 계약 (키오브릿지_API_계약_초안_v0.1.md) ────────────────────────────────

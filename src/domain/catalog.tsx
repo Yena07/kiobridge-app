@@ -9,7 +9,8 @@ export const DETAIL_OPTIONS: Record<string, DetailOption[]> = {
     { label: "온도", multi: false, choices: ["HOT", "ICE"] },
     { label: "사이즈", multi: false, choices: ["Short", "Tall", "Grande", "Venti"] },
     { label: "샷 추가", multi: false, choices: ["1샷 추가", "2샷 추가"] },
-    { label: "시럽", multi: true, choices: ["바닐라", "헤이즐넛", "카라멜", "시럽 없음"] },
+    // '시럽 없음' 은 다른 시럽과 같이 고를 수 없다.
+    { label: "시럽", multi: true, choices: ["바닐라", "헤이즐넛", "카라멜", "시럽 없음"], exclusive: ["시럽 없음"] },
     { label: "우유 변경", multi: false, choices: ["일반 우유", "오트밀크", "두유", "저지방"] },
   ],
   // 아래 세 곳의 질문과 선택지는 공식 시뮬레이션 킷의 option-groups.json 을 그대로 따른다.

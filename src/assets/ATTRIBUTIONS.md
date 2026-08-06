@@ -3,6 +3,9 @@
 앱에 들어간 사진과 픽토그램은 모두 외부에서 내려받은 것이다.
 CC BY-SA 자산이 섞여 있으므로 이 문서를 지우지 말 것.
 
+CC BY-SA 는 저작자 표시 · 라이선스 링크 · 변경 여부 표시를 모두 요구한다.
+아래 항목에 셋을 다 적어 둔다. 이 문서는 배포물에도 포함된다.
+
 ---
 
 ## 픽토그램 — src/assets/icons/*.svg
@@ -36,17 +39,21 @@ receipt, shopping-cart-simple, squares-four, user-circle, warning, x-circle
 ### dakgangjeong.jpg
 - 원본: 만석닭강정.jpg
 - 저작자: LR0725
-- 라이선스: CC BY-SA 4.0
+- 라이선스: CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/
+- 변경 여부: 변경 없음 (원본 그대로 사용)
 - 출처: https://commons.wikimedia.org/wiki/File:%EB%A7%8C%EC%84%9D%EB%8B%AD%EA%B0%95%EC%A0%95.jpg
 
 ### iced-americano.jpg
 - 원본: Iced Americano 1.jpg
 - 저작자: Challapramod
-- 라이선스: CC BY-SA 4.0
+- 라이선스: CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/
+- 변경 여부: 변경 없음 (원본 그대로 사용)
 - 출처: https://commons.wikimedia.org/wiki/File:Iced_Americano_1.jpg
 
 ### bulgogi-burger.jpg
 - 원본: Bulgogi burger 1.jpg
 - 저작자: star5112
-- 라이선스: CC BY-SA 2.0
+- 라이선스: CC BY-SA 2.0 — https://creativecommons.org/licenses/by-sa/2.0/
+- 변경 여부: 변경 없음 (원본 그대로 사용)
+- 사용 여부: 현재 화면에서 쓰지 않는다. 파일은 남겨 두되 다시 쓸 때 이 고지를 함께 지킨다.
 - 출처: https://commons.wikimedia.org/wiki/File:Bulgogi_burger_1.jpg

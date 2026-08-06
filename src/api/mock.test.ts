@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { MappingState, ProfileData } from "@/domain/types";
 import { MOCK_CART, MOCK_MENU_NAME, buildMapping } from "./mock";
@@ -144,6 +146,42 @@ describe("결제 경계", () => {
       const s = JSON.stringify(buildMapping(state, 땅콩알레르기));
       expect(s).not.toMatch(/select_payment|confirm_payment|submit_payment|complete_payment|open_payment_method/);
     }
+  });
+
+  // 심사 규칙은 이 문자열들이 '실행되지 않아도 코드에 존재하기만 하면' 위반으로 본다.
+  // 응답 JSON 만 보면 그 조건을 확인할 수 없으므로 소스 전체를 훑는다.
+  it("소스 어디에도 결제 action 문자열이 없다", () => {
+    const 금지 = ["select_payment", "confirm_payment", "submit_payment", "complete_payment", "open_payment_method"];
+    const 걸린것: string[] = [];
+    const 훑기 = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const 경로 = join(dir, e.name);
+        if (e.isDirectory()) { 훑기(경로); continue; }
+        if (!/\.(ts|tsx|css|html)$/.test(e.name)) continue;
+        // 이 파일 자신은 금지어를 검사 대상으로 들고 있으므로 건너뛴다.
+        if (e.name === "mock.test.ts") continue;
+        const 내용 = readFileSync(경로, "utf8");
+        for (const w of 금지) if (내용.includes(w)) 걸린것.push(`${경로}: ${w}`);
+      }
+    };
+    훑기("src");
+    expect(걸린것).toEqual([]);
+  });
+
+  // "주문 완료" 도 쓰면 안 된다. 종료 상태는 장바구니까지다.
+  it("소스 어디에도 '주문 완료' 표현이 없다", () => {
+    const 걸린것: string[] = [];
+    const 훑기 = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const 경로 = join(dir, e.name);
+        if (e.isDirectory()) { 훑기(경로); continue; }
+        if (!/\.(ts|tsx)$/.test(e.name)) continue;
+        if (e.name === "mock.test.ts") continue;
+        if (readFileSync(경로, "utf8").includes("주문 완료")) 걸린것.push(경로);
+      }
+    };
+    훑기("src");
+    expect(걸린것).toEqual([]);
   });
 });
 

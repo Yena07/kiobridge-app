@@ -72,7 +72,10 @@ export const FOCUS_STYLES = `
   /* 확인 카드의 마지막 행에는 구분선을 남기지 않는다.
      행의 구분선은 인라인 스타일로 들어가므로 !important 가 없으면 덮이지 않는다. */
   [data-confirm-body] > div:last-child { border-bottom: none !important; }
-  input::placeholder { color: ${TEXT_3}; font-weight: 400; }
+  /* placeholder 는 장식이 아니라 '무엇을 적어야 하는지' 를 알려 주는 글이다.
+     '예: 할머니, 김씨' 처럼 예시를 담고 있어서 안 보이면 무엇을 적을지 알 수 없다.
+     TEXT_3 는 1.74:1 이라 사실상 안 보인다. TEXT_2 는 입력 배경 위에서 AA 를 넘는다. */
+  input::placeholder { color: ${TEXT_2}; font-weight: 400; }
   /* 내려받은 픽토그램에는 width/height 가 없고 viewBox 만 있다.
      감싼 span 크기에 맞춰 늘어나도록 여기서 한 번만 정해 준다. */
   [data-pictogram] > svg { width: 100%; height: 100%; display: block; }

@@ -483,10 +483,19 @@ function ProfileScreen({ onNext, onBack }: { onNext: (p: ProfileData) => void; o
   const [memo, setMemo] = useState("");
 
   const toggleChip = (sectionLabel: string, choice: string, multi: boolean) => {
+    const 배타 = options.find((o) => o.label === sectionLabel)?.exclusive ?? [];
     setSelections((prev) => {
       const current = prev[sectionLabel] ?? [];
       if (multi) {
-        return { ...prev, [sectionLabel]: current.includes(choice) ? current.filter((c) => c !== choice) : [...current, choice] };
+        if (current.includes(choice)) {
+          return { ...prev, [sectionLabel]: current.filter((c) => c !== choice) };
+        }
+        // '시럽 없음' 을 고르면 다른 시럽은 내린다. 반대로 시럽을 고르면 '없음'을 내린다.
+        // 둘이 같이 켜져 있으면 앱도 사용자도 무엇을 시킨 건지 알 수 없다.
+        const 남길 = 배타.includes(choice)
+          ? []
+          : current.filter((c) => !배타.includes(c));
+        return { ...prev, [sectionLabel]: [...남길, choice] };
       } else {
         return { ...prev, [sectionLabel]: current[0] === choice ? [] : [choice] };
       }
