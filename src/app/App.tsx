@@ -740,11 +740,19 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
 
         <div style={{ marginBottom: 8 }}>
           <SectionLabel text="메모" />
+          {/*
+           * 메모는 자유 입력이라 사용자가 무엇이든 적을 수 있다.
+           * "이 칸을 없애라" 는 지적도 있었지만, '얼음 적게 부탁드려요' 처럼
+           * 자기 사정을 말하는 유일한 자리라 없애면 잃는 게 더 크다.
+           * 대신 무엇을 적지 말아야 하는지 적을 자리 바로 옆에서 밝힌다.
+           * placeholder 는 입력하면 사라지므로 안내는 밖에 따로 둔다.
+           */}
           <textarea
-            aria-label="메모 (선택)"
+            aria-label="메모 (선택). 이름·전화번호·주민등록번호 같은 개인정보는 적지 마세요"
+            aria-describedby="memo-notice"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="추가로 기억해둘 내용을 적어주세요."
+            placeholder="예: 얼음 적게 주세요"
             rows={3}
             style={{
               width: "100%", ...TYPE.body, color: TEXT_1, fontFamily: FONT,
@@ -752,6 +760,9 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
               border: "none", outline: "none", backgroundColor: CANVAS, boxSizing: "border-box",
             }}
           />
+          <p id="memo-notice" style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8 }}>
+            주문에 필요한 내용만 적어 주세요. <strong style={{ fontWeight: 600, color: TEXT_1 }}>이름·전화번호·주민등록번호 같은 개인정보는 적지 마세요.</strong>
+          </p>
         </div>
       </div>
 
