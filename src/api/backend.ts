@@ -403,6 +403,15 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
     },
 
     // 일괄 처리라 검증 단계가 따로 없다. 제출이 성공했으면 통과한 것이다.
+    //
+    // 이건 이 계층 안에서만 쓰는 모양이다. 화면은 제출·검증·실행을 단계로
+    // 보여 주지 않는다 — 실행 화면의 다섯 단계는 키오스크 화면 진행이고
+    // evidence 에서 온다. 그러니 여기서 true 를 돌려주는 게 사용자에게
+    // 없는 검증을 했다고 말하는 건 아니다.
+    //
+    // 다만 submit 이 실패했을 때 키오스크를 건드렸는지 아닌지는 알 수 없다.
+    // 그 둘은 사용자에게 할 말이 다르다(다시 해 보세요 / 직원을 불러 주세요).
+    // docs/BACKEND_INTEGRATION.md 질문 ③ 이 이것이다.
     async validate() { return { valid: true }; },
 
     async execute(sessionId) {
