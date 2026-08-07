@@ -56,6 +56,19 @@ describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
     expect(r.result).toBe("not_found");
   });
 
+  it("보여 줄 수 있는 후보가 하나도 없으면 clarification 을 만들지 않는다", async () => {
+    // display 가 비면 이름 없는 후보라 걸러진다. 다 걸러지고도 clarification 을
+    // 내보내면 화면은 "비슷한 메뉴가 여러 개예요" 라고 말하면서 고를 것을 하나도
+    // 못 보여 준다. 승인은 후보 선택을 요구하는데 고를 방법이 없으니 갇힌다.
+    const r = await 매핑(가짜백엔드({}, 기본추천({
+      alternativeCandidateIds: ["CHICKEN-003"],
+      requiresReconfirmation: true,
+      display: {},
+    })));
+    expect(r.result).toBe("not_found");
+    expect(r.candidates).toBeUndefined();
+  });
+
   it("확신도가 낮으면 재확인을 요구한다", async () => {
     // 심사 필수 기준: 신뢰도 낮을 때 사용자 재확인 수행.
     const r = await 매핑(가짜백엔드({}, 기본추천({ confidence: 0.4 })));
@@ -127,6 +140,27 @@ describe("상품 ID 를 화면으로 내보내지 않는다", () => {
       ).rejects.toThrow();
     }
     expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("어떤 결과 종류에서도 상품 ID 가 응답 전체에 섞이지 않는다", async () => {
+    // 후보 목록만 보면 부족하다. reasons·item·profileOptions·message 어디로든
+    // 새어 나갈 수 있다. 응답 전체를 문자열로 만들어 잠근다.
+    //
+    // 상품 ID 는 서버가 정하는 값이라 CHICKEN- 만 막으면 다음 환경에서 뚫린다.
+    // 가짜 백엔드가 쓰는 모든 후보 ID 를 그대로 금지어로 쓴다.
+    const 후보ID = ["CHICKEN-001", "CHICKEN-003", "CHICKEN-005"];
+    const 경우 = [
+      기본추천(),
+      기본추천({ alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true }),
+      기본추천({ confidence: 0.4 }),
+      기본추천({ matchedOptions: [{ label: "컵", value: "종이컵", matched: false }] }),
+      기본추천({ recommendedCandidateId: null }),
+    ];
+    for (const rec of 경우) {
+      const r = await 매핑(가짜백엔드({}, rec));
+      const s = JSON.stringify(r);
+      for (const id of 후보ID) expect(s).not.toContain(id);
+    }
   });
 
   it("사용자가 고른 표식을 서버가 아는 후보로 되돌려 보낸다", async () => {

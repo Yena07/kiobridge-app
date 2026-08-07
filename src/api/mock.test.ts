@@ -1,40 +1,60 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// CWD 에 기대면 다른 디렉터리에서 돌릴 때 조용히 0개를 훑고 통과한다.
-// 기준점은 src 가 아니라 리포지터리 루트다. 심사 규칙은 결제 문자열이
-// 코드 어디에 있어도 위반으로 보는데, src 만 훑으면 index.html·vite.config.ts·
-// api/bff/ 가 검사에서 빠진다.
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-// 리포지터리에 들어가지 않는 것은 훑지 않는다. 목록을 손으로 적으면 .gitignore 와
-// 어긋나는 날이 오므로 .gitignore 를 그대로 읽는다. 지금 이 파일은 평범한 이름과
-// 디렉터리뿐이라 이 정도로 충분하다. 글롭이 늘면 여기도 같이 늘려야 한다.
-const 건너뛸것 = new Set([
-  ".git",
-  ...readFileSync(join(ROOT, ".gitignore"), "utf8")
-    .split("\n")
-    .map((l) => l.trim().replace(/\/$/, ""))
-    .filter((l) => l && !l.startsWith("#") && !l.includes("*") && !l.includes("/")),
-]);
+/**
+ * 저장소 루트를 찾는다.
+ *
+ * CWD 에 기대면 다른 디렉터리에서 돌릴 때 조용히 0개를 훑고 통과한다.
+ * '..' 을 몇 번 쓸지 세는 것도 안 된다 — 이 앱은 자기 저장소에서는 루트에 있지만
+ * 팀 저장소에서는 frontend/ 아래에 있다. 개수를 고정하면 한쪽이 반드시 틀린다.
+ * 실제로 팀 저장소에서는 frontend 까지만 올라가 그 바깥을 검사하지 못했고,
+ * 개인 저장소에서 한 단계 더 올리면 Downloads 폴더 전체를 훑는다.
+ *
+ * .git 이 있는 곳까지 올라간다. 어느 배치에서도 그곳이 저장소 루트다.
+ */
+const 저장소루트 = (() => {
+  let d = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(join(d, ".git"))) return d;
+    const 위 = dirname(d);
+    if (위 === d) break;
+    d = 위;
+  }
+  // .git 이 없는 환경(내려받은 소스 등)에서는 앱 폴더까지만 본다.
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+})();
 
 import { describe, expect, it } from "vitest";
 import type { MappingState, ProfileData } from "@/domain/types";
 import { MOCK_CART, MOCK_MENU_NAME, buildMapping } from "./mock";
 
-/** ROOT 아래에서 검사 대상 확장자만 골라 훑는다. */
+// 저장소에 들어가지 않는 것은 훑지 않는다. 목록을 손으로 적으면 .gitignore 와
+// 어긋나는 날이 오므로 각 디렉터리의 .gitignore 를 그대로 읽는다.
+// 팀 저장소처럼 루트와 frontend/ 에 .gitignore 가 따로 있는 배치도 이걸로 덮인다.
+// 평범한 이름과 디렉터리만 읽는다. 글롭이 늘면 여기도 같이 늘려야 한다.
+const 무시목록 = (dir: string): string[] => {
+  const p = join(dir, ".gitignore");
+  if (!existsSync(p)) return [];
+  return readFileSync(p, "utf8")
+    .split("\n")
+    .map((l) => l.trim().replace(/\/$/, ""))
+    .filter((l) => l && !l.startsWith("#") && !l.includes("*") && !l.includes("/"));
+};
+
+/** 저장소 루트 아래에서 검사 대상 확장자만 골라 훑는다. */
 const 소스훑기 = (확장자: RegExp, 검사: (경로: string, 내용: string) => void) => {
-  const 훑기 = (dir: string) => {
+  const 훑기 = (dir: string, 물려받은: ReadonlySet<string>) => {
+    const 건너뛸것 = new Set([...물려받은, ...무시목록(dir)]);
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (건너뛸것.has(e.name)) continue;
       const 경로 = join(dir, e.name);
-      if (e.isDirectory()) { 훑기(경로); continue; }
+      if (e.isDirectory()) { 훑기(경로, 건너뛸것); continue; }
       if (!확장자.test(e.name)) continue;
       검사(경로, readFileSync(경로, "utf8"));
     }
   };
-  훑기(ROOT);
+  훑기(저장소루트, new Set([".git"]));
 };
 
 // 이 파일이 지키는 것은 하나다.
@@ -72,7 +92,9 @@ const 모든상태: MappingState[] = ["exact", "clarification", "not_found", "ch
 const 이유문구 = (r: ReturnType<typeof buildMapping>) => (r.reasons ?? []).map((x) => x.text);
 
 describe("buildMapping — 결과 종류", () => {
-  it.each(모든상태)("%s 상태는 같은 result 를 돌려준다 (어긋난 게 없을 때)", (state) => {
+  // changed 는 뺀다. 결과 종류는 스위치가 고르지만 '맞았는지' 는 데이터가 정한다.
+  // 다 맞는 프로필로 changed 를 고르면 아래 테스트대로 exact 가 돌아온다.
+  it.each(모든상태.filter((s) => s !== "changed"))("%s 상태는 같은 result 를 돌려준다 (어긋난 게 없을 때)", (state) => {
     // 어긋난 게 있으면 exact 는 changed 로 승격된다. 이 프로필은 다 맞는다.
     expect(buildMapping(state, 땅콩알레르기).result).toBe(state);
   });
@@ -81,6 +103,15 @@ describe("buildMapping — 결과 종류", () => {
     // 순한맛+뼈 조합은 오늘 메뉴에 없다.
     const r = buildMapping("exact", 알레르기없음);
     expect(r.result).toBe("changed");
+  });
+
+  it("어긋난 게 없으면 changed 를 골라도 없는 불일치를 지어내지 않는다", () => {
+    // 예전에는 시연을 위해 멀쩡한 행 하나에 "오늘은 제공되지 않아요" 를 붙였다.
+    // 실제로 되는 옵션을 안 된다고 말한 것이고, 심사 중 스위치를 돌리면 보였다.
+    const r = buildMapping("changed", 땅콩알레르기);
+    expect(r.result).toBe("exact");
+    expect(r.diffNote).toBeUndefined();
+    expect((r.item?.options ?? []).every((o) => o.matched)).toBe(true);
   });
 
   it("어긋난 게 있으면 없는 불일치를 지어내지 않는다", () => {
@@ -217,11 +248,16 @@ describe("상태별 화면 요건", () => {
     }
   });
 
-  it("changed 는 달라진 항목을 matched=false 로 짚는다", () => {
-    const r = buildMapping("changed", 땅콩알레르기);
-    const 컵 = (r.item?.options ?? []).find((o) => o.label === "컵");
-    expect(컵?.matched).toBe(false);
-    expect(r.diffNote).toContain("종이컵");
+  it("changed 는 실제로 달라진 항목을 matched=false 로 짚는다", () => {
+    // 순한맛+뼈 를 저장했는데 오늘은 그 조합이 없어 형태가 어긋난다.
+    // 짚는 항목도 문장도 실제 불일치에서 나와야 한다.
+    const r = buildMapping("changed", 알레르기없음);
+    expect(r.result).toBe("changed");
+    const 형태 = (r.item?.options ?? []).find((o) => o.label === "형태");
+    expect(형태?.matched).toBe(false);
+    expect(r.diffNote).toContain("뼈");
+    // 맞은 항목까지 싸잡아 틀렸다고 하지 않는다.
+    expect((r.item?.options ?? []).find((o) => o.label === "맵기")?.matched).toBe(true);
   });
 
   it("not_found 는 사용자가 저장한 이름으로 말한다", () => {
@@ -290,8 +326,23 @@ describe("결제 경계", () => {
     }
   });
 
+  // 스캔이 아무것도 못 훑고도 통과하는 게 가장 위험하다. 빈 배열은 늘 통과한다.
+  // 기준점이 틀어지면(폴더 배치가 바뀌면) 그때부터 이 파일의 모든 보증이
+  // 조용히 사라지므로, 실제로 훑었는지를 먼저 잠가 둔다.
+  it("스캔이 앱 바깥과 루트 파일까지 실제로 훑는다", () => {
+    const 훑은것: string[] = [];
+    소스훑기(/\.(ts|tsx|css|html|json)$/, (경로) => 훑은것.push(경로.replace(/\\/g, "/")));
+    expect(훑은것.some((p) => p.endsWith("/index.html"))).toBe(true);
+    expect(훑은것.some((p) => p.endsWith("/vite.config.ts"))).toBe(true);
+    expect(훑은것.some((p) => p.includes("/api/bff/"))).toBe(true);
+    expect(훑은것.some((p) => p.includes("/src/app/App.tsx"))).toBe(true);
+    // node_modules 를 훑기 시작하면 수만 개가 되고 무의미하게 느려진다.
+    expect(훑은것.some((p) => p.includes("/node_modules/"))).toBe(false);
+  });
+
   // 심사 규칙은 이 문자열들이 '실행되지 않아도 코드에 존재하기만 하면' 위반으로 본다.
   // 응답 JSON 만 보면 그 조건을 확인할 수 없으므로 소스 전체를 훑는다.
+  // 문서(.md)도 함께 본다. 실제로 연동 문서에 금지어를 그대로 적어 둔 적이 있다.
   it("소스 어디에도 결제 action 문자열이 없다", () => {
     // 금지어를 문자열 그대로 적으면 이 파일 자신이 위반이 된다.
     // 심사 규칙은 "실행되지 않아도 코드에 존재하기만 하면" 위반으로 보기 때문이다.
@@ -299,7 +350,7 @@ describe("결제 경계", () => {
     const P = "pay" + "ment";
     const 금지 = [`select_${P}`, `confirm_${P}`, `submit_${P}`, `complete_${P}`, `open_${P}_method`];
     const 걸린것: string[] = [];
-    소스훑기(/\.(ts|tsx|css|html|json)$/, (경로, 내용) => {
+    소스훑기(/\.(ts|tsx|css|html|json|md)$/, (경로, 내용) => {
       for (const w of 금지) if (내용.includes(w)) 걸린것.push(`${경로}: ${w}`);
     });
     expect(걸린것).toEqual([]);
@@ -310,7 +361,7 @@ describe("결제 경계", () => {
     // 위와 같은 이유로 조각내서 만든다.
     const 금지표현 = "주문 " + "완료";
     const 걸린것: string[] = [];
-    소스훑기(/\.(ts|tsx|css|html|json)$/, (경로, 내용) => {
+    소스훑기(/\.(ts|tsx|css|html|json|md)$/, (경로, 내용) => {
       if (내용.includes(금지표현)) 걸린것.push(경로);
     });
     expect(걸린것).toEqual([]);

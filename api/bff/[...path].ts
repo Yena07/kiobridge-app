@@ -16,6 +16,10 @@
 // 열린 프록시가 되지 않게 통과시킬 경로를 명시한다.
 // 여기 없는 경로는 백엔드에 닿지 않는다. 백엔드가 사내망에 있을 때
 // 이 함수가 통로가 되어 아무 데나 부를 수 있으면 안 된다.
+// 경로만 검사하면 메서드는 무엇이든 통과한다. 백엔드에 DELETE 가 생기는 순간
+// 이 함수가 그 통로가 된다. 지금 쓰는 두 가지만 연다.
+const 허용메서드 = new Set(["GET", "POST"]);
+
 const 허용경로 = [
   /^internal\/simulation\/session$/,
   /^internal\/simulation\/submit-and-run$/,
@@ -36,6 +40,10 @@ export default async function handler(req: Request): Promise<Response> {
   if (!base) {
     // 설정이 없으면 조용히 실패하지 않는다. 붙이는 사람이 왜 안 되는지 알아야 한다.
     return json(503, { code: "BFF_NOT_CONFIGURED", message: "서버에 백엔드 주소가 설정되지 않았어요" });
+  }
+
+  if (!허용메서드.has(req.method)) {
+    return json(405, { code: "METHOD_NOT_ALLOWED", message: "허용되지 않은 방식이에요" });
   }
 
   const url = new URL(req.url);

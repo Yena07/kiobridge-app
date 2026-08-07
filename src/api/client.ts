@@ -136,6 +136,7 @@ const sessions = new Map<string, {
 }>();
 
 const plans = new Map<string, { startedAt: number; outcome: Scenario["execution"]; cart: CartResult }>();
+let 플랜일련번호 = 0;
 
 export const mockApi: KioBridgeApi = {
   async claimPairing(claimCode) {
@@ -252,7 +253,9 @@ export const mockApi: KioBridgeApi = {
       session.approved = false;
       throw e;
     }
-    const planId = `pln_${Date.now()}`;
+    // 밀리초만 쓰면 지연을 0 으로 낮춘 테스트에서 두 승인이 같은 값을 만든다.
+    // 그러면 앞의 계획이 덮여 다른 세션의 장바구니를 보게 된다. 일련번호를 붙인다.
+    const planId = `pln_${Date.now()}_${++플랜일련번호}`;
     plans.set(planId, {
       startedAt: Date.now(),
       outcome: scenario.execution,

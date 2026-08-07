@@ -109,6 +109,22 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
   // 세션 하나에 대해 서버가 뭐라고 답했는지. 승인 검사와 실행 조회의 기준이 된다.
   // 페어링 만료 시각. 승인 때 끝난 연결인지 다시 보려면 필요하다.
   const 만료 = new Map<string, number>();
+  /**
+   * 이 계층이 매핑과 승인 사이에 들고 있는 것.
+   *
+   * P0-1 은 상품 ID 를 앱이 다루거나 저장하지 말라고 한다. 화면(App.tsx)은
+   * 실제로 c1·c2·c3 과 사람이 읽는 값만 받는다 — 위 테스트가 응답 전체를
+   * 훑어서 잠가 두었다.
+   *
+   * 다만 이 Map 은 서버가 준 rec 를 그대로 들고 있고, 그 안에 서버의 후보
+   * 식별자가 들어 있다. 이 계층도 브라우저에서 돈다. 승인할 때 "사용자가 고른
+   * 그 후보" 를 서버에 되돌려 줘야 하는데, 지금 API 가 후보를 식별자로만
+   * 받기 때문이다.
+   *
+   * 없애려면 서버가 세션 안에서 후보를 기억하고 c1·c2·c3 같은 표식을 직접
+   * 발급해야 한다. docs/BACKEND_INTEGRATION.md 에 요청으로 적어 두었다.
+   * 그때 이 Map 은 expiresAt·result 만 남는다.
+   */
   const 세션 = new Map<string, {
     rec: RecommendationResult;
     result: MappingResponse["result"];
@@ -167,6 +183,14 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         return { result, reasons, message: "담을 수 있는 메뉴가 없어요" };
       }
       if (result === "clarification") {
+        // 이름 없는 후보를 걸러내고 나면 하나도 안 남을 수 있다. 그대로 내보내면
+        // 화면은 "비슷한 메뉴가 여러 개예요" 라고 말하면서 고를 것을 하나도
+        // 못 보여 준다. 승인은 CANDIDATE_REQUIRED 를 요구하는데 고를 방법이 없으니
+        // 사용자는 그 화면에서 빠져나갈 수 없다. 담을 게 없다고 답한다.
+        const 보일후보 = [rec.recommendedCandidateId!, ...rec.alternativeCandidateIds].filter(보일수있나);
+        if (보일후보.length === 0) {
+          return { result: "not_found", reasons, message: "담을 수 있는 메뉴가 없어요" };
+        }
         return {
           result, reasons,
           reason: "비슷한 메뉴가 여러 개예요",
@@ -177,8 +201,7 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
           // 어느 후보를 고르든 안 맞는 축이 있다는 사실이 사라진다.
           profileOptions: rec.matchedOptions,
           // 상품 ID 를 화면으로 내보내지 않는다. 이번 응답 안에서만 쓰는 표식으로 바꾼다.
-          candidates: [rec.recommendedCandidateId!, ...rec.alternativeCandidateIds]
-            .filter(보일수있나)
+          candidates: 보일후보
             .map((id, i) => ({
               candidateId: `c${i + 1}`,
               ...보이기(id),
@@ -336,11 +359,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
  * kiobridge.cors.allowed-origin 을 이 앱 주소로 맞춰야 한다.
  */
 export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSession" | "submit" | "validate" | "execute" | "getEvidence"> {
-  const 보내기 = async <T>(path: string, body: unknown): Promise<T> => {
+  const 보내기 = async <T>(path: string, body?: unknown): Promise<T> => {
     const res = await fetch(baseUrl + path, {
-      method: "POST",
+      // body 가 없으면 조회다. 명세의 evidence 는 GET 이라 POST 로 부르면 405 가 난다.
+      method: body === undefined ? "GET" : "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
@@ -355,13 +379,19 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
   const 실행결과 = new Map<string, { planId: string }>();
 
   return {
-    async createSession({ environmentId }) {
+    async createSession({ environmentId, claimCode }) {
+      // claimCode 를 버리면 QR 로 읽은 그 키오스크와 무관하게 세션이 열린다.
+      // 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻이다.
+      // 백엔드가 아직 이 값을 받지 않지만, 여기서 빼 두면 받게 되는 날에도
+      // 아무도 눈치채지 못한다. 보내고, 서버가 무시하면 서버 사정이다.
       const r = await 보내기<{ sessionId: string; initialState: string; submissionEndpoint: string }>(
-        "/internal/simulation/session", { environmentId },
+        "/internal/simulation/session", { environmentId, claimCode },
       );
       return {
         sessionId: r.sessionId,
         // 백엔드가 키오스크 이름과 만료를 아직 안 준다. 받게 되면 여기서 쓴다.
+        // 만료를 클라이언트 시계로 가정하고 있어서, 서버가 먼저 끝내면 앱은 모른다.
+        // docs/BACKEND_INTEGRATION.md 질문 ① 이 이것이다.
         kioskName: "키오스크",
         expiresAt: Date.now() + 5 * 60 * 1000,
       };
@@ -381,13 +411,21 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
       return r;
     },
 
+    // 명세는 GET 이다. 백엔드에 아직 이 경로가 없어서 붙이면 404 가 난다.
+    // docs/BACKEND_INTEGRATION.md 질문 ⑤ 가 이것이다.
     async getEvidence(sessionId) {
-      const r = await 보내기<{ state?: string; reachedStep?: number }>(
-        `/internal/simulation/evidence/${encodeURIComponent(sessionId)}`, {},
-      );
+      const r = await 보내기<{
+        state?: string; reachedStep?: number;
+        cart?: EvidenceSummary["cart"]; abort?: EvidenceSummary["abort"];
+      }>(`/internal/simulation/evidence/${encodeURIComponent(sessionId)}`);
       return {
         state: r?.state === "cart_ready" || r?.state === "aborted" ? r.state : "running",
         reachedStep: r?.reachedStep ?? 0,
+        // 서버가 요약을 주면 그대로 옮긴다. 빼 두면 "장바구니에 담았어요" 화면에
+        // 개수도 금액도 안 나오고, 중단됐을 때도 왜 멈췄는지 못 알려 준다.
+        // 안 주면 그대로 비운다 — 지어내지 않는다.
+        ...(r?.cart ? { cart: r.cart } : {}),
+        ...(r?.abort ? { abort: r.abort } : {}),
       };
     },
   };

@@ -5,7 +5,7 @@
 
 배포: https://kiobridge-app.vercel.app
 
-```
+```text
 바로 시작하기 (로그인 없음)
   └ 프로필 만들기 ── 장소 → 조건 → 저장
       └ QR 찍기 ── 키오스크와 연결

@@ -16,6 +16,9 @@ const 프로필 = (id: string, selections: Record<string, string[]>): ProfileDat
 
 const 매운 = 프로필("p1", { "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"] });
 const 순한 = 프로필("p2", { "이용 방식": ["포장하기"], "맵기": ["순한맛"], "형태": ["순살"] });
+// 순한맛+뼈 조합은 오늘 메뉴에 없다. 실제로 어긋나므로 시나리오 스위치와 무관하게
+// changed 가 된다. 목은 없는 불일치를 지어내지 않으므로 이 프로필이 필요하다.
+const 안맞음 = 프로필("p3", { "이용 방식": ["포장하기"], "맵기": ["순한맛"], "형태": ["뼈"] });
 
 // 페어링을 거치지 않은 세션으로는 매핑할 수 없다. 실제 흐름대로 먼저 받는다.
 let PAIRING = "";
@@ -250,11 +253,14 @@ describe("승인 검사 — 서버가 자기 답을 기준으로 본다", () => 
   });
 
   it("changed 인데 확인 표시가 없으면 거절한다", async () => {
+    // 실제로 어긋나는 프로필을 쓴다. 스위치만 changed 로 돌리고 다 맞는 프로필을
+    // 넣으면 목이 사실대로 exact 를 돌려주므로 이 검사가 통과할 수 없다.
     setScenario({ mapping: "changed" });
-    registerProfile(매운);
-    await api.requestMapping(PAIRING, "p1");
+    registerProfile(안맞음);
+    const r = await api.requestMapping(PAIRING, "p3");
+    expect(r.result).toBe("changed");
     await expect(
-      api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "changed" }),
+      api.approve({ pairingId: PAIRING, profileId: "p3", mappingResult: "changed" }),
     ).rejects.toThrow();
   });
 
@@ -309,10 +315,10 @@ describe("승인 검사 — 서버가 자기 답을 기준으로 본다", () => 
   it("클라이언트가 mappingResult 를 속여도 서버 판단을 따른다", async () => {
     // 화면이 changed 를 받았는데 exact 라고 보내며 확인 표시를 빼면 통과해서는 안 된다.
     setScenario({ mapping: "changed" });
-    registerProfile(매운);
-    await api.requestMapping(PAIRING, "p1");
+    registerProfile(안맞음);
+    await api.requestMapping(PAIRING, "p3");
     await expect(
-      api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" }),
+      api.approve({ pairingId: PAIRING, profileId: "p3", mappingResult: "exact" }),
     ).rejects.toThrow();
   });
 });
