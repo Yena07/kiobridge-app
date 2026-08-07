@@ -322,11 +322,14 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
  * 그래서 지금 붙일 수 있는 건 세션 생성과 실행뿐이다. 추천 계열이 생기면
  * filterCandidates·recommend 만 채우면 된다.
  *
- * CORS 는 백엔드가 kiobridge.cors.allowed-origin 으로 한 곳만 허용한다.
- * 기본값이 http://localhost:5173 인데 이 앱의 개발 서버는 5199 다.
- * 붙이기 전에 CORS_ALLOWED_ORIGIN 을 맞춰야 한다.
+ * 기본 주소는 /api/bff 다. 이 앱의 서버 함수가 백엔드로 대신 보내 주므로
+ * 브라우저는 같은 출처로만 요청하고 CORS 가 발생하지 않는다.
+ * 백엔드 주소는 Vercel 환경변수 KIOBRIDGE_API_BASE 로 준다.
+ *
+ * 백엔드를 직접 부르고 싶으면 주소를 넘기면 된다. 그 경우에는
+ * kiobridge.cors.allowed-origin 을 이 앱 주소로 맞춰야 한다.
  */
-export function createTeamBackend(baseUrl: string): Pick<Backend, "createSession" | "submit" | "validate" | "execute" | "getEvidence"> {
+export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSession" | "submit" | "validate" | "execute" | "getEvidence"> {
   const 보내기 = async <T>(path: string, body: unknown): Promise<T> => {
     const res = await fetch(baseUrl + path, {
       method: "POST",

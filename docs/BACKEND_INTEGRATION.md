@@ -39,7 +39,21 @@ record CreateSessionResponse(String sessionId, String initialState, String submi
 
 카탈로그는 QR 로 연결한 키오스크가 정합니다. 지금은 `createApi(backend, "chicken-store")` 로 고정되어 있어서, 병원 키오스크에 연결해도 닭강정 카탈로그를 봅니다.
 
-**③ CORS 가 한 곳만 허용합니다.**
+**③ CORS 는 해결했습니다 — 설정 안 하셔도 됩니다.**
+
+`api/bff/[...path].ts` 를 두어 이 앱의 서버가 백엔드로 대신 보냅니다. 브라우저는 같은 출처(`/api/bff/...`)로만 요청하므로 **CORS 가 아예 발생하지 않습니다.**
+
+백엔드 쪽에서 하실 일은 없고, 저희가 Vercel 환경변수에 주소만 넣으면 됩니다.
+
+```
+KIOBRIDGE_API_BASE = https://<백엔드 주소>
+```
+
+열린 프록시가 되지 않게 통과시킬 경로를 명시해 두었습니다. 새 엔드포인트가 생기면 그 목록에 추가해야 하니 알려 주세요.
+
+참고로 원래 문제는 이랬습니다.
+
+**③-1 (해결됨) CORS 가 한 곳만 허용합니다.**
 
 ```yaml
 cors:
