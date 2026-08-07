@@ -232,7 +232,6 @@ export const mockApi: KioBridgeApi = {
     if (result === "low_confidence" && !input.confirmedLowConfidence) {
       throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
     }
-    await delay(delays.approve);
     // 후보를 고르는 화면이 아닌데 candidateId 가 오면 무언가 어긋난 것이다.
     // 조용히 1순위로 되돌리면 사용자가 고른 것과 다른 게 담길 수 있다.
     if (input.candidateId && result !== "clarification") {
@@ -243,7 +242,16 @@ export const mockApi: KioBridgeApi = {
     if (!담을것) {
       throw new KioBridgeError("MENU_NOT_FOUND", "담을 수 있는 메뉴가 없어요", false);
     }
+    // 첫 await 전에 표시한다. 212번 줄의 검사와 여기 사이에 await 가 있으면
+    // 동시에 들어온 승인 두 건이 모두 그 검사를 통과하고 둘 다 담긴다.
+    // 실패하면 되돌린다. backend.ts 도 같은 방식이다.
     session.approved = true;
+    try {
+      await delay(delays.approve);
+    } catch (e) {
+      session.approved = false;
+      throw e;
+    }
     const planId = `pln_${Date.now()}`;
     plans.set(planId, {
       startedAt: Date.now(),

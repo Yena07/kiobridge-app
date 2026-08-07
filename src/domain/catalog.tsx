@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import type { DetailOption, PlaceType, ProfileData } from "@/domain/types";
 import { Pictogram } from "@/design/Pictogram";
 
-export const DETAIL_OPTIONS: Record<string, DetailOption[]> = {
+// 키를 PlaceType 으로 좁혀 둔다. string 이면 장소를 새로 넣을 때 한쪽만 채워도
+// 컴파일러가 아무 말을 안 하고, 그 장소는 화면에서 조용히 빈칸이 된다.
+export const DETAIL_OPTIONS: Record<NonNullable<PlaceType>, DetailOption[]> = {
   카페: [
     { label: "이용 방식", multi: false, choices: ["매장컵", "테이크아웃"] },
     { label: "음료", multi: false, choices: ["아메리카노", "카페라떼", "카푸치노", "콜드브루", "바닐라라떼"] },
@@ -65,7 +67,7 @@ export const PLACE_LIST: { label: PlaceType; icon: ReactNode }[] = [
   { label: "관공서", icon: <Pictogram name="bank" size={22} /> },
 ];
 
-export const PLACE_ICONS: Record<string, ReactNode> = {
+export const PLACE_ICONS: Record<NonNullable<PlaceType>, ReactNode> = {
   카페: <Pictogram name="coffee" size={19} />,
   음식점: <Pictogram name="forkKnife" size={19} />,
   병원: <Pictogram name="hospital" size={19} />,

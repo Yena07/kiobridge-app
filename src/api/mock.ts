@@ -89,6 +89,7 @@ const 로으로 = (w: string) =>
   w + (/[a-zA-Z]$/.test(w) ? (/[aeiouAEIOU]$/.test(w) ? "로" : "으로") : 조사(w, "으로", "로"));
 const 은는 = (w: string) => w + 조사(w, "은", "는");
 const 이가 = (w: string) => w + 조사(w, "이", "가");
+const 메뉴이름 = (p: ProfileData | undefined) => p?.menuName || MOCK_MENU_NAME;
 const 고른값 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축]?.[0];
 const 고른값들 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축] ?? [];
 
@@ -290,11 +291,16 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
   // 절대 조건에 다 걸려서 담을 수 있는 게 하나도 안 남을 수 있다.
   // 그때 item 없이 exact/changed/low_confidence 를 돌려주면 화면이 item 을 있다고 믿고
   // 그리다가 터진다. 담을 게 없다는 건 그 자체로 not_found 이므로 그렇게 답한다.
-  if (!고름 && state !== "not_found") {
+  if (!고름) {
     // 세 경우를 구분한다. 사용자가 다음에 할 일이 서로 다르기 때문이다.
     //   장소를 안 골랐다     → 프로필에 장소를 정하면 된다 (사용자가 고칠 수 있다)
     //   그 장소를 모른다     → 직원에게 도움을 청한다 (사용자가 고칠 수 없다)
     //   조건에 걸려 다 빠졌다 → 조건을 손보면 된다
+    //
+    // state 를 보지 않는다. 예전에는 state !== "not_found" 일 때만 여기 들어와서,
+    // 시연 스위치로 not_found 를 고르면 아래 case 로 빠져 병원 프로필에도
+    // "메뉴가 바뀌었을 수 있어요" 라고 답했다. 담을 게 없다는 사실은 스위치와
+    // 무관하고, 왜 없는지도 마찬가지다.
     const 장소미정 = !profile?.place;
     const 목록없음 = 카탈로그(profile).length === 0;
     return {
@@ -329,7 +335,9 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
         // 사용자에게 "형태: 순살, 그대로예요" 라고 말하게 된다.
         // 고름 을 넘기지 않으면 확인표가 판단을 미룬다.
         profileOptions: 확인표(profile, undefined),
-        reason: `저장하신 '${profile?.menuName || MOCK_MENU_NAME}'과 비슷한 메뉴가 여러 개예요`,
+        // menuName 은 사용자가 직접 적은 값이라 받침을 장담할 수 없다.
+        // 따옴표가 뒤에 붙으면 헬퍼가 마지막 글자를 못 읽으므로 이름만 넘긴다.
+        reason: `저장하신 '${메뉴이름(profile)}'${조사(메뉴이름(profile), "과", "와")} 비슷한 메뉴가 여러 개예요`,
         reasons: 이유,
         // candidateId 는 이번 매핑 응답에서만 쓰는 임시 표식이다.
         // 키오스크 상품 ID 를 앱이 들고 있지 않도록 의도적으로 불투명한 값을 쓴다.
@@ -344,10 +352,12 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
         })),
       };
 
+    // 여기까지 왔다는 건 담을 후보는 있는데 저장한 이름과 다르다는 뜻이다.
+    // 후보가 아예 없는 경우는 위에서 사유를 구분해 답하고 끝난다.
     case "not_found":
       return {
         result: "not_found",
-        message: `저장하신 '${profile?.menuName || MOCK_MENU_NAME}'이 오늘의 메뉴에 없어요. 메뉴가 바뀌었을 수 있어요.`,
+        message: `저장하신 '${메뉴이름(profile)}'${조사(메뉴이름(profile), "이", "가")} 오늘의 메뉴에 없어요. 메뉴가 바뀌었을 수 있어요.`,
       };
 
     case "changed": {

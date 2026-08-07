@@ -626,6 +626,8 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [memo, setMemo] = useState("");
 
+  const options = place ? DETAIL_OPTIONS[place] : [];
+
   const toggleChip = (sectionLabel: string, choice: string, multi: boolean) => {
     const 배타 = options.find((o) => o.label === sectionLabel)?.exclusive ?? [];
     setSelections((prev) => {
@@ -659,7 +661,6 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
     setSelections(p ? (장소별선택.current[p] ?? {}) : {});
     setPlace(p);
   };
-  const options = place ? DETAIL_OPTIONS[place] : [];
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -1071,13 +1072,21 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
 
 // ─── QR Pairing ───────────────────────────────────────────────────────────────
 
+// 회전은 CSS 로 돌린다. SVG SMIL(<animateTransform>)로 만들면
+// prefers-reduced-motion 이 멈추지 못한다. SMIL 은 CSS 규칙의 대상이 아니라
+// 축소 블록의 animation-duration·iteration-count 가 닿지 않는다.
+// 어지럼을 느끼는 분에게 이 원은 계속 돌았다. 키프레임은 tokens.ts 에 한 번만 둔다.
+const SPIN = (cx: number, cy: number) => ({
+  transformBox: "view-box" as const,
+  transformOrigin: `${cx}px ${cy}px`,
+  animation: "kb-spin 0.9s linear infinite",
+});
+
 function SpinnerIcon() {
   return (
     <svg width="52" height="52" viewBox="0 0 64 64" fill="none" aria-hidden="true">
       <circle cx="32" cy="32" r="27" stroke={BORDER} strokeWidth="4" />
-      <path d="M32 5 A27 27 0 0 1 59 32" stroke={P} strokeWidth="4" strokeLinecap="round">
-        <animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="0.9s" repeatCount="indefinite" />
-      </path>
+      <path d="M32 5 A27 27 0 0 1 59 32" stroke={P} strokeWidth="4" strokeLinecap="round" style={SPIN(32, 32)} />
     </svg>
   );
 }
@@ -1111,7 +1120,9 @@ function PairingConnected({
 }) {
   const [secs, setSecs] = useState(() => Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
   const expire = useRef(onExpire);
-  expire.current = onExpire;
+  // 렌더 본문에서 ref 를 건드리지 않는다. React 는 렌더를 버리거나 다시 돌릴 수 있어서,
+  // 커밋되지 않은 렌더의 값이 ref 에 남을 수 있다.
+  useEffect(() => { expire.current = onExpire; }, [onExpire]);
 
   // P0-2: claim 세션은 단명한다. 만료되면 화면도 같이 끊겨야 한다.
   useEffect(() => {
@@ -1359,14 +1370,18 @@ function PairingIdle({ onScan }: { onScan: () => void }) {
   );
 }
 
-function QrScreen({ onPaired, initialPhase = "scan" }: {
-  onPaired: (pairingId: string, expiresAt: number) => void;
+function QrScreen({ onPaired, initialPhase = "scan", connected = null }: {
+  onPaired: (pairingId: string, expiresAt: number, kioskName: string) => void;
   // 연결이 만료돼서 되돌아온 경우에는 스캐너가 아니라 만료 안내부터 보여 준다.
   // 스캐너로 바로 보내면 사용자는 자기가 왜 여기 왔는지 알 수 없다.
   initialPhase?: "scan" | "expired";
+  // 이미 연결돼 있으면 그 상태를 그대로 보여 준다. 다시 찍으라고 하지 않는다.
+  connected?: { pairingId: string; expiresAt: number; kioskName: string } | null;
 }) {
-  const [phase, setPhase] = useState<"scan" | "idle" | PairingState>(initialPhase);
-  const [pairing, setPairing] = useState<PairingResult | null>(null);
+  const [phase, setPhase] = useState<"scan" | "idle" | PairingState>(connected ? "connected" : initialPhase);
+  const [pairing, setPairing] = useState<PairingResult | null>(
+    connected ? { pairingId: connected.pairingId, expiresAt: connected.expiresAt, kioskName: connected.kioskName } : null,
+  );
 
   // 서버가 왜 실패했는지 알려 줬으면 그걸 그대로 보여 준다.
   // 예전에는 버리고 늘 "유효하지 않은 QR입니다" 라고 했다. 서버가 죽었을 때도 그랬다.
@@ -1410,7 +1425,7 @@ function QrScreen({ onPaired, initialPhase = "scan" }: {
             kioskName={pairing.kioskName}
             expiresAt={pairing.expiresAt}
             onExpire={() => setPhase("expired")}
-            onSelectProfile={() => onPaired(pairing.pairingId, pairing.expiresAt)}
+            onSelectProfile={() => onPaired(pairing.pairingId, pairing.expiresAt, pairing.kioskName)}
           />
         )}
         {phase === "failed" && <PairingFailed reason={failReason} onScan={handleRescan} />}
@@ -2195,9 +2210,7 @@ function StepRow({ label, status }: { label: string; status: StepStatus }) {
         {isActive && (
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="10" cy="10" r="7" stroke={BORDER} strokeWidth="2.5" />
-            <path d="M10 3 A7 7 0 0 1 17 10" stroke={P} strokeWidth="2.5" strokeLinecap="round">
-              <animateTransform attributeName="transform" type="rotate" from="0 10 10" to="360 10 10" dur="0.9s" repeatCount="indefinite" />
-            </path>
+            <path d="M10 3 A7 7 0 0 1 17 10" stroke={P} strokeWidth="2.5" strokeLinecap="round" style={SPIN(10, 10)} />
           </svg>
         )}
         {isFailed && (
@@ -2552,6 +2565,8 @@ export default function App() {
   // 프로필을 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
   // 그러면 이미 끝난 연결로 승인까지 진행되고, 화면은 아무 말도 하지 않는다.
   const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
+  // 연결된 키오스크 이름. QR 탭으로 돌아왔을 때 무엇에 연결돼 있는지 말하려면 필요하다.
+  const [pairingKiosk, setPairingKiosk] = useState<string | null>(null);
   // 만료 때문에 QR 화면으로 되돌아왔는지. 되돌아왔으면 안내부터 띄운다.
   const [qrExpired, setQrExpired] = useState(false);
   const [orderProfile, setOrderProfile] = useState<ProfileData | null>(null);
@@ -2599,6 +2614,7 @@ export default function App() {
     const 되돌리기 = () => {
       setPairingId(null);
       setPairingExpiresAt(null);
+      setPairingKiosk(null);
       setOrderProfile(null);
       setFromQr(false);
       setScreen("saved");
@@ -2723,7 +2739,15 @@ export default function App() {
             <QrScreen
               key={qrKey}
               initialPhase={qrExpired ? "expired" : "scan"}
-              onPaired={(id, exp) => { setPairingId(id); setPairingExpiresAt(exp); setQrExpired(false); setFromQr(true); setTab("menu"); }}
+              // 연결이 살아 있으면 스캐너부터 열지 않는다. 예전에는 QR 탭에 들어갈
+              // 때마다 검은 스캐너가 떠서, 연결이 멀쩡한데도 끊긴 것처럼 보였다.
+              // 같은 상태를 두고 주문 화면과 QR 화면이 다른 이야기를 했다.
+              connected={
+                pairingId && pairingExpiresAt
+                  ? { pairingId, expiresAt: pairingExpiresAt, kioskName: pairingKiosk ?? "키오스크" }
+                  : null
+              }
+              onPaired={(id, exp, kiosk) => { setPairingId(id); setPairingExpiresAt(exp); setPairingKiosk(kiosk); setQrExpired(false); setFromQr(true); setTab("menu"); }}
             />
           )}
           {inMain && tab === "menu" && (
@@ -2750,7 +2774,7 @@ export default function App() {
               planId={planId}
               onHome={() => {
                 setScreen("saved"); setFromQr(false);
-                setPlanId(null); setOrderProfile(null); setPairingId(null); setPairingExpiresAt(null);
+                setPlanId(null); setOrderProfile(null); setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null);
               }}
             />
           )}
@@ -2777,7 +2801,7 @@ export default function App() {
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가
                   // 터지면서 QR 만료 화면으로 튕겨 나간다. 방금 다 지웠는데 왜 그러는지
                   // 사용자는 알 수 없다.
-                  setPairingId(null); setPairingExpiresAt(null); setFromQr(false);
+                  setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null); setFromQr(false);
                 },
               })}
               // 연결이 살아 있으면 주문 경로를 끊지 않는다. 하단 탭과 같은 판단이다.

@@ -87,6 +87,8 @@ export const FOCUS_STYLES = `
   /* 내려받은 픽토그램에는 width/height 가 없고 viewBox 만 있다.
      감싼 span 크기에 맞춰 늘어나도록 여기서 한 번만 정해 준다. */
   [data-pictogram] > svg { width: 100%; height: 100%; display: block; }
+  /* 진행 중 표시의 회전. SVG SMIL 이 아니라 CSS 로 두어야 아래 축소 블록이 멈춘다. */
+  @keyframes kb-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
     /* iteration-count 를 안 막으면 무한 반복 애니메이션이 0.01ms 마다 계속 돈다.
        느려 보이지만 않을 뿐 멈추지는 않아서, 어지럼을 느끼는 분에게는 그대로다. */

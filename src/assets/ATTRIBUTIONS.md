@@ -1,4 +1,4 @@
-# 외부 자산 출처
+﻿# 외부 자산 출처
 
 앱에 들어간 사진과 픽토그램은 모두 외부에서 내려받은 것이다.
 CC BY-SA 자산이 섞여 있으므로 이 문서를 지우지 말 것.
@@ -18,7 +18,7 @@ CC BY-SA 는 저작자 표시 · 라이선스 링크 · 변경 여부 표시를 
 
 MIT 는 저작권 고지와 허가문 전문을 함께 배포할 것을 요구한다. 아래가 그 전문이다.
 
-```
+```text
 MIT License
 
 Copyright (c) 2023 Phosphor Icons
@@ -60,12 +60,14 @@ MIT 라 남겨 두어도 고지 의무에 어긋나지 않지만, 숫자는 실�
 모두 Wikimedia Commons 에서 받았다. 각 파일의 라이선스 조건을 따른다.
 
 ### kiosk-hero.jpg
+
 - 원본: Queuing for self-service kiosk at HOKO 2024-12-21.jpg
 - 저작자: Andy Li
 - 라이선스: CC0
 - 출처: https://commons.wikimedia.org/wiki/File:Queuing_for_self-service_kiosk_at_HOKO_2024-12-21.jpg
 
 ### dakgangjeong.jpg
+
 - 원본: 만석닭강정.jpg
 - 저작자: LR0725
 - 라이선스: CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/
@@ -73,6 +75,7 @@ MIT 라 남겨 두어도 고지 의무에 어긋나지 않지만, 숫자는 실�
 - 출처: https://commons.wikimedia.org/wiki/File:%EB%A7%8C%EC%84%9D%EB%8B%AD%EA%B0%95%EC%A0%95.jpg
 
 ### iced-americano.jpg
+
 - 원본: Iced Americano 1.jpg
 - 저작자: Challapramod
 - 라이선스: CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/
@@ -80,6 +83,7 @@ MIT 라 남겨 두어도 고지 의무에 어긋나지 않지만, 숫자는 실�
 - 출처: https://commons.wikimedia.org/wiki/File:Iced_Americano_1.jpg
 
 ### bulgogi-burger.jpg
+
 - 원본: Bulgogi burger 1.jpg
 - 저작자: star5112
 - 라이선스: CC BY-SA 2.0 — https://creativecommons.org/licenses/by-sa/2.0/

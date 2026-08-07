@@ -296,6 +296,16 @@ describe("승인 검사 — 서버가 자기 답을 기준으로 본다", () => 
     ).rejects.toThrow();
   });
 
+  it("동시에 들어온 승인 두 건 중 하나만 담긴다", async () => {
+    // 위 테스트는 순차 호출만 본다. 검사와 확정 사이에 await 가 있으면
+    // 동시에 들어온 두 건이 모두 검사를 통과하는데 그걸 잡지 못한다.
+    registerProfile(매운);
+    await api.requestMapping(PAIRING, "p1");
+    const 요청 = { pairingId: PAIRING, profileId: "p1", mappingResult: "exact" as const };
+    const 결과 = await Promise.allSettled([api.approve(요청), api.approve(요청)]);
+    expect(결과.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  });
+
   it("클라이언트가 mappingResult 를 속여도 서버 판단을 따른다", async () => {
     // 화면이 changed 를 받았는데 exact 라고 보내며 확인 표시를 빼면 통과해서는 안 된다.
     setScenario({ mapping: "changed" });

@@ -246,6 +246,36 @@ describe("changed 는 확인 표시를 받아야 넘어간다", () => {
     ).rejects.toThrow();
     expect(execute).toHaveBeenCalledTimes(1);
   });
+
+  it("동시에 들어온 승인 두 건 중 하나만 실행된다", async () => {
+    // 위 테스트는 순차 호출만 본다. 검사와 확정 사이에 await 를 끼워 넣어도
+    // 통과한다. 예전에 실제로 그랬고, 사용자는 한 번 승인하고 두 개를 받았다.
+    const execute = vi.fn(async () => ({ planId: "pln_1" }));
+    const api = createApi(가짜백엔드({
+      execute,
+      // 두 호출이 겹치도록 첫 await 를 늘린다.
+      submit: async () => { await new Promise((r) => setTimeout(r, 10)); },
+    }));
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    const 요청 = { pairingId: "s1", profileId: "p1", mappingResult: "exact" as const };
+    const 결과 = await Promise.allSettled([api.approve(요청), api.approve(요청)]);
+    expect(결과.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("후보를 고르는 화면이 아닌데 candidateId 가 오면 거절한다", async () => {
+    // client.ts 는 이미 막는데 이 계층만 열려 있으면, 붙이는 구현을 바꾸는
+    // 것만으로 사용자가 고른 적 없는 메뉴가 담긴다.
+    const execute = vi.fn(async () => ({ planId: "pln_1" }));
+    const api = createApi(가짜백엔드({ execute }));
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");   // exact 로 답한다
+    await expect(
+      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact", candidateId: "c2" }),
+    ).rejects.toThrow();
+    expect(execute).not.toHaveBeenCalled();
+  });
 });
 
 describe("evidence 를 화면이 아는 상태로 옮긴다", () => {

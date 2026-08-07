@@ -223,6 +223,12 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
         throw new KioBridgeError("DIFF_NOT_ACKNOWLEDGED", "달라진 내용을 확인해 주세요", true);
       if (s.result === "low_confidence" && !input.confirmedLowConfidence)
         throw new KioBridgeError("CONFIRMATION_REQUIRED", "이 메뉴가 맞는지 확인해 주세요", true);
+      // 후보를 고르는 화면이 아닌데 candidateId 가 오면 무언가 어긋난 것이다.
+      // client.ts 는 이미 이 경우를 막는데 여기만 열려 있으면, 붙이는 구현을
+      // 바꾸는 것만으로 사용자가 고른 적 없는 메뉴가 담긴다.
+      if (input.candidateId && s.result !== "clarification") {
+        throw new KioBridgeError("CANDIDATE_UNEXPECTED", "메뉴를 다시 찾아 주세요", true);
+      }
 
       // 사용자가 고른 표식(c1·c2·c3)을 서버가 아는 실제 후보로 되돌린다.
       // 우리가 준 표식인지 반드시 확인한다. 예전에는 숫자로 바꾸기만 해서

@@ -3,10 +3,39 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // CWD 에 기대면 다른 디렉터리에서 돌릴 때 조용히 0개를 훑고 통과한다.
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..");
+// 기준점은 src 가 아니라 리포지터리 루트다. 심사 규칙은 결제 문자열이
+// 코드 어디에 있어도 위반으로 보는데, src 만 훑으면 index.html·vite.config.ts·
+// api/bff/ 가 검사에서 빠진다.
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// 리포지터리에 들어가지 않는 것은 훑지 않는다. 목록을 손으로 적으면 .gitignore 와
+// 어긋나는 날이 오므로 .gitignore 를 그대로 읽는다. 지금 이 파일은 평범한 이름과
+// 디렉터리뿐이라 이 정도로 충분하다. 글롭이 늘면 여기도 같이 늘려야 한다.
+const 건너뛸것 = new Set([
+  ".git",
+  ...readFileSync(join(ROOT, ".gitignore"), "utf8")
+    .split("\n")
+    .map((l) => l.trim().replace(/\/$/, ""))
+    .filter((l) => l && !l.startsWith("#") && !l.includes("*") && !l.includes("/")),
+]);
+
 import { describe, expect, it } from "vitest";
 import type { MappingState, ProfileData } from "@/domain/types";
 import { MOCK_CART, MOCK_MENU_NAME, buildMapping } from "./mock";
+
+/** ROOT 아래에서 검사 대상 확장자만 골라 훑는다. */
+const 소스훑기 = (확장자: RegExp, 검사: (경로: string, 내용: string) => void) => {
+  const 훑기 = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (건너뛸것.has(e.name)) continue;
+      const 경로 = join(dir, e.name);
+      if (e.isDirectory()) { 훑기(경로); continue; }
+      if (!확장자.test(e.name)) continue;
+      검사(경로, readFileSync(경로, "utf8"));
+    }
+  };
+  훑기(ROOT);
+};
 
 // 이 파일이 지키는 것은 하나다.
 // 확인 화면은 사용자가 실제로 고른 조건만 말해야 한다.
@@ -217,15 +246,32 @@ describe("메뉴를 못 찾은 이유마다 다음에 할 일이 다르다", () 
     expect(메시지(병원)).toContain("직원");
   });
 
-  it("조건에 걸려 다 빠진 경우는 조건 얘기를 한다", () => {
-    // 음식점인데 이용 방식이 서로 안 맞아 후보가 남지 않는 경우가 아니라,
-    // 알레르기로 전부 빠지는 쪽을 만든다.
-    const 전부제외 = 프로필({
-      "이용 방식": ["포장하기"],
-      "알레르기 (꼭 빼주세요)": ["땅콩"],
-    });
-    // 남는 후보가 있으므로 not_found 가 아니다 — 이 경우는 문구 분기만 확인한다.
-    expect(buildMapping("not_found", 전부제외).message).toContain("닭강정");
+  // '조건에 걸려 다 빠졌다' 분기는 지금 fixture 로는 닿을 수 없다.
+  // 닭강정집·카페 모두 알레르기도 이용 방식 제한도 없는 후보가 남는다.
+  // fixture 는 공식 chicken-store 와 같은 값이라 테스트를 위해 바꾸지 않는다.
+  // 백엔드가 실제 목록을 내려 주기 시작하면 그때 이 분기의 테스트를 붙인다.
+
+  it("시연 스위치로 not_found 를 골라도 사유는 그대로 구분한다", () => {
+    // 예전에는 스위치가 not_found 면 사유 분기를 건너뛰어서, 병원 프로필에도
+    // 장소 없는 프로필에도 똑같이 "메뉴가 바뀌었을 수 있어요" 라고 답했다.
+    // 사용자가 다음에 할 일이 서로 다른데 화면이 같은 말을 했다.
+    const 병원: ProfileData = { ...프로필({ "진료과": ["내과"] }), place: "병원", menuName: "접수" };
+    const 장소없음: ProfileData = { ...프로필({}), place: null, menuName: "커피" };
+    expect(buildMapping("not_found", 병원).message).toContain("직원");
+    expect(buildMapping("not_found", 장소없음).message).toContain("프로필에 정해");
+  });
+
+  it("후보가 있는데 이름만 다르면 이름을 짚어 말한다", () => {
+    // 후보가 남아 있는 경우다. 위의 '담을 게 아예 없다' 와는 다른 이야기다.
+    const 있음 = 프로필({ "이용 방식": ["포장하기"], "알레르기 (꼭 빼주세요)": ["땅콩"] });
+    expect(buildMapping("not_found", 있음).message).toContain("닭강정");
+  });
+
+  it("메뉴 이름에 받침이 없어도 조사가 맞는다", () => {
+    // menuName 은 사용자가 직접 적는 값이다. '커피이 없어요' 가 되면 안 된다.
+    const 커피 = { ...프로필({ "음료": ["아메리카노"] }), place: "카페" as const, menuName: "커피" };
+    expect(buildMapping("not_found", 커피).message).toContain("'커피'가");
+    expect(buildMapping("clarification", 커피).reason).toContain("'커피'와");
   });
 });
 
@@ -253,17 +299,9 @@ describe("결제 경계", () => {
     const P = "pay" + "ment";
     const 금지 = [`select_${P}`, `confirm_${P}`, `submit_${P}`, `complete_${P}`, `open_${P}_method`];
     const 걸린것: string[] = [];
-    const 훑기 = (dir: string) => {
-      for (const e of readdirSync(dir, { withFileTypes: true })) {
-        const 경로 = join(dir, e.name);
-        if (e.isDirectory()) { 훑기(경로); continue; }
-        if (!/\.(ts|tsx|css|html)$/.test(e.name)) continue;
-
-        const 내용 = readFileSync(경로, "utf8");
-        for (const w of 금지) if (내용.includes(w)) 걸린것.push(`${경로}: ${w}`);
-      }
-    };
-    훑기(SRC);
+    소스훑기(/\.(ts|tsx|css|html|json)$/, (경로, 내용) => {
+      for (const w of 금지) if (내용.includes(w)) 걸린것.push(`${경로}: ${w}`);
+    });
     expect(걸린것).toEqual([]);
   });
 
@@ -272,16 +310,9 @@ describe("결제 경계", () => {
     // 위와 같은 이유로 조각내서 만든다.
     const 금지표현 = "주문 " + "완료";
     const 걸린것: string[] = [];
-    const 훑기 = (dir: string) => {
-      for (const e of readdirSync(dir, { withFileTypes: true })) {
-        const 경로 = join(dir, e.name);
-        if (e.isDirectory()) { 훑기(경로); continue; }
-        if (!/\.(ts|tsx)$/.test(e.name)) continue;
-
-        if (readFileSync(경로, "utf8").includes(금지표현)) 걸린것.push(경로);
-      }
-    };
-    훑기(SRC);
+    소스훑기(/\.(ts|tsx|css|html|json)$/, (경로, 내용) => {
+      if (내용.includes(금지표현)) 걸린것.push(경로);
+    });
     expect(걸린것).toEqual([]);
   });
 });
