@@ -308,6 +308,82 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
 
 // ─── HTTP 구현 — 서버 주소만 넣으면 된다 ─────────────────────────────────────
 
+/**
+ * 팀 백엔드가 실제로 구현한 경로에 맞춘 구현.
+ *
+ * 명세서와 다른 점이 있어서 그대로 옮기면 안 붙는다. 확인한 것:
+ *
+ *   명세서                              실제 구현
+ *   POST /api/v1/sessions               POST /internal/simulation/session
+ *   submission → validate → execute     POST /internal/simulation/submit-and-run  (일괄)
+ *   POST /api/v1/candidate-filters      아직 없음
+ *   POST /api/v1/recommendations        아직 없음
+ *
+ * 그래서 지금 붙일 수 있는 건 세션 생성과 실행뿐이다. 추천 계열이 생기면
+ * filterCandidates·recommend 만 채우면 된다.
+ *
+ * CORS 는 백엔드가 kiobridge.cors.allowed-origin 으로 한 곳만 허용한다.
+ * 기본값이 http://localhost:5173 인데 이 앱의 개발 서버는 5199 다.
+ * 붙이기 전에 CORS_ALLOWED_ORIGIN 을 맞춰야 한다.
+ */
+export function createTeamBackend(baseUrl: string): Pick<Backend, "createSession" | "submit" | "validate" | "execute" | "getEvidence"> {
+  const 보내기 = async <T>(path: string, body: unknown): Promise<T> => {
+    const res = await fetch(baseUrl + path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new KioBridgeError(b.code ?? `HTTP_${res.status}`, b.message ?? "요청을 처리하지 못했어요", res.status >= 500);
+    }
+    const t = await res.text();
+    return (t ? JSON.parse(t) : undefined) as T;
+  };
+
+  // submit-and-run 이 일괄이라 3단계로 나눌 수 없다. 실행 결과를 여기 담아 두고
+  // execute 가 꺼내 쓴다. 화면은 여전히 '제출 → 검증 → 실행' 으로 본다.
+  const 실행결과 = new Map<string, { planId: string }>();
+
+  return {
+    async createSession({ environmentId }) {
+      const r = await 보내기<{ sessionId: string; initialState: string; submissionEndpoint: string }>(
+        "/internal/simulation/session", { environmentId },
+      );
+      return {
+        sessionId: r.sessionId,
+        // 백엔드가 키오스크 이름과 만료를 아직 안 준다. 받게 되면 여기서 쓴다.
+        kioskName: "키오스크",
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      };
+    },
+
+    async submit(sessionId, submission) {
+      const r = await 보내기<{ planId?: string }>("/internal/simulation/submit-and-run", { sessionId, submission });
+      실행결과.set(sessionId, { planId: r?.planId ?? sessionId });
+    },
+
+    // 일괄 처리라 검증 단계가 따로 없다. 제출이 성공했으면 통과한 것이다.
+    async validate() { return { valid: true }; },
+
+    async execute(sessionId) {
+      const r = 실행결과.get(sessionId);
+      if (!r) throw new KioBridgeError("PLAN_NOT_FOUND", "실행 정보를 찾을 수 없어요", false);
+      return r;
+    },
+
+    async getEvidence(sessionId) {
+      const r = await 보내기<{ state?: string; reachedStep?: number }>(
+        `/internal/simulation/evidence/${encodeURIComponent(sessionId)}`, {},
+      );
+      return {
+        state: r?.state === "cart_ready" || r?.state === "aborted" ? r.state : "running",
+        reachedStep: r?.reachedStep ?? 0,
+      };
+    },
+  };
+}
+
 export function createHttpBackend(baseUrl: string): Backend {
   // 타임아웃이 없으면 서버가 응답하지 않을 때 화면이 '연결 중' 에서 멈춘다.
   // 그 화면에는 취소 버튼도 하단 탭도 없어서 사용자가 할 수 있는 게 없다.

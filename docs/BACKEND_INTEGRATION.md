@@ -12,6 +12,46 @@
 
 `createHttpBackend` 는 `src/api/backend.ts` 에 있고, 명세서의 경로를 그대로 `fetch` 합니다. 서버 주소만 넣으면 됩니다.
 
+## 실제 구현과 명세서가 다릅니다 — 먼저 읽어 주세요
+
+팀 백엔드 코드를 직접 확인한 결과입니다.
+
+| 명세서 | 실제 구현 |
+| --- | --- |
+| `POST /api/v1/sessions` | `POST /internal/simulation/session` |
+| `submission` → `validate` → `execute` (3단계) | `POST /internal/simulation/submit-and-run` (일괄) |
+| `POST /api/v1/candidate-filters` | 아직 없음 |
+| `POST /api/v1/recommendations` | 아직 없음 |
+
+**`createTeamBackend`** 를 `src/api/backend.ts` 에 만들어 두었습니다. 실제 경로에 맞춘 구현입니다. 추천 계열이 생기면 `filterCandidates`·`recommend` 두 개만 채우면 됩니다.
+
+### 지금 물어보고 싶은 것
+
+**① `createSession` 응답에 키오스크 이름과 만료 시각이 없습니다.**
+
+```java
+record CreateSessionResponse(String sessionId, String initialState, String submissionEndpoint)
+```
+
+화면은 "OO분식 1번 키오스크 · 세션 유효시간 04:58" 을 보여 줍니다. 만료는 안전 요건이기도 해서(끝난 연결로 승인 금지) 지금은 5분으로 가정하고 있습니다. `kioskName`·`expiresAt` 를 넣어 주실 수 있나요?
+
+**② `environmentId` 를 세션이 알려 주면 좋겠습니다.**
+
+카탈로그는 QR 로 연결한 키오스크가 정합니다. 지금은 `createApi(backend, "chicken-store")` 로 고정되어 있어서, 병원 키오스크에 연결해도 닭강정 카탈로그를 봅니다.
+
+**③ CORS 가 한 곳만 허용합니다.**
+
+```yaml
+cors:
+  allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
+```
+
+이 앱의 개발 서버는 **5199** 이고 배포는 `https://kiobridge-app.vercel.app` 입니다. 붙이기 전에 `CORS_ALLOWED_ORIGIN` 을 맞춰 주세요. 두 곳을 동시에 허용하려면 `allowedOrigins` 가 배열을 받도록 바꿔야 합니다.
+
+**④ `submit-and-run` 이 일괄이라 어디서 멈췄는지 구분이 안 됩니다.**
+
+화면은 "검증에서 막혔는지" 와 "실행 중 중단됐는지" 를 다르게 보여 줍니다. 응답에 실패 단계와 사유를 실어 주시면 그대로 사용자에게 전달합니다.
+
 ## 백엔드가 맞춰 줘야 하는 것
 
 `src/api/backend.ts` 의 `Backend` 인터페이스가 명세서와 1:1 입니다.
