@@ -34,27 +34,31 @@ Node 20 LTS 또는 22 LTS. **24 이상은 쓰지 마세요** (시뮬레이션 �
 | --- | --- |
 | `src/app/App.tsx` | 화면 전부 |
 | `src/api/client.ts` | 앱이 쓰는 API 계약 + 목 구현 |
-| `src/api/backend.ts` | 팀 API 명세와 1:1 인 연동 계층 |
+| `src/api/backend.ts` | 연동 계층. 명세용(`createHttpBackend`)과 팀 백엔드용(`createTeamBackend`) 둘 |
 | `src/api/mock.ts` | 프로필로 매핑 응답을 만드는 로직 |
 | `src/domain/catalog.tsx` | 장소별 질문 목록 (시뮬레이션 킷 fixture 축과 일치) |
 | `src/design/tokens.ts` | 색·타이포 (WCAG AA 통과값) |
+| `api/bff/[...path].ts` | 백엔드로 대신 보내 주는 서버 함수. 이것 덕분에 CORS 가 없습니다 |
+| `backend/` | **팀 백엔드 사본** — 로컬에서 붙여 보려고 복사만 해 둔 것. 여기서 고치지 않습니다 ([COPY_NOTICE](backend/COPY_NOTICE.md)) |
 
 ## 백엔드 붙이기
 
 `src/api/client.ts` 마지막 줄만 바꾸면 됩니다.
 
 ```ts
-export const api = createApi(createHttpBackend("https://<서버주소>"));
+export const api = createApi(createTeamBackend());
 ```
 
+**아직 바꾸지 마세요.** 팀 백엔드에 후보 추천 경로가 없어서, 지금 바꾸면 확인 화면이 비어 버립니다. 추천 컨트롤러가 생기는 날 이 한 줄을 바꿉니다.
+
 자세한 내용은 **[docs/BACKEND_INTEGRATION.md](docs/BACKEND_INTEGRATION.md)** 를 보세요.
-백엔드가 채울 인터페이스와 응답 모양, 지켜야 할 제약이 정리돼 있습니다.
+백엔드가 채울 인터페이스와 응답 모양, 실제로 띄워서 붙여 본 결과가 정리돼 있습니다.
 
 ## 지키고 있는 것
 
 심사 실격 조건과 접근성 기준입니다. 테스트로 잠가 둔 것에는 표시를 했습니다.
 
-- **결제 관련 문자열 0건** — `src` 전체를 훑는 테스트. 실행되지 않아도 존재하면 실패합니다 ✔
+- **결제 관련 문자열 0건** — 저장소 전체를 훑는 테스트. 실행되지 않아도 존재하면 실패합니다 ✔
 - **승인 전 실행계획 생성 0건** — `approve()` 호출은 버튼 핸들러 안에만 ✔
 - **상품 ID 미보유** — 후보 표식은 `c1`·`c2`·`c3` 형태만 ✔
 - **선택 불가능 후보 추천 0건** — 알레르기·품절·이용 불가는 순위를 깎는 게 아니라 후보에서 제거 ✔
@@ -65,7 +69,7 @@ export const api = createApi(createHttpBackend("https://<서버주소>"));
 
 ## 알려진 제한
 
-- 백엔드가 아직 없어 `src/api/mock.ts` 로 구동됩니다. 스키마는 참가 계약과 같습니다.
+- **아직 목(`src/api/mock.ts`)으로 구동됩니다.** 팀 백엔드는 세션 생성·제출·실행까지 만들어졌고 연동 계층도 실제 응답 모양에 맞춰 두었지만, 후보 추천에 HTTP 경로가 없어 확인 화면을 채울 수 없습니다. 스키마는 참가 계약과 같습니다.
 - 프로필은 메모리에만 있습니다. `localStorage` 를 쓰지 않아 새로고침하면 사라집니다.
 - 큰 글씨는 `zoom` 으로 구현해서 OS·브라우저 글씨 크기 설정을 따르지 않습니다. `rem` 기반 전환은 하지 않았습니다.
 - 폰 프레임 밖의 시나리오 전환 패널은 시연용이며 배포본에도 보입니다.
@@ -73,3 +77,4 @@ export const api = createApi(createHttpBackend("https://<서버주소>"));
 ## 자산 출처
 
 [src/assets/ATTRIBUTIONS.md](src/assets/ATTRIBUTIONS.md) — CC BY-SA 자산이 있으니 지우지 마세요.
+빌드할 때 `dist/ATTRIBUTIONS.md` 로 함께 나가고, 배포본에서는 `/ATTRIBUTIONS.md` 로 열립니다.
