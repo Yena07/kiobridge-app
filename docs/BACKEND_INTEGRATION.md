@@ -69,13 +69,23 @@ return simulationApiClient.execute(sessionId);
 
 ## 붙이는 방법 — 한 줄입니다
 
+바꾸는 곳은 `src/api/client.ts` 의 마지막 줄 하나입니다. 화면 코드는 손대지 않습니다.
+
 ```ts
-// src/api/client.ts 마지막 줄
 - export const api: KioBridgeApi = mockApi;
-+ export const api = createApi(createHttpBackend("https://<서버주소>"));
++ export const api = createApi(createTeamBackend());
 ```
 
-`createHttpBackend` 는 `src/api/backend.ts` 에 있고, 명세서의 경로를 그대로 `fetch` 합니다. 서버 주소만 넣으면 됩니다.
+붙일 상대에 따라 둘 중 하나를 씁니다. 둘 다 `src/api/backend.ts` 에 있습니다.
+
+| | 언제 |
+| --- | --- |
+| **`createTeamBackend()`** | **지금 팀 백엔드에 붙일 때.** 실제 경로(`/internal/simulation/...`)와 실제 응답 모양에 맞춰 두었습니다. 주소는 `/api/bff` 가 기본이라 넣지 않아도 됩니다. |
+| `createHttpBackend("https://<주소>")` | 명세서대로 구현된 서버에 붙일 때. 명세 경로를 그대로 `fetch` 합니다. |
+
+**다만 지금 바꾸면 확인 화면이 비어 버립니다.** `createTeamBackend` 는 세션 생성·승인·실행만 채웁니다. 후보 추천(`filterCandidates`·`recommend`)은 백엔드에 HTTP 경로가 없어서 아직 못 채웠습니다.
+
+그래서 이 줄은 **추천 컨트롤러가 생기는 날 바꿉니다.** 그때까지는 목(`mockApi`)이 화면을 돌립니다.
 
 ## 실제 구현과 명세서가 다릅니다 — 먼저 읽어 주세요
 
@@ -209,17 +219,19 @@ KIOBRIDGE_API_BASE = https://<백엔드 주소>
 
 ## 백엔드가 맞춰 줘야 하는 것
 
-`src/api/backend.ts` 의 `Backend` 인터페이스가 명세서와 1:1 입니다.
+`src/api/backend.ts` 의 `Backend` 인터페이스는 **명세서와 1:1** 입니다. 오른쪽 칸은 팀 백엔드가 지금 실제로 어떻게 되어 있는지입니다.
 
-| 메서드 | 경로 |
-| --- | --- |
-| `createSession` | `POST /api/v1/sessions` |
-| `filterCandidates` | `POST /api/v1/candidate-filters` |
-| `recommend` | `POST /api/v1/recommendations` |
-| `submit` | `POST /api/v1/sessions/:id/submission` |
-| `validate` | `POST /api/v1/sessions/:id/validate` |
-| `execute` | `POST /api/v1/sessions/:id/execute` |
-| `getEvidence` | `GET /internal/simulation/evidence/{sessionId}` |
+| 메서드 | 명세서 경로 | 팀 백엔드 (지금) |
+| --- | --- | --- |
+| `createSession` | `POST /api/v1/sessions` | `POST /internal/simulation/session` |
+| `filterCandidates` | `POST /api/v1/candidate-filters` | **경로 없음** |
+| `recommend` | `POST /api/v1/recommendations` | **경로 없음** |
+| `submit` | `POST /api/v1/sessions/:id/submission` | `POST /internal/simulation/submit-and-run` (셋이 한 번에) |
+| `validate` | `POST /api/v1/sessions/:id/validate` | 위 응답의 `valid` · `validation` |
+| `execute` | `POST /api/v1/sessions/:id/execute` | 위 응답의 `evidence.runId` |
+| `getEvidence` | `GET /internal/simulation/evidence/{id}` | 위 응답의 `evidence` — **따로 부르지 않습니다** |
+
+명세서대로 새로 만드시면 `createHttpBackend` 가 왼쪽 칸을 그대로 부릅니다. 지금 구조를 유지하시면 `createTeamBackend` 가 오른쪽 칸에 맞춰 이미 돌아갑니다. **둘 중 아무거나 고르셔도 프론트는 준비돼 있습니다.**
 
 ### 삭제 경로가 필요합니다
 
@@ -229,7 +241,14 @@ KIOBRIDGE_API_BASE = https://<백엔드 주소>
 
 ### 타임아웃은 15초로 두었습니다
 
-`createHttpBackend` 가 `AbortController` 로 15초에 끊고 `TIMEOUT` 코드를 올립니다. 서버가 더 오래 걸리는 경로가 있으면 알려 주세요.
+서버가 응답하지 않을 때 화면이 '연결 중' 에서 멈추면 사용자가 할 수 있는 게 없습니다. 두 경로 모두 15초에 끊습니다.
+
+| 경로 | 끊는 곳 |
+| --- | --- |
+| `createTeamBackend()` → `/api/bff` | BFF 함수의 `AbortController` (`TIMEOUT` · 504) |
+| `createHttpBackend("https://...")` | 이 함수의 `AbortController` (`TIMEOUT`) |
+
+서버가 더 오래 걸리는 경로가 있으면 알려 주세요.
 
 응답 모양은 같은 파일의 타입(`RecommendationResult`, `EvidenceSummary`)을 보시면 됩니다. **`src/api/backend.test.ts` 에 명세대로 응답하는 가짜 백엔드가 있으니 그걸 실제 응답 예시로 쓰셔도 됩니다.** 그 파일의 테스트가 조립이 맞는지 검사합니다.
 
