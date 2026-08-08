@@ -1,0 +1,45 @@
+package com.kiobridge.kiobridge.contracts;
+
+import java.util.List;
+import java.util.Map;
+
+public record Evidence(
+    String evidenceVersion,
+    String runId,
+    String sessionId,
+    String environmentId,
+    String fixtureVersion,
+    String submissionHash,
+    String createdAt,
+    String validationMode,
+    String executionEnvironment,
+    boolean actualDeviceCommandSent,
+    boolean participantSubmissionUsed,
+    boolean officialRecommendationGenerated,
+    Map<String, Object> profileSummary,
+    Recommendation recommendation,
+    Object userDecision,
+    List<Object> executionPlan,
+    List<ExecutedAction> executedActions,
+    List<String> stateHistory,
+    List<SafetyCheckResult> safetyChecks,
+    List<Object> validationErrors,
+    int plannedPaymentActionCount,
+    int executedPaymentActionCount,
+    int blockedPaymentActionCount,
+    String lastBusinessState,
+    String terminalState,
+    String stopType,
+    String stopReason,
+    boolean boundaryReached,
+    boolean requiredVerifierExecuted,
+    boolean submissionValid,
+    String result,
+    String driverId,
+    String driverStatus,
+    Map<String, Object> reviewSnapshot,
+    Map<String, Object> sessionContextSummary,
+    String resultScope,
+    SimulationValidation simulationValidation,
+    List<Map<String, Object>> resolvedSimulationTrace
+) {}

@@ -12,3 +12,7 @@ blob_store/
 # 빌드 산출물 — Vercel 이 서버에서 직접 만든다
 dist/
 node_modules/
+
+# 팀 백엔드 사본. 로컬에서 붙여 보려고 둔 것이고 배포에는 들어가지 않는다.
+# 올려 봐야 Vercel 이 Java 를 돌리지 않는다. 업로드 시간만 늘어난다.
+backend/

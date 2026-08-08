@@ -3,3 +3,9 @@
 *.png binary
 *.jpg binary
 *.fig binary
+
+# 팀 백엔드 사본. gradle 래퍼는 줄바꿈이 틀리면 실행이 안 된다.
+# jar 를 텍스트로 다루면 파일이 깨진다.
+*.jar binary
+backend/gradlew text eol=lf
+backend/gradlew.bat text eol=crlf
