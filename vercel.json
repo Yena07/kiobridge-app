@@ -15,6 +15,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/bff/(.*)", "destination": "/api/bff?p=$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

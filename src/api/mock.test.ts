@@ -334,7 +334,7 @@ describe("결제 경계", () => {
     소스훑기(/\.(ts|tsx|css|html|json)$/, (경로) => 훑은것.push(경로.replace(/\\/g, "/")));
     expect(훑은것.some((p) => p.endsWith("/index.html"))).toBe(true);
     expect(훑은것.some((p) => p.endsWith("/vite.config.ts"))).toBe(true);
-    expect(훑은것.some((p) => p.includes("/api/bff/"))).toBe(true);
+    expect(훑은것.some((p) => p.endsWith("/api/bff.ts"))).toBe(true);
     expect(훑은것.some((p) => p.includes("/src/app/App.tsx"))).toBe(true);
     // node_modules 를 훑기 시작하면 수만 개가 되고 무의미하게 느려진다.
     expect(훑은것.some((p) => p.includes("/node_modules/"))).toBe(false);
