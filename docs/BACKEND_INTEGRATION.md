@@ -2,6 +2,71 @@
 
 **연동 코드는 이미 다 짜여 있습니다.** 백엔드는 `Backend` 인터페이스 하나만 채우면 되고, 화면 코드는 한 줄도 바뀌지 않습니다.
 
+---
+
+## 실제로 띄워서 붙여 봤습니다 (2026-08-08)
+
+킷(`:4000`) · 백엔드(`:8080`) · 프론트(`:5199`) 셋을 로컬에 올리고 요청을 넣어 봤습니다.
+아래는 문서를 읽고 짐작한 게 아니라 **돌려 본 결과**입니다.
+
+### 되는 것
+
+**세션 생성이 실제로 됩니다.**
+
+```
+POST /internal/simulation/session   {"environmentId":"chicken-store","claimCode":"kb_demo"}
+→ {"sessionId":"SIM-20260808-001","initialState":"SERVICE_TYPE",
+   "submissionEndpoint":"/api/v1/sessions/SIM-20260808-001/submission"}
+```
+
+`claimCode` 를 함께 보내도 **400 이 나지 않습니다.** 서버가 조용히 무시할 뿐이라, 받으실 준비가 될 때까지 프론트는 계속 보내 두겠습니다.
+
+**목 카탈로그가 킷 fixture 와 같습니다.** 킷에서 직접 받아 대조했습니다 — `CHICKEN-001`~`008`, 축은 `SERVICE_TYPE`·`SPICY_LEVEL`·`BONE_TYPE`·`CUP`·`QUANTITY`. 화면에만 있는 가짜 메뉴는 없습니다.
+
+### 막히는 것 — 셋 다 백엔드 쪽입니다
+
+**① 실행계획 생성이 아직 구현 전입니다. 이게 결정적입니다.**
+
+```java
+// ExecutionPlanService.buildExecutionPlan
+if (!userDecision.approved()) return ExecutionPlan.empty();
+throw new UnsupportedOperationException(
+    "buildExecutionPlan: recommendation 기반 Action 조립이 아직 구현되지 않았습니다. ...");
+```
+
+**승인하면 예외가 납니다.** 지금은 어떤 경로로도 주문을 끝까지 넣을 수 없습니다.
+빈 계획을 성공으로 돌려주지 않으려고 일부러 실패시켜 두신 것으로 읽었습니다 — 그 판단에 동의합니다. 다만 이게 풀리기 전까지는 프론트도 실행 화면을 실제 데이터로 보여 줄 수 없습니다.
+
+**② `State` enum 이 닭강정집 상태만 압니다.**
+
+```
+Cannot deserialize value of type `State` from String "WELCOME":
+not one of the values accepted for Enum class:
+[STOP, SERVICE_TYPE, MENU_SELECTION_WITH_CART, CART_REVIEW,
+ MENU_SELECTION, OPTION_SELECTION, OPTION_CONFIRM]
+```
+
+킷이 제공하는 **sandbox 예시 제출이 JSON 파싱 단계에서 400** 으로 막힙니다. sandbox 는 연결 흐름을 연습하라고 있는 환경인데 지금은 쓸 수 없습니다. 병원·관공서도 같은 벽에 걸립니다.
+
+환경마다 상태 집합이 다르니 enum 대신 문자열로 받거나, 환경별로 나눠 주셔야 합니다.
+
+**③ 추천 계열에 HTTP 경로가 없습니다.** (아래에서 다시 다룹니다)
+
+### 이걸로 확인된 것
+
+`ExecutionPlanService.submitAndRun` 이 프론트가 가정한 것과 정확히 같습니다.
+
+```java
+simulationApiClient.submit(sessionId, submission);
+ValidationResult validation = simulationApiClient.validate(sessionId);
+if (!validation.valid()) return new ExecuteResult(false, null, null, validation);  // run·evidence 가 null
+return simulationApiClient.execute(sessionId);
+```
+
+`valid: false` 면 증거가 없고 실행도 없었다는 뜻입니다. 프론트는 이 경우 진행 화면을 그대로 두고 아무것도 지어내지 않습니다. 테스트로 잠가 두었습니다.
+
+---
+
 ## 붙이는 방법 — 한 줄입니다
 
 ```ts
@@ -71,7 +136,7 @@ new CreateSessionResponse(session.sessionId(), session.initialState(), session.s
 record CreateSessionRequest(String environmentId)   // claimCode 자리가 없습니다
 ```
 
-QR 로 읽은 페어링 코드입니다. 지금 요청에 함께 보내고 있고 서버는 무시합니다. 그러면 **QR 로 어떤 기계를 찍었는지와 무관하게 세션이 열립니다.** 사용자가 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻입니다.
+QR 로 읽은 페어링 코드입니다. 지금 요청에 함께 보내고 있고 서버는 무시합니다(400 이 나지 않는 것은 확인했습니다). 그러면 **QR 로 어떤 기계를 찍었는지와 무관하게 세션이 열립니다.** 사용자가 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻입니다.
 
 **④ 추천 계열에 HTTP 경로가 없습니다.**
 
@@ -86,6 +151,40 @@ QR 로 읽은 페어링 코드입니다. 지금 요청에 함께 보내고 있�
 | `unmatchedLabelsByCandidate` — 후보별 어긋난 축 | 없음 (선택) |
 
 `display` 가 없으면 화면에 상품 ID 밖에 보여 줄 게 없는데, 그건 실격 조건입니다. **이름과 가격은 꼭 필요합니다.**
+
+**⑤ `buildExecutionPlan` 과 `State` enum** — 위 "실제로 띄워서 붙여 봤습니다" 에 적었습니다. 급한 순서로는 이 둘이 가장 앞입니다.
+
+### 급한 순서
+
+| | 없으면 |
+| --- | --- |
+| **1. `buildExecutionPlan`** | 아무도 주문을 끝까지 못 넣습니다 |
+| **2. 추천 컨트롤러 + `display`** | 승인 화면에 무엇을 왜 골랐는지 못 보여 줍니다 |
+| 3. `State` enum | sandbox·병원·관공서를 시험할 수 없습니다 |
+| 4. `environmentId` 한 줄 | 병원 키오스크에 닭강정 카탈로그가 뜹니다 |
+| 5. `claimCode` | 다른 기계 앞에서도 같은 세션이 열립니다 |
+| 6. `kioskName`·`expiresAt` | 화면이 5분으로 가정합니다 |
+
+1·2 가 되면 **프론트는 그날 바로 붙습니다.** 나머지는 그 뒤에 하나씩 채워도 화면이 돌아갑니다.
+
+### 로컬에서 셋 다 띄우기
+
+순서가 있습니다. 킷이 먼저입니다 — 백엔드가 `SIMULATION_API_BASE_URL`(기본 `http://localhost:4000`)로 킷을 부릅니다.
+
+```bash
+# 1) 시뮬레이션 킷  :4000
+cd <킷>
+npm run start:api
+
+# 2) 백엔드  :8080   (JDK 21 필요, gradle 첫 실행은 몇 분 걸립니다)
+cd backend
+./gradlew bootRun
+
+# 3) 프론트  :5199
+npm run dev
+```
+
+프론트에서 백엔드를 부르려면 `KIOBRIDGE_API_BASE=http://localhost:8080` 을 주면 `/api/bff` 프록시가 넘겨 줍니다.
 
 ### CORS 는 프론트에서 없앴습니다 — 설정하실 필요가 없습니다
 
