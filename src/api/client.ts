@@ -81,6 +81,14 @@ const profiles = new Map<string, ProfileData>();
 export const registerProfile = (profile: ProfileData): void => {
   profiles.set(profile.id, profile);
 };
+/**
+ * 등록해 둔 프로필을 id 로 찾는다.
+ *
+ * 팀 백엔드에는 프로필 저장소가 없어서, 후보 필터·추천·승인 때마다 내용을 함께
+ * 보내야 한다. 그 내용을 들고 있는 곳이 여기다. createApi 의 세 번째 인자로 넘긴다.
+ * 서버가 profileId 로 찾아 줄 수 있게 되면 이 함수도 registerProfile 과 함께 사라진다.
+ */
+export const getProfile = (id: string): ProfileData | undefined => profiles.get(id);
 export const unregisterProfile = (id: string): void => {
   profiles.delete(id);
 };
@@ -298,5 +306,21 @@ export const mockApi: KioBridgeApi = {
   },
 };
 
+/**
+ * 화면이 쓰는 API.
+ *
+ * 팀 백엔드로 바꾸려면 아래 한 줄을 이렇게 바꾼다.
+ *
+ *   import { createApi, createTeamBackend } from "@/api/backend";
+ *   export const api = createApi(createTeamBackend(), "chicken-store", getProfile);
+ *
+ * 아직 바꾸지 않는 이유는 두 가지다.
+ *   1. 추천 응답에 조건별 일치 여부(matchedOptions)가 없어서, 확인 카드가
+ *      "무엇을 왜 골랐는지" 를 항목별로 보여 주지 못한다.
+ *   2. 백엔드 운영 배포(main)에 아직 컨트롤러가 올라가지 않았다.
+ *
+ * 연동 계층과 변환기는 이미 실제 계약에 맞춰 두었고 테스트로 잠가 두었다.
+ * 위 둘이 풀리면 이 줄만 바꾸면 된다. docs/BACKEND_INTEGRATION.md 참고.
+ */
 export const api: KioBridgeApi = mockApi;
 export const POLL_MS = 600;

@@ -1,6 +1,7 @@
 import type {
-  ApproveInput, CartResult, MappingResponse, PairingResult, PlanCreated, PlanStatus, StepStatus,
+  ApproveInput, CartResult, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
+import { toCanonicalProfile, toChickenStoreContext } from "@/api/canonical";
 import { KioBridgeError, type KioBridgeApi } from "@/api/client";
 import { STEPS } from "@/domain/catalog";
 
@@ -25,12 +26,24 @@ export interface Backend {
     sessionId: string;
     kioskName: string;
     expiresAt: number;
+    /**
+     * 이 세션이 실제로 붙은 키오스크. 카탈로그를 정하는 값이다.
+     * 서버가 알려 주면 이후 단계에서 그 값을 쓴다 — 화면이 보낸 값을 다시 믿지 않는다.
+     */
+    environmentId?: string;
   }>;
 
-  /** POST /api/v1/candidate-filters — severity=BLOCK 위반 후보를 제외하고 생존 후보 반환 */
-  filterCandidates(input: { environmentId: string; profileId: string }): Promise<{
+  /**
+   * POST /api/v1/candidate-filters — severity=BLOCK 위반 후보를 제외하고 생존 후보 반환
+   *
+   * profile 은 선택 항목이다. 서버가 프로필을 id 로 찾아 줄 수 있으면 필요 없지만,
+   * 팀 백엔드는 프로필 저장소가 없어서 내용을 그대로 받아야 한다.
+   */
+  filterCandidates(input: { environmentId: string; profileId: string; profile?: ProfileData }): Promise<{
     survivingCandidateIds: string[];
     excluded: { candidateId: string; reasonCode: string; explanation: string }[];
+    /** 후보 표시 정보. 서버가 이름·가격을 함께 주면 여기 실린다. */
+    display?: Record<string, { displayName: string; priceText: string; imageUrl?: string }>;
   }>;
 
   /** POST /api/v1/recommendations — 1순위 추천·이유·대안·제외 사유·확신도 */
@@ -38,6 +51,7 @@ export interface Backend {
     environmentId: string;
     profileId: string;
     survivingCandidateIds: string[];
+    profile?: ProfileData;
   }): Promise<RecommendationResult>;
 
   /** POST /api/v1/sessions/:sessionId/submission — 검증 X, 저장만 */
@@ -105,10 +119,23 @@ export const LOW_CONFIDENCE = 0.7;
 
 // ─── 조립 — 화면이 쓰는 네 동작을 위 호출들로 만든다 ──────────────────────────
 
-export function createApi(backend: Backend, environmentId = "chicken-store"): KioBridgeApi {
+/**
+ * 화면이 쓰는 API 를 백엔드 위에 조립한다.
+ *
+ * getProfile 은 프로필 id 로 실제 내용을 찾아 주는 함수다. 팀 백엔드는 프로필
+ * 저장소가 없어서 매번 내용을 함께 보내야 하고, 그 내용은 화면이 들고 있다.
+ * 서버가 id 로 찾아 줄 수 있게 되면 이 인자는 빼면 된다.
+ */
+export function createApi(
+  backend: Backend,
+  environmentId = "chicken-store",
+  getProfile?: (profileId: string) => ProfileData | undefined,
+): KioBridgeApi {
   // 세션 하나에 대해 서버가 뭐라고 답했는지. 승인 검사와 실행 조회의 기준이 된다.
   // 페어링 만료 시각. 승인 때 끝난 연결인지 다시 보려면 필요하다.
   const 만료 = new Map<string, number>();
+  // 세션이 실제로 붙은 키오스크. 서버가 알려 주면 environmentId 인자 대신 이걸 쓴다.
+  const 환경 = new Map<string, string>();
   /**
    * 이 계층이 매핑과 승인 사이에 들고 있는 것.
    *
@@ -149,15 +176,27 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
     async claimPairing(claimCode) {
       const s = await backend.createSession({ environmentId, claimCode });
       만료.set(s.sessionId, s.expiresAt);
+      // 카탈로그는 QR 로 연결한 키오스크가 정한다. 서버가 알려 주면 그걸 쓴다.
+      // 예전에는 "chicken-store" 로 고정이라 병원에 붙어도 닭강정을 봤다.
+      환경.set(s.sessionId, s.environmentId ?? environmentId);
       const out: PairingResult = { pairingId: s.sessionId, kioskName: s.kioskName, expiresAt: s.expiresAt };
       return out;
     },
 
     async requestMapping(pairingId, profileId) {
-      const filtered = await backend.filterCandidates({ environmentId, profileId });
+      // 서버에 프로필 저장소가 없으면 내용을 함께 보내야 한다. 있으면 id 만으로 충분하다.
+      const profile = getProfile?.(profileId);
+      const env = 환경.get(pairingId) ?? environmentId;
+      const filtered = await backend.filterCandidates({ environmentId: env, profileId, ...(profile ? { profile } : {}) });
       const rec = await backend.recommend({
-        environmentId, profileId, survivingCandidateIds: filtered.survivingCandidateIds,
+        environmentId: env, profileId, survivingCandidateIds: filtered.survivingCandidateIds,
+        ...(profile ? { profile } : {}),
       });
+      // 이름·가격을 추천이 안 주면 후보 필터가 준 것으로 채운다.
+      // 둘 다 없으면 화면에 보여 줄 게 없어서 그 후보는 빠진다.
+      if (filtered.display) {
+        rec.display = { ...filtered.display, ...rec.display };
+      }
       const result = 판정(rec);
       세션.set(pairingId, {
         rec, result, profileId,
@@ -286,7 +325,10 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
       let planId: string;
       try {
         // 제출 → 검증 → 실행. 어느 단계에서 멈췄는지 구분해서 알린다.
-        await backend.submit(input.pairingId, { ...input, candidateId });
+        // 프로필 내용을 함께 넘긴다. 팀 백엔드는 프로필 저장소가 없어서
+        // 승인 때도 내용을 다시 받아야 제출물을 조립할 수 있다.
+        const profile = getProfile?.(input.profileId);
+        await backend.submit(input.pairingId, { ...input, candidateId, ...(profile ? { profile } : {}) });
         const v = await backend.validate(input.pairingId);
         if (!v.valid) {
           throw new KioBridgeError("VALIDATION_FAILED", v.errors?.[0] ?? "계획을 검증하지 못했어요", false);
@@ -384,7 +426,34 @@ interface ExecuteResult {
   };
 }
 
-export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSession" | "submit" | "validate" | "execute" | "getEvidence"> {
+/** 킷 fixture 의 후보. candidate-filters 가 이 모양으로 돌려준다. */
+interface KitCandidate {
+  candidateId: string;
+  name?: string;
+  price?: number;
+  available?: boolean;
+}
+
+/** POST /api/v1/candidate-filters 응답 (CandidateFilterResult). */
+interface CandidateFilterResponse {
+  eligibleCandidates?: KitCandidate[];
+  excludedCandidates?: { candidateId: string; reasonCode?: string; explanation?: string }[];
+}
+
+/** POST /api/v1/recommendations 응답 (Recommendation). */
+interface RecommendationResponse {
+  recommendedCandidateId: string | null;
+  alternativeCandidateIds?: string[];
+  excludedCandidates?: { candidateId: string; reasonCode?: string; explanation?: string }[];
+  recommendationReasons?: string[];
+  unmetConditions?: string[];
+  confidence?: number;
+  requiresReconfirmation?: boolean;
+}
+
+const 원 = (n: number | undefined) => (typeof n === "number" ? `${n.toLocaleString("ko-KR")}원` : "");
+
+export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 보내기 = async <T>(path: string, body?: unknown): Promise<T> => {
     const res = await fetch(baseUrl + path, {
       // body 가 없으면 조회다. 명세의 evidence 는 GET 이라 POST 로 부르면 405 가 난다.
@@ -400,9 +469,11 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
     return (t ? JSON.parse(t) : undefined) as T;
   };
 
-  // submit-and-run 이 일괄이라 3단계로 나눌 수 없다. 응답을 통째로 담아 두고
-  // validate·execute·getEvidence 가 나눠 읽는다. 화면은 여전히 세 단계로 본다.
+  // 승인이 조립·제출·검증·실행을 한 번에 하므로 3단계로 나눌 수 없다. 응답을
+  // 통째로 담아 두고 validate·execute·getEvidence 가 나눠 읽는다.
   const 실행결과 = new Map<string, ExecuteResult>();
+  // 서버가 준 추천을 그대로 승인 요청에 되돌려 줘야 한다. 화면은 이 값을 보지 않는다.
+  const 추천 = new Map<string, RecommendationResponse>();
 
   /**
    * reviewSnapshot 을 장바구니 요약으로 옮긴다.
@@ -436,11 +507,14 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
       // 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻이다.
       // 백엔드가 아직 이 값을 받지 않지만, 여기서 빼 두면 받게 되는 날에도
       // 아무도 눈치채지 못한다. 보내고, 서버가 무시하면 서버 사정이다.
-      const r = await 보내기<{ sessionId: string; initialState: string; submissionEndpoint: string }>(
+      const r = await 보내기<{ sessionId: string; environmentId?: string; initialState: string; submissionEndpoint: string }>(
         "/internal/simulation/session", { environmentId, claimCode },
       );
       return {
         sessionId: r.sessionId,
+        // 서버가 세션 생성 시점의 값을 그대로 돌려준다. 조립 계층이 이후 단계에서
+        // 이 값을 쓴다 — 화면이 보낸 값을 다시 믿지 않는다.
+        ...(r.environmentId ? { environmentId: r.environmentId } : {}),
         // 백엔드가 키오스크 이름과 만료를 아직 안 준다. 받게 되면 여기서 쓴다.
         // 만료를 클라이언트 시계로 가정하고 있어서, 서버가 먼저 끝내면 앱은 모른다.
         // docs/BACKEND_INTEGRATION.md 질문 ① 이 이것이다.
@@ -449,10 +523,95 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
       };
     },
 
-    // 제출·검증·실행·증거가 이 한 번의 호출로 전부 돌아온다.
-    // 여기서 통째로 받아 두고 아래 셋이 나눠 읽는다. 두 번 부르지 않는다.
+    /**
+     * POST /api/v1/candidate-filters
+     *
+     * 알레르기·품절 같은 절대 조건으로 후보를 거른다. 점수를 깎는 게 아니라 뺀다.
+     * 응답의 eligibleCandidates 에 이름·가격이 함께 오므로 화면 표시값도 여기서 만든다.
+     * 추천 응답에는 그 값이 없어서, 이게 없으면 화면에 상품 ID 밖에 보여 줄 게 없다.
+     */
+    async filterCandidates({ environmentId, profile }) {
+      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      const r = await 보내기<CandidateFilterResponse>("/api/v1/candidate-filters", {
+        environmentId, sessionContext: toChickenStoreContext(profile),
+      });
+      const display: Record<string, { displayName: string; priceText: string }> = {};
+      for (const c of r.eligibleCandidates ?? []) {
+        if (c?.candidateId && c.name) display[c.candidateId] = { displayName: c.name, priceText: 원(c.price) };
+      }
+      return {
+        survivingCandidateIds: (r.eligibleCandidates ?? []).map((c) => c.candidateId).filter(Boolean),
+        excluded: (r.excludedCandidates ?? []).map((e) => ({
+          candidateId: e.candidateId,
+          reasonCode: e.reasonCode ?? "EXCLUDED",
+          explanation: e.explanation ?? "",
+        })).filter((e) => e.explanation),
+        display,
+      };
+    },
+
+    /**
+     * POST /api/v1/recommendations
+     *
+     * 서버는 survivingCandidateIds 를 받지 않는다. 클라이언트가 보낸 필터 결과를
+     * 믿으면 알레르기 필터를 우회할 수 있어서, 서버가 직접 다시 계산한다.
+     * 그 판단이 옳아서 여기서도 따로 보내지 않는다.
+     */
+    async recommend({ environmentId, profile }) {
+      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      const r = await 보내기<RecommendationResponse>("/api/v1/recommendations", {
+        environmentId,
+        profile: toCanonicalProfile(profile),
+        sessionContext: toChickenStoreContext(profile),
+      });
+      추천.set(profile.id, r);
+      return {
+        recommendedCandidateId: r.recommendedCandidateId,
+        alternativeCandidateIds: r.alternativeCandidateIds ?? [],
+        excludedCandidates: (r.excludedCandidates ?? []).map((e) => ({
+          candidateId: e.candidateId,
+          reasonCode: e.reasonCode ?? "EXCLUDED",
+          explanation: e.explanation ?? "",
+        })).filter((e) => e.explanation),
+        recommendationReasons: r.recommendationReasons ?? [],
+        confidence: r.confidence ?? 0,
+        requiresReconfirmation: r.requiresReconfirmation ?? false,
+        // 이름·가격은 candidate-filters 에서 온다. 추천 응답에는 없다.
+        display: {},
+        // 조건별로 맞았는지는 서버가 아직 알려 주지 않는다. 짐작하지 않는다.
+        matchedOptions: [],
+      };
+    },
+
+    /**
+     * POST /internal/orchestrator/approve
+     *
+     * 제출물 조립(실행계획 생성 포함)부터 제출·검증·실행까지 한 번에 한다.
+     * submit-and-run 은 완성된 제출물을 요구하는데, 그 안의 executionPlan 은
+     * 서버만 만들 수 있어서 프론트가 채울 방법이 없었다.
+     *
+     * P0-4 는 그대로다 — 이 호출은 승인 버튼 핸들러 안에서만 일어난다.
+     */
     async submit(sessionId, submission) {
-      const r = await 보내기<ExecuteResult>("/internal/simulation/submit-and-run", { sessionId, submission });
+      const input = submission as ApproveInput & { candidateId?: string; profile?: ProfileData };
+      const profile = input.profile;
+      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      const rec = 추천.get(profile.id);
+      if (!rec) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
+
+      const r = await 보내기<ExecuteResult>("/internal/orchestrator/approve", {
+        sessionId,
+        profile: toCanonicalProfile(profile),
+        sessionContext: toChickenStoreContext(profile),
+        // 사용자가 다른 후보를 골랐으면 그것이 1순위다. 서버가 조립할 때 그 값을 쓴다.
+        recommendation: input.candidateId ? { ...rec, recommendedCandidateId: input.candidateId } : rec,
+        userDecision: {
+          approved: true,
+          decision: "APPROVE",
+          confirmedAt: new Date().toISOString(),
+          note: null,
+        },
+      });
       실행결과.set(sessionId, r);
     },
 

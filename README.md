@@ -38,7 +38,7 @@ Node 20 LTS 또는 22 LTS. **24 이상은 쓰지 마세요** (시뮬레이션 �
 | `src/api/mock.ts` | 프로필로 매핑 응답을 만드는 로직 |
 | `src/domain/catalog.tsx` | 장소별 질문 목록 (시뮬레이션 킷 fixture 축과 일치) |
 | `src/design/tokens.ts` | 색·타이포 (WCAG AA 통과값) |
-| `api/bff/[...path].ts` | 백엔드로 대신 보내 주는 서버 함수. 이것 덕분에 CORS 가 없습니다 |
+| `api/bff.ts` | 백엔드로 대신 보내 주는 서버 함수. 이것 덕분에 CORS 가 없습니다 |
 | `backend/` | **팀 백엔드 사본** — 로컬에서 붙여 보려고 복사만 해 둔 것. 여기서 고치지 않습니다 ([COPY_NOTICE](backend/COPY_NOTICE.md)) |
 
 ## 백엔드 붙이기
@@ -46,10 +46,15 @@ Node 20 LTS 또는 22 LTS. **24 이상은 쓰지 마세요** (시뮬레이션 �
 `src/api/client.ts` 마지막 줄만 바꾸면 됩니다.
 
 ```ts
-export const api = createApi(createTeamBackend());
+export const api = createApi(createTeamBackend(), "chicken-store", getProfile);
 ```
 
-**아직 바꾸지 마세요.** 팀 백엔드에 후보 추천 경로가 없어서, 지금 바꾸면 확인 화면이 비어 버립니다. 추천 컨트롤러가 생기는 날 이 한 줄을 바꿉니다.
+연동 계층·변환기는 팀 백엔드의 실제 계약(`orchestrator/approve` · `candidate-filters` · `recommendations`)에 맞춰 두었고 테스트로 잠가 두었습니다.
+
+**아직 바꾸지 않은 이유는 둘입니다.**
+
+1. 추천 응답에 **조건별 일치 여부**가 없어서 확인 카드가 "그대로예요 / 오늘은 없어요" 를 못 보여 줍니다
+2. 운영 배포(`main`)에 컨트롤러가 아직 없습니다 — `dev` 에만 있습니다
 
 자세한 내용은 **[docs/BACKEND_INTEGRATION.md](docs/BACKEND_INTEGRATION.md)** 를 보세요.
 백엔드가 채울 인터페이스와 응답 모양, 실제로 띄워서 붙여 본 결과가 정리돼 있습니다.

@@ -23,9 +23,9 @@ POST /internal/simulation/session   {"environmentId":"chicken-store","claimCode"
 
 **목 카탈로그가 킷 fixture 와 같습니다.** 킷에서 직접 받아 대조했습니다 — `CHICKEN-001`~`008`, 축은 `SERVICE_TYPE`·`SPICY_LEVEL`·`BONE_TYPE`·`CUP`·`QUANTITY`. 화면에만 있는 가짜 메뉴는 없습니다.
 
-### 막히는 것 — 셋 다 백엔드 쪽입니다
+### 그때 막혔던 것 — **셋 다 그 뒤에 해결됐습니다** (#41 · #42 · #43)
 
-**① 실행계획 생성이 아직 구현 전입니다. 이게 결정적입니다.**
+**① 실행계획 생성이 아직 구현 전입니다.** → **`#42` 로 구현됐습니다.**
 
 ```java
 // ExecutionPlanService.buildExecutionPlan
@@ -37,7 +37,7 @@ throw new UnsupportedOperationException(
 **승인하면 예외가 납니다.** 지금은 어떤 경로로도 주문을 끝까지 넣을 수 없습니다.
 빈 계획을 성공으로 돌려주지 않으려고 일부러 실패시켜 두신 것으로 읽었습니다 — 그 판단에 동의합니다. 다만 이게 풀리기 전까지는 프론트도 실행 화면을 실제 데이터로 보여 줄 수 없습니다.
 
-**② `State` enum 이 닭강정집 상태만 압니다.**
+**② `State` enum 이 닭강정집 상태만 압니다.** → **아직 그대로입니다.**
 
 ```
 Cannot deserialize value of type `State` from String "WELCOME":
@@ -50,7 +50,7 @@ not one of the values accepted for Enum class:
 
 환경마다 상태 집합이 다르니 enum 대신 문자열로 받거나, 환경별로 나눠 주셔야 합니다.
 
-**③ 추천 계열에 HTTP 경로가 없습니다.** (아래에서 다시 다룹니다)
+**③ 추천 계열에 HTTP 경로가 없습니다.** → **`#41` 로 생겼습니다.**
 
 ### 이걸로 확인된 것
 
@@ -80,26 +80,32 @@ return simulationApiClient.execute(sessionId);
 
 | | 언제 |
 | --- | --- |
-| **`createTeamBackend()`** | **지금 팀 백엔드에 붙일 때.** 실제 경로(`/internal/simulation/...`)와 실제 응답 모양에 맞춰 두었습니다. 주소는 `/api/bff` 가 기본이라 넣지 않아도 됩니다. |
+| **`createTeamBackend()`** | **지금 팀 백엔드에 붙일 때.** 실제 경로와 응답 모양에 맞춰 두었습니다. 주소는 `/api/bff` 가 기본이라 넣지 않아도 됩니다. |
 | `createHttpBackend("https://<주소>")` | 명세서대로 구현된 서버에 붙일 때. 명세 경로를 그대로 `fetch` 합니다. |
 
-**다만 지금 바꾸면 확인 화면이 비어 버립니다.** `createTeamBackend` 는 세션 생성·승인·실행만 채웁니다. 후보 추천(`filterCandidates`·`recommend`)은 백엔드에 HTTP 경로가 없어서 아직 못 채웠습니다.
+`getProfile` 을 세 번째 인자로 넘깁니다. 팀 백엔드에는 프로필 저장소가 없어서 후보 필터·추천·승인 때마다 내용을 함께 보내야 하고, 그 내용을 들고 있는 곳이 화면이라서요.
 
-그래서 이 줄은 **추천 컨트롤러가 생기는 날 바꿉니다.** 그때까지는 목(`mockApi`)이 화면을 돌립니다.
+**아직 바꾸지 않은 이유는 둘입니다.**
+
+1. **`matchedOptions` 가 없습니다.** 확인 카드가 조건별로 "그대로예요 / 오늘은 없어요" 를 못 보여 줍니다 (아래 참고).
+2. **운영 배포(`main`)에 컨트롤러가 아직 없습니다.** `dev` 에만 있습니다.
+
+둘이 풀리면 이 한 줄만 바꾸면 됩니다.
 
 ## 실제 구현과 명세서가 다릅니다 — 먼저 읽어 주세요
 
 팀 백엔드 코드를 직접 확인한 결과입니다.
 
-`dev` 의 `ExecutionPlanController` · `CanonicalInputValidationController` 를 직접 읽고 맞췄습니다. (2026-08-07 기준)
+`dev` 의 컨트롤러를 직접 읽고 맞췄습니다. (2026-08-09 기준)
 
 | 명세서 | 실제 구현 |
 | --- | --- |
 | `POST /api/v1/sessions` | `POST /internal/simulation/session` |
 | `submission` → `validate` → `execute` (3단계) | `POST /internal/simulation/submit-and-run` (일괄) |
 | `GET /internal/simulation/evidence/{id}` | 없음 — **필요 없습니다** (아래) |
-| `POST /api/v1/candidate-filters` | 서비스만 있고 HTTP 경로 없음 |
-| `POST /api/v1/recommendations` | 서비스만 있고 HTTP 경로 없음 |
+| `POST /api/v1/candidate-filters` | 같음 (`#41` 로 생김) |
+| `POST /api/v1/recommendations` | 같음 (`#41` 로 생김) |
+| — | `POST /internal/orchestrator/approve` (`#43`, 프론트가 승인에 쓰는 경로) |
 
 **`createTeamBackend`** 를 `src/api/backend.ts` 에 실제 응답 모양(`ExecuteResult` · `Evidence`)에 맞춰 구현해 두었습니다. 테스트도 그 모양 그대로 넣어 검사합니다.
 
@@ -116,89 +122,83 @@ public record ExecuteResult(boolean valid, JsonNode run, JsonNode evidence, Vali
 
 장바구니 개수·금액은 `reviewSnapshot.cartItems` 와 `total` 에서 만듭니다(킷 `simulation-driver` 의 `reviewOf`). `cartItems` 가 없는 환경에서는 **비워 둡니다 — 지어내지 않습니다.**
 
-### 지금 물어보고 싶은 것
+### 새 경로에 맞춰 붙여 두었습니다 (2026-08-09)
 
-**① `createSession` 응답에 키오스크 이름과 만료 시각이 없습니다.**
+`orchestrator/approve` 안내 문서 잘 받았습니다. 셋 다 반영했습니다.
 
-```java
-record CreateSessionResponse(String sessionId, String initialState, String submissionEndpoint)
+**① BFF 허용경로 추가** — `internal/orchestrator/approve` · `api/v1/recommendation-output-validations` 를 열었습니다. (파일은 `api/bff.ts` 입니다. `[...path].ts` 로 두었더니 Vercel 에서 여러 단계 경로가 안 잡혀 옮겼습니다.)
+
+**② 승인 경로 교체** — `submit()` 이 이제 `/internal/orchestrator/approve` 로 다섯 조각을 갖춰 보냅니다.
+
+```
+sessionId · profile · sessionContext · recommendation · userDecision
 ```
 
-화면은 "OO분식 1번 키오스크 · 세션 유효시간 04:58" 을 보여 줍니다. 만료는 안전 요건이기도 해서(끝난 연결로 승인 금지) 지금은 5분으로 가정하고 있습니다. `kioskName`·`expiresAt` 를 넣어 주실 수 있나요?
+`environmentId` 는 안 보냅니다 — 말씀하신 대로 서버가 `sessionId` 로 다시 조회하니까요.
 
-**② `environmentId` 한 줄만 흘려 주시면 됩니다.**
+**③ `recommendation` 확보** — `filterCandidates`·`recommend` 를 실제 경로에 붙였습니다. **문서에는 "STEP4/5가 아직 안 붙어 있어서 못 쓸 수 있다"고 하셨는데, `#41` 이 `#43` 보다 먼저 들어와서 이미 됩니다.**
 
-시뮬레이션 API 응답에는 이미 들어 있는데, 내부 DTO 로 옮길 때 빠집니다.
+### 한글 선택지 → enum 변환기를 만들었습니다
 
-```java
-// SessionCreateResponse 에는 있습니다
-record SessionCreateResponse(String sessionId, String environmentId, ...)
+`src/api/canonical.ts` 하나에 모아 두었고, 값은 백엔드 enum 파일에서 그대로 옮겼습니다.
 
-// CreateSessionResponse 로 옮길 때 빠집니다
-new CreateSessionResponse(session.sessionId(), session.initialState(), session.submissionEndpoint())
-```
-
-카탈로그는 QR 로 연결한 키오스크가 정합니다. 지금은 `createApi(backend, "chicken-store")` 로 고정이라 **병원 키오스크에 연결해도 닭강정 카탈로그를 봅니다.**
-
-**③ `createSession` 이 `claimCode` 를 안 받습니다.**
-
-```java
-record CreateSessionRequest(String environmentId)   // claimCode 자리가 없습니다
-```
-
-QR 로 읽은 페어링 코드입니다. 지금 요청에 함께 보내고 있고 서버는 무시합니다(400 이 나지 않는 것은 확인했습니다). 그러면 **QR 로 어떤 기계를 찍었는지와 무관하게 세션이 열립니다.** 사용자가 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻입니다.
-
-**④ 추천 계열에 HTTP 경로가 없습니다.**
-
-`CandidateFilterService` · `RuleEvaluator` 는 들어왔는데 컨트롤러가 없어서 프론트에서 부를 방법이 없습니다. 이게 없으면 **승인 화면에 무엇을 왜 골랐는지 보여 줄 수 없습니다.**
-
-그리고 `Recommendation` 레코드에 화면이 쓸 값이 아직 없습니다.
-
-| 필요한 것 | 지금 |
+| 화면 | 보내는 값 |
 | --- | --- |
-| `display` — 후보 이름·가격 | 없음 (ID 만) |
-| `matchedOptions` — 조건별 맞았는지 | 없음 |
-| `unmatchedLabelsByCandidate` — 후보별 어긋난 축 | 없음 (선택) |
+| 먹고 가기 / 포장하기 | `DINE_IN` / `TAKE_OUT` |
+| 순한맛 / 보통맛 / 매운맛 | `MILD` / `MEDIUM` / `HOT` |
+| 뼈 / 순살 | `BONE` / `BONELESS` |
+| 종이컵 / 일반컵 | `PAPER` / `REGULAR` |
+| 1개 / 2개 / 3개 | `1` / `2` / `3` |
+| 땅콩·대두·우유·계란·밀·새우 | `PEANUT`·`SOY`·`MILK`·`EGG`·`WHEAT`·`SHRIMP` |
 
-`display` 가 없으면 화면에 상품 ID 밖에 보여 줄 게 없는데, 그건 실격 조건입니다. **이름과 가격은 꼭 필요합니다.**
+**안 고른 축은 `NO_PREFERENCE`, 모르는 값은 `UNKNOWN`** 으로 구분해서 보냅니다. 둘을 뭉뚱그리면 화면에 새 선택지가 생겼을 때 서버가 "아무거나 괜찮대요" 로 읽습니다.
 
-**⑤ `buildExecutionPlan` 과 `State` enum** — 위 "실제로 띄워서 붙여 봤습니다" 에 적었습니다. 급한 순서로는 이 둘이 가장 앞입니다.
+**모르는 알레르기도 버리지 않고 `UNKNOWN` 으로 보냅니다.** 조용히 버리면 그 사람의 알레르기가 서버에 전달되지 않습니다.
 
-### 급한 순서
+### `display` 문제는 풀렸습니다 — `candidate-filters` 에서 받습니다
 
-| | 없으면 |
-| --- | --- |
-| **1. `buildExecutionPlan`** | 아무도 주문을 끝까지 못 넣습니다 |
-| **2. 추천 컨트롤러 + `display`** | 승인 화면에 무엇을 왜 골랐는지 못 보여 줍니다 |
-| 3. `State` enum | sandbox·병원·관공서를 시험할 수 없습니다 |
-| 4. `environmentId` 한 줄 | 병원 키오스크에 닭강정 카탈로그가 뜹니다 |
-| 5. `claimCode` | 다른 기계 앞에서도 같은 세션이 열립니다 |
-| 6. `kioskName`·`expiresAt` | 화면이 5분으로 가정합니다 |
+`Recommendation` 에는 여전히 상품 ID 만 있지만, `candidate-filters` 응답의 `eligibleCandidates` 에 `name`·`price` 가 함께 오는 걸 확인했습니다. 거기서 이름·가격을 만듭니다. **실격 위험은 없어졌습니다.**
 
-1·2 가 되면 **프론트는 그날 바로 붙습니다.** 나머지는 그 뒤에 하나씩 채워도 화면이 돌아갑니다.
+### 아직 남은 것
 
-### 로컬에서 셋 다 띄우기
+**① `matchedOptions` — 이게 마지막 한 조각입니다.**
 
-순서가 있습니다. 킷이 먼저입니다 — 백엔드가 `SIMULATION_API_BASE_URL`(기본 `http://localhost:4000`)로 킷을 부릅니다.
+확인 화면은 "저장하신 조건을 이렇게 썼습니다" 를 **항목별로** 보여 줍니다.
 
-```bash
-# 1) 시뮬레이션 킷  :4000
-cd <킷>
-npm run start:api
-
-# 2) 백엔드  :8080   (JDK 21 필요, gradle 첫 실행은 몇 분 걸립니다)
-cd backend
-./gradlew bootRun
-
-# 3) 프론트  :5199
-npm run dev
+```
+이용 방식  포장하기      그대로예요
+맵기      매운맛        그대로예요
+형태      뼈           오늘은 이 조합이 없어요   ← 이 판단
 ```
 
-프론트에서 백엔드를 부르려면 `KIOBRIDGE_API_BASE=http://localhost:8080` 을 주면 `/api/bff` 프록시가 넘겨 줍니다.
+`Recommendation` 에 후보별로 어떤 축이 맞고 안 맞았는지가 없어서, 지금은 이 표를 채울 수 없습니다. 프론트가 이름으로 짐작하지는 않습니다 — 예전에 그렇게 했다가 온도가 `ICE` 인 '아이스 아메리카노' 를 고른 분께 "달라요" 라고 말한 적이 있습니다.
+
+`recommendationReasons` 문장만으로도 화면은 돌아가지만, 이 표가 있어야 확인 카드가 완성됩니다.
+
+**② `State` enum 이 닭강정집 전용입니다.**
+
+```
+SERVICE_TYPE MENU_SELECTION OPTION_SELECTION OPTION_CONFIRM
+MENU_SELECTION_WITH_CART CART_REVIEW STOP
+```
+
+새 요청 타입도 `ChickenStoreSessionContext` 로 못박혀 있어서 **병원·관공서·sandbox 는 아직 못 씁니다.** 심사 환경이 닭강정집이면 문제없지만 알고 계시면 좋겠습니다.
+
+**③ `kioskName`·`expiresAt`** — 화면이 "OO분식 1번 키오스크 · 04:58" 을 보여 줍니다. 지금은 5분으로 가정합니다.
+
+**④ `claimCode`** — 여전히 안 받으십니다. QR 로 어떤 기계를 찍었든 세션이 열립니다.
+
+### 해결된 질문
+
+**`environmentId`** — `CreateSessionResponse` 에 넣어 주셔서 받아 쓰고 있습니다. 이제 세션이 알려 준 값으로 카탈로그를 정합니다. 감사합니다.
+
+**`evidence` 조회 경로** — 필요 없었습니다. `ExecuteResult` 에 같이 옵니다.
+
+**"실패했을 때 키오스크를 건드렸는지"** — `valid` 가 그 한 비트였습니다.
 
 ### CORS 는 프론트에서 없앴습니다 — 설정하실 필요가 없습니다
 
-`api/bff/[...path].ts` 를 두어 이 앱의 서버가 백엔드로 대신 보냅니다. 브라우저는 같은 출처(`/api/bff/...`)로만 요청하므로 **CORS 가 아예 발생하지 않습니다.**
+`api/bff.ts` 를 두어 이 앱의 서버가 백엔드로 대신 보냅니다. 브라우저는 같은 출처(`/api/bff/...`)로만 요청하므로 **CORS 가 아예 발생하지 않습니다.**
 
 원래 문제는 이랬습니다.
 

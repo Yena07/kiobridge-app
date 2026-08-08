@@ -38,18 +38,23 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 // 여기 없는 경로는 백엔드에 닿지 않는다. 백엔드가 사내망에 있을 때
 // 이 함수가 통로가 되어 아무 데나 부를 수 있으면 안 된다.
 const 허용경로 = [
-  // 백엔드에 실제로 있는 것 (2026-08-07 dev 기준, ExecutionPlanController)
+  // 승인 한 번으로 조립·제출·검증·실행까지. 프론트가 실제로 쓰는 경로다.
+  /^internal\/orchestrator\/approve$/,
+  // 추천 계열 (RecommendationController)
+  /^api\/v1\/candidate-filters$/,
+  /^api\/v1\/recommendations$/,
+  /^api\/v1\/recommendation-output-validations$/,
+  // 세션 생성 (ExecutionPlanController)
   /^internal\/simulation\/session$/,
+  // 이미 조립된 제출물을 다루는 저수준 경로. 프론트는 안 쓰지만 남겨 둔다.
   /^internal\/simulation\/submit-and-run$/,
   /^internal\/plan\/build$/,
   // 입력 정규화 계열 (CanonicalInputValidationController 등)
   /^api\/v1\/canonical-inputs\/validate$/,
   /^api\/v1\/profile-normalizations$/,
   /^api\/v1\/session-context-normalizations$/,
-  // 아직 컨트롤러가 없는 것들. 생기면 바로 통하도록 미리 열어 둔다.
+  // 명세에는 있고 아직 컨트롤러가 없는 것들. 생기면 바로 통하도록 열어 둔다.
   // 여기 있다고 백엔드에 있는 건 아니다 — 없으면 404 가 그대로 올라온다.
-  /^api\/v1\/candidate-filters$/,
-  /^api\/v1\/recommendations$/,
   /^api\/v1\/environments(\/[^/]+(\/(fixture|input-options|compatibility-rules))?)?$/,
   /^api\/v1\/sessions(\/[^/]+(\/(submission|validate|execute))?)?$/,
 ];
