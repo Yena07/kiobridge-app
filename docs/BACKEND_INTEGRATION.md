@@ -16,14 +16,30 @@
 
 팀 백엔드 코드를 직접 확인한 결과입니다.
 
+`dev` 의 `ExecutionPlanController` · `CanonicalInputValidationController` 를 직접 읽고 맞췄습니다. (2026-08-07 기준)
+
 | 명세서 | 실제 구현 |
 | --- | --- |
 | `POST /api/v1/sessions` | `POST /internal/simulation/session` |
 | `submission` → `validate` → `execute` (3단계) | `POST /internal/simulation/submit-and-run` (일괄) |
-| `POST /api/v1/candidate-filters` | 아직 없음 |
-| `POST /api/v1/recommendations` | 아직 없음 |
+| `GET /internal/simulation/evidence/{id}` | 없음 — **필요 없습니다** (아래) |
+| `POST /api/v1/candidate-filters` | 서비스만 있고 HTTP 경로 없음 |
+| `POST /api/v1/recommendations` | 서비스만 있고 HTTP 경로 없음 |
 
-**`createTeamBackend`** 를 `src/api/backend.ts` 에 만들어 두었습니다. 실제 경로에 맞춘 구현입니다. 추천 계열이 생기면 `filterCandidates`·`recommend` 두 개만 채우면 됩니다.
+**`createTeamBackend`** 를 `src/api/backend.ts` 에 실제 응답 모양(`ExecuteResult` · `Evidence`)에 맞춰 구현해 두었습니다. 테스트도 그 모양 그대로 넣어 검사합니다.
+
+### 코드를 보고 스스로 풀린 것 두 가지
+
+**`submit-and-run` 응답에 증거가 같이 옵니다.** 따로 조회할 필요가 없었습니다.
+
+```java
+public record ExecuteResult(boolean valid, JsonNode run, JsonNode evidence, ValidationResult validation) {}
+```
+
+- `valid: false` → 검증에서 막힌 것이고 **키오스크에는 아무것도 하지 않았습니다.** 컨트롤러 주석대로 "제출 → 검증 → (통과 시) 실행" 이라 실행 단계로 가지 않습니다. 앞서 물어본 "키오스크를 건드렸는지" 가 이 한 비트입니다.
+- `valid: true` → `evidence.result`(PASS/FAIL) · `evidence.stopType`(SAFETY_STOP 등) · `evidence.executedActions` · `evidence.reviewSnapshot` 을 그대로 화면 값으로 옮깁니다.
+
+장바구니 개수·금액은 `reviewSnapshot.cartItems` 와 `total` 에서 만듭니다(킷 `simulation-driver` 의 `reviewOf`). `cartItems` 가 없는 환경에서는 **비워 둡니다 — 지어내지 않습니다.**
 
 ### 지금 물어보고 싶은 것
 
@@ -35,36 +51,41 @@ record CreateSessionResponse(String sessionId, String initialState, String submi
 
 화면은 "OO분식 1번 키오스크 · 세션 유효시간 04:58" 을 보여 줍니다. 만료는 안전 요건이기도 해서(끝난 연결로 승인 금지) 지금은 5분으로 가정하고 있습니다. `kioskName`·`expiresAt` 를 넣어 주실 수 있나요?
 
-**② `environmentId` 를 세션이 알려 주면 좋겠습니다.**
+**② `environmentId` 한 줄만 흘려 주시면 됩니다.**
 
-카탈로그는 QR 로 연결한 키오스크가 정합니다. 지금은 `createApi(backend, "chicken-store")` 로 고정되어 있어서, 병원 키오스크에 연결해도 닭강정 카탈로그를 봅니다.
+시뮬레이션 API 응답에는 이미 들어 있는데, 내부 DTO 로 옮길 때 빠집니다.
 
-**③ 실패했을 때, 키오스크를 건드렸는지 알려 주세요.**
+```java
+// SessionCreateResponse 에는 있습니다
+record SessionCreateResponse(String sessionId, String environmentId, ...)
 
-`submit-and-run` 이 일괄인 건 문제가 아닙니다. 화면은 제출·검증·실행을 단계로 보여 주지 않습니다. 실행 화면에 뜨는 다섯 단계는 키오스크 화면 진행(포장/매장 선택 → 메뉴 선택 → …)이고, 그건 `evidence` 에서 옵니다.
+// CreateSessionResponse 로 옮길 때 빠집니다
+new CreateSessionResponse(session.sessionId(), session.initialState(), session.submissionEndpoint())
+```
 
-필요한 건 실패 응답의 **한 가지 사실**입니다.
+카탈로그는 QR 로 연결한 키오스크가 정합니다. 지금은 `createApi(backend, "chicken-store")` 로 고정이라 **병원 키오스크에 연결해도 닭강정 카탈로그를 봅니다.**
 
-| 키오스크에 아무것도 안 했다 | 하다가 멈췄다 |
+**③ `createSession` 이 `claimCode` 를 안 받습니다.**
+
+```java
+record CreateSessionRequest(String environmentId)   // claimCode 자리가 없습니다
+```
+
+QR 로 읽은 페어링 코드입니다. 지금 요청에 함께 보내고 있고 서버는 무시합니다. 그러면 **QR 로 어떤 기계를 찍었는지와 무관하게 세션이 열립니다.** 사용자가 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻입니다.
+
+**④ 추천 계열에 HTTP 경로가 없습니다.**
+
+`CandidateFilterService` · `RuleEvaluator` 는 들어왔는데 컨트롤러가 없어서 프론트에서 부를 방법이 없습니다. 이게 없으면 **승인 화면에 무엇을 왜 골랐는지 보여 줄 수 없습니다.**
+
+그리고 `Recommendation` 레코드에 화면이 쓸 값이 아직 없습니다.
+
+| 필요한 것 | 지금 |
 | --- | --- |
-| "다시 해 보세요" | "직원을 불러 주세요" |
-| 사용자가 고쳐서 재시도 가능 | 기계가 중간 상태일 수 있음 — 재시도하면 두 번 담길 위험 |
+| `display` — 후보 이름·가격 | 없음 (ID 만) |
+| `matchedOptions` — 조건별 맞았는지 | 없음 |
+| `unmatchedLabelsByCandidate` — 후보별 어긋난 축 | 없음 (선택) |
 
-이 둘을 뒤집어 말하면 안전 문제가 됩니다. 심사 기준에도 **오류 후 추가 클릭 0건** 이 있어서, 저희는 함부로 재시도 버튼을 두지 않습니다. 어느 쪽인지 모르면 늘 보수적으로 "직원을 불러 주세요" 를 띄워야 하는데, 그러면 그냥 다시 하면 될 상황에도 직원을 부르게 됩니다.
-
-응답에 `executionStarted: true/false` 같은 한 필드면 충분합니다. 사유 문구가 있으면 그대로 사용자에게 보여 드립니다.
-
-**④ `createSession` 이 `claimCode` 를 받나요?**
-
-QR 로 읽은 페어링 코드입니다. 지금 요청에 함께 보내고 있는데, 서버가 무시하면 **QR 로 어떤 키오스크를 찍었는지와 무관하게 세션이 열립니다.** 사용자가 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻입니다.
-
-**⑤ `evidence` 조회 경로가 아직 없습니다.**
-
-```
-GET /internal/simulation/evidence/{sessionId}     ← 명세에는 있고 구현에는 없음
-```
-
-이게 없으면 승인 뒤 실행 화면이 아무 상태도 못 받습니다. 진행 단계·장바구니 요약·중단 사유가 전부 이 응답에서 옵니다. 경로가 다르면 알려 주세요.
+`display` 가 없으면 화면에 상품 ID 밖에 보여 줄 게 없는데, 그건 실격 조건입니다. **이름과 가격은 꼭 필요합니다.**
 
 ### CORS 는 프론트에서 없앴습니다 — 설정하실 필요가 없습니다
 
@@ -115,7 +136,7 @@ KIOBRIDGE_API_BASE = https://<백엔드 주소>
 
 ### 응답에서 봐 주시면 좋은 곳
 
-**① `evidence` 는 요약해서 주세요.** 39개 필드를 화면이 다 알 필요는 없습니다. `EvidenceSummary` 는 `state`(running/cart_ready/aborted) · `reachedStep` · `cart` · `abort` 넷뿐입니다. `EvidenceSummaryService` 가 이 모양으로 내려 주면 됩니다.
+**① `evidence` 는 그대로 주셔도 됩니다.** 39개 필드 중 화면이 쓰는 건 `result` · `stopType` · `stopReason` · `executedActions` · `reviewSnapshot` 다섯입니다. 프론트에서 골라 쓰고 있으니 따로 요약해 주실 필요 없습니다.
 
 **② `display` 에 사람이 읽는 값을 넣어 주세요.** 후보 표시 이름·가격입니다. 상품 ID 는 화면으로 나가면 안 되는데, 이름이 없으면 보여 줄 게 없습니다.
 
@@ -140,11 +161,13 @@ KIOBRIDGE_API_BASE = https://<백엔드 주소>
 
 지금 `createApi(backend, environmentId = "chicken-store")` 로 고정되어 있습니다. 페어링 응답(`createSession`)이 그 세션의 `environmentId` 를 돌려주면 거기서 받아 쓰도록 바꾸겠습니다. **`createSession` 응답에 `environmentId` 를 넣어 주실 수 있는지 알려 주세요.**
 
-### `approve` 는 3단계라는 걸 화면도 압니다
+### `approve` 는 검증에 실패하면 실행하지 않습니다
 
-`submit` → `validate` → `execute` 순서로 부르고, **검증에 실패하면 실행하지 않고** 사유를 화면까지 올립니다(`VALIDATION_FAILED`). 테스트로 순서와 이 동작을 잠가 두었습니다.
+조립 계층은 `submit` → `validate` → `execute` 순서로 부르고, **검증에 실패하면 실행하지 않고** 사유를 화면까지 올립니다(`VALIDATION_FAILED`). 테스트로 순서와 이 동작을 잠가 두었습니다.
 
-`validate` 응답에 `errors[0]` 를 넣어 주시면 그 문장이 사용자에게 그대로 보입니다.
+팀 백엔드에 붙일 때는 `submit-and-run` 한 번으로 셋이 끝나므로, `ExecuteResult.valid` 와 `validation.errors` 를 그 세 단계에 나눠 읽습니다. 백엔드가 이미 "통과 시에만 실행" 이라서 순서가 그대로 지켜집니다.
+
+`validation.errors[].message` 에 넣어 주신 문장이 사용자에게 그대로 보입니다.
 
 ## 2. 질문 목록이 겹칩니다 — 조율이 필요합니다
 

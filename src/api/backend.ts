@@ -358,6 +358,32 @@ export function createApi(backend: Backend, environmentId = "chicken-store"): Ki
  * 백엔드를 직접 부르고 싶으면 주소를 넘기면 된다. 그 경우에는
  * kiobridge.cors.allowed-origin 을 이 앱 주소로 맞춰야 한다.
  */
+/** 킷 드라이버가 verify 단계에서 만드는 읽기 전용 값. 환경마다 키가 다르다. */
+interface ReviewSnapshot {
+  cartItems?: { name?: string; price?: number; quantity?: number }[];
+  total?: number;
+  [label: string]: unknown;
+}
+
+/**
+ * POST /internal/simulation/submit-and-run 응답.
+ * 백엔드 `ExecuteResult` 레코드와 같은 모양이다.
+ * 제출·검증·실행·증거가 이 한 응답에 전부 들어 있다.
+ */
+interface ExecuteResult {
+  valid: boolean;
+  validation?: { valid: boolean; errors?: { path?: string; code?: string; message: string }[] };
+  run?: { terminalState?: string; stopType?: string; stopReason?: string };
+  evidence?: {
+    runId?: string;
+    result?: "PASS" | "FAIL";
+    stopType?: "NORMAL_BOUNDARY_STOP" | "SAFETY_STOP" | "NONE";
+    stopReason?: string;
+    executedActions?: unknown[];
+    reviewSnapshot?: ReviewSnapshot;
+  };
+}
+
 export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSession" | "submit" | "validate" | "execute" | "getEvidence"> {
   const 보내기 = async <T>(path: string, body?: unknown): Promise<T> => {
     const res = await fetch(baseUrl + path, {
@@ -374,9 +400,35 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
     return (t ? JSON.parse(t) : undefined) as T;
   };
 
-  // submit-and-run 이 일괄이라 3단계로 나눌 수 없다. 실행 결과를 여기 담아 두고
-  // execute 가 꺼내 쓴다. 화면은 여전히 '제출 → 검증 → 실행' 으로 본다.
-  const 실행결과 = new Map<string, { planId: string }>();
+  // submit-and-run 이 일괄이라 3단계로 나눌 수 없다. 응답을 통째로 담아 두고
+  // validate·execute·getEvidence 가 나눠 읽는다. 화면은 여전히 세 단계로 본다.
+  const 실행결과 = new Map<string, ExecuteResult>();
+
+  /**
+   * reviewSnapshot 을 장바구니 요약으로 옮긴다.
+   *
+   * 킷의 시뮬레이션 드라이버가 verify 단계에서 만드는 읽기 전용 값이다.
+   * chicken-store 는 cartItems 와 total 을 함께 넣어 준다(simulation-driver 의 reviewOf).
+   * 다른 환경은 라벨→표시값 쌍만 들어오므로 개수·금액을 알 수 없다.
+   *
+   * 모르는 값은 지어내지 않는다. 확인 화면에서 본 값과 결과가 어긋나면
+   * 승인이라는 절차 자체가 무의미해진다.
+   */
+  const 장바구니 = (r: ReviewSnapshot | undefined): CartResult | undefined => {
+    if (!r) return undefined;
+    const items = Array.isArray(r.cartItems) ? r.cartItems : undefined;
+    if (!items) return undefined;
+    const 개수 = items.reduce((s, i) => s + (Number(i?.quantity) || 0), 0);
+    const 합계 = typeof r.total === "number"
+      ? r.total
+      : items.reduce((s, i) => s + (Number(i?.price) || 0) * (Number(i?.quantity) || 0), 0);
+    return {
+      itemCountText: `${개수}개`,
+      totalText: `${합계.toLocaleString("ko-KR")}원`,
+      evidenceLabel: "화면 인식으로 확인됨",
+      handoff: "키오스크 화면에서 장바구니를 확인해 주세요",
+    };
+  };
 
   return {
     async createSession({ environmentId, claimCode }) {
@@ -397,44 +449,64 @@ export function createTeamBackend(baseUrl = "/api/bff"): Pick<Backend, "createSe
       };
     },
 
+    // 제출·검증·실행·증거가 이 한 번의 호출로 전부 돌아온다.
+    // 여기서 통째로 받아 두고 아래 셋이 나눠 읽는다. 두 번 부르지 않는다.
     async submit(sessionId, submission) {
-      const r = await 보내기<{ planId?: string }>("/internal/simulation/submit-and-run", { sessionId, submission });
-      실행결과.set(sessionId, { planId: r?.planId ?? sessionId });
+      const r = await 보내기<ExecuteResult>("/internal/simulation/submit-and-run", { sessionId, submission });
+      실행결과.set(sessionId, r);
     },
 
-    // 일괄 처리라 검증 단계가 따로 없다. 제출이 성공했으면 통과한 것이다.
+    // 서버가 실제로 판단한 결과를 읽는다.
     //
-    // 이건 이 계층 안에서만 쓰는 모양이다. 화면은 제출·검증·실행을 단계로
-    // 보여 주지 않는다 — 실행 화면의 다섯 단계는 키오스크 화면 진행이고
-    // evidence 에서 온다. 그러니 여기서 true 를 돌려주는 게 사용자에게
-    // 없는 검증을 했다고 말하는 건 아니다.
-    //
-    // 다만 submit 이 실패했을 때 키오스크를 건드렸는지 아닌지는 알 수 없다.
-    // 그 둘은 사용자에게 할 말이 다르다(다시 해 보세요 / 직원을 불러 주세요).
-    // docs/BACKEND_INTEGRATION.md 질문 ③ 이 이것이다.
-    async validate() { return { valid: true }; },
+    // 백엔드의 submit-and-run 은 '제출 → 검증 → (통과 시) 실행' 이다.
+    // 그래서 valid 가 false 면 키오스크에 아무것도 하지 않은 것이 보장된다.
+    // 이 한 비트가 사용자에게 할 말을 가른다 — 다시 해 보시라고 할지,
+    // 직원을 부르시라고 할지. 예전에는 알 방법이 없어 true 를 박아 뒀다.
+    async validate(sessionId) {
+      const r = 실행결과.get(sessionId);
+      if (!r) throw new KioBridgeError("PLAN_NOT_FOUND", "실행 정보를 찾을 수 없어요", false);
+      if (r.valid) return { valid: true };
+      // 서버가 준 문장을 그대로 올린다. 없으면 화면이 기본 문구를 쓴다.
+      const errors = (r.validation?.errors ?? []).map((e) => e.message).filter(Boolean);
+      return { valid: false, ...(errors.length > 0 ? { errors } : {}) };
+    },
 
     async execute(sessionId) {
       const r = 실행결과.get(sessionId);
       if (!r) throw new KioBridgeError("PLAN_NOT_FOUND", "실행 정보를 찾을 수 없어요", false);
-      return r;
+      // runId 는 이 실행 하나를 가리키는 값이다. 없으면 세션으로 대신한다.
+      return { planId: r.evidence?.runId ?? sessionId };
     },
 
-    // 명세는 GET 이다. 백엔드에 아직 이 경로가 없어서 붙이면 404 가 난다.
-    // docs/BACKEND_INTEGRATION.md 질문 ⑤ 가 이것이다.
+    // 증거는 submit-and-run 응답에 이미 실려 왔다. 따로 조회하지 않는다.
+    // 예전에는 명세에만 있는 GET 경로를 불렀는데 백엔드에 그 경로가 없다.
     async getEvidence(sessionId) {
-      const r = await 보내기<{
-        state?: string; reachedStep?: number;
-        cart?: EvidenceSummary["cart"]; abort?: EvidenceSummary["abort"];
-      }>(`/internal/simulation/evidence/${encodeURIComponent(sessionId)}`);
+      const r = 실행결과.get(sessionId);
+      const e = r?.evidence;
+      if (!e) return { state: "running", reachedStep: 0 };
+
+      // 킷의 stopType 은 NORMAL_BOUNDARY_STOP · SAFETY_STOP · NONE 이고
+      // result 는 PASS · FAIL 이다. 안전 중단과 그냥 실패는 사용자에게
+      // 할 말이 다르므로 SAFETY_STOP 만 중단 화면으로 보낸다.
+      const state: EvidenceSummary["state"] =
+        e.result === "PASS" ? "cart_ready" : e.stopType === "SAFETY_STOP" ? "aborted" : "running";
+
       return {
-        state: r?.state === "cart_ready" || r?.state === "aborted" ? r.state : "running",
-        reachedStep: r?.reachedStep ?? 0,
-        // 서버가 요약을 주면 그대로 옮긴다. 빼 두면 "장바구니에 담았어요" 화면에
-        // 개수도 금액도 안 나오고, 중단됐을 때도 왜 멈췄는지 못 알려 준다.
-        // 안 주면 그대로 비운다 — 지어내지 않는다.
-        ...(r?.cart ? { cart: r.cart } : {}),
-        ...(r?.abort ? { abort: r.abort } : {}),
+        state,
+        // 몇 번째 화면까지 갔는지. 실행한 동작 수가 그대로 진행도다.
+        reachedStep: e.executedActions?.length ?? 0,
+        ...(state === "cart_ready" ? { cart: 장바구니(e.reviewSnapshot) } : {}),
+        ...(state === "aborted"
+          ? {
+              abort: {
+                code: e.stopType ?? "UNKNOWN",
+                title: "안전을 위해 중단되었습니다",
+                // 서버가 이유를 주면 그대로 쓴다. 지어내지 않는다.
+                message: e.stopReason ?? "예상하지 못한 화면이 감지되어 작동을 멈췄어요.",
+                userAction: "직원 초기화를 기다려 주세요",
+              },
+            }
+          : {}),
       };
     },
   };

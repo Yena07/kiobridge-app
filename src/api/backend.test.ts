@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { createApi, type Backend, type EvidenceSummary, type RecommendationResult } from "./backend";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createApi, createTeamBackend, type Backend, type EvidenceSummary, type RecommendationResult } from "./backend";
 
 // 백엔드가 아직 없으므로, 명세서대로 응답하는 가짜를 만들어 조립이 맞는지 본다.
 // 이 테스트가 통과한다는 건 "백엔드가 명세대로 주면 화면이 돈다" 는 뜻이다.
@@ -336,5 +336,121 @@ describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
     expect(s.state).toBe("aborted");
     expect(s.steps[2]).toBe("failed");
     expect(s.abort?.recoverable).toBe(false);
+  });
+});
+
+// ─── 팀 백엔드 어댑터 ─────────────────────────────────────────────────────────
+//
+// 위 테스트들은 "명세대로 주면 도는가" 를 본다. 아래는 팀 백엔드가 실제로
+// 돌려주는 모양(ExecutionPlanController · ExecuteResult · Evidence)을 그대로 넣고
+// 화면이 아는 값으로 옮겨지는지 본다. 명세와 구현이 달라서 둘 다 필요하다.
+
+const 원래fetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = 원래fetch; });
+
+const 응답 = (body: unknown, status = 200) =>
+  ({ ok: status < 400, status, text: async () => JSON.stringify(body), json: async () => body }) as Response;
+
+/** 실제 백엔드가 돌려주는 submit-and-run 응답. */
+const 실행성공 = {
+  valid: true,
+  validation: { valid: true, errors: [] },
+  evidence: {
+    runId: "run_77",
+    result: "PASS",
+    stopType: "NORMAL_BOUNDARY_STOP",
+    executedActions: [{}, {}, {}, {}, {}],
+    reviewSnapshot: {
+      "주문 방식": "포장하기",
+      cartItems: [{ name: "매운 순살 닭강정", price: 6000, quantity: 2 }],
+      total: 12000,
+    },
+  },
+};
+
+describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다", () => {
+  const 붙이기 = (응답들: unknown[]) => {
+    let i = 0;
+    globalThis.fetch = vi.fn(async () => 응답(응답들[Math.min(i++, 응답들.length - 1)])) as typeof fetch;
+    return createTeamBackend("/api/bff");
+  };
+
+  it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
+    const b = 붙이기([실행성공]);
+    await b.submit("s1", {});
+    expect(await b.validate("s1")).toEqual({ valid: true });
+    expect(await b.execute("s1")).toEqual({ planId: "run_77" });
+
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("cart_ready");
+    expect(e.reachedStep).toBe(5);
+    // 개수와 금액은 reviewSnapshot 에서 온다. 고정값을 쓰면 승인 화면과 어긋난다.
+    expect(e.cart?.itemCountText).toBe("2개");
+    expect(e.cart?.totalText).toBe("12,000원");
+  });
+
+  it("증거를 따로 조회하지 않는다 — 요청은 한 번뿐이다", async () => {
+    const b = 붙이기([실행성공]);
+    await b.submit("s1", {});
+    await b.validate("s1");
+    await b.execute("s1");
+    await b.getEvidence("s1");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("검증에서 막히면 실행하지 않았다는 사실이 그대로 올라온다", async () => {
+    // valid:false 는 백엔드가 실행 단계로 가지 않았다는 뜻이다.
+    // 사용자에게 "다시 해 보세요" 라고 말할 수 있는 근거가 이것뿐이다.
+    const b = 붙이기([{
+      valid: false,
+      validation: { valid: false, errors: [{ path: "$.plan[0]", code: "BAD", message: "담을 수 없는 메뉴예요" }] },
+    }]);
+    await b.submit("s1", {});
+    expect(await b.validate("s1")).toEqual({ valid: false, errors: ["담을 수 없는 메뉴예요"] });
+    // 실행이 없었으므로 증거도 없다. 진행 중으로 두고 아무것도 지어내지 않는다.
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("running");
+    expect(e.cart).toBeUndefined();
+  });
+
+  it("안전 중단만 중단 화면으로 보낸다", async () => {
+    const b = 붙이기([{
+      valid: true,
+      evidence: {
+        runId: "run_9", result: "FAIL", stopType: "SAFETY_STOP",
+        stopReason: "예상하지 못한 화면이 나왔어요", executedActions: [{}, {}],
+      },
+    }]);
+    await b.submit("s1", {});
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("aborted");
+    expect(e.reachedStep).toBe(2);
+    expect(e.abort?.message).toBe("예상하지 못한 화면이 나왔어요");
+  });
+
+  it("그냥 실패는 중단 화면으로 보내지 않는다", async () => {
+    // SAFETY_STOP 이 아닌 FAIL 은 "직원을 불러 주세요" 를 띄울 근거가 아니다.
+    const b = 붙이기([{ valid: true, evidence: { result: "FAIL", stopType: "NONE", executedActions: [] } }]);
+    await b.submit("s1", {});
+    expect((await b.getEvidence("s1")).state).toBe("running");
+  });
+
+  it("cartItems 가 없는 환경에서는 개수·금액을 지어내지 않는다", async () => {
+    // 닭강정집 말고는 reviewSnapshot 이 라벨-값 쌍만 준다.
+    const b = 붙이기([{
+      valid: true,
+      evidence: { result: "PASS", executedActions: [{}], reviewSnapshot: { "접수 번호": "A-12" } },
+    }]);
+    await b.submit("s1", {});
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("cart_ready");
+    expect(e.cart).toBeUndefined();
+  });
+
+  it("QR 로 읽은 claimCode 를 세션 요청에 함께 보낸다", async () => {
+    const b = 붙이기([{ sessionId: "sess_1", initialState: "IDLE", submissionEndpoint: "/x" }]);
+    await b.createSession({ environmentId: "chicken-store", claimCode: "kb_demo" });
+    const [, init] = (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
+    expect(JSON.parse(String(init.body))).toEqual({ environmentId: "chicken-store", claimCode: "kb_demo" });
   });
 });
