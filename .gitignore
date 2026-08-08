@@ -14,3 +14,10 @@ blob_store/
 _png/
 _extracted/
 _extracted_manifest.txt
+
+# gradle 산출물. backend/ 는 팀 레포 사본인데, 거기서 이 규칙을 갖고 있던
+# .gitignore 는 팀 레포 '루트' 에 있어서 backend/ 만 복사할 때 딸려오지 않았다.
+# backend/.gitignore 를 새로 만들지는 않는다 — 사본을 원본과 다르게 만들면
+# robocopy /MIR 로 새로 받을 때 지워진다. 규칙은 여기에 둔다.
+.gradle/
+build/
