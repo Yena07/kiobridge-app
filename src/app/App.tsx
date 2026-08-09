@@ -2558,6 +2558,22 @@ function 연동표시() {
   );
 }
 
+/**
+ * 시연용 스위치를 보여 줄지.
+ *
+ * 이 패널은 실제 앱 화면이 아니라 시연·심사에서 예외 상태(애매·변경·안전 중단)를
+ * 재현하려고 둔 것이다. 그냥 앱을 쓰는 사람에게는 무슨 물건인지 알 수 없고,
+ * 배포본에 그대로 보이면 완성되지 않은 화면처럼 읽힌다.
+ *
+ * 그래서 기본은 감춘다. 필요할 때만 주소 뒤에 ?demo=1 을 붙인다.
+ *   https://kiobridge-app.vercel.app/?demo=1
+ *
+ * 지우지 않고 남기는 이유는, 시연 영상에서 이 상태들을 보여 줘야 하는데
+ * 실제로 그 상황을 만들려면 키오스크가 그렇게 답해 줘야 하기 때문이다.
+ */
+const 시연패널보임 =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "1";
+
 function ScenarioPanel() {
   const [current, setCurrent] = useState<Scenario>(getScenario());
   const apply = (patch: Partial<Scenario>) => {
@@ -2766,7 +2782,7 @@ export default function App() {
       style={{ backgroundColor: BACKDROP, fontFamily: FONT }}
     >
       <style>{FOCUS_STYLES}</style>
-      <ScenarioPanel />
+      {시연패널보임 && <ScenarioPanel />}
       {팀백엔드모드 && <연동표시 />}
       {/*
         큰 글씨 모드. 화면 크기(휴대폰 틀)는 그대로 두고 안쪽 내용만 키운다.
