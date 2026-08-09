@@ -34,8 +34,7 @@ throw new UnsupportedOperationException(
     "buildExecutionPlan: recommendation 기반 Action 조립이 아직 구현되지 않았습니다. ...");
 ```
 
-**승인하면 예외가 납니다.** 지금은 어떤 경로로도 주문을 끝까지 넣을 수 없습니다.
-빈 계획을 성공으로 돌려주지 않으려고 일부러 실패시켜 두신 것으로 읽었습니다 — 그 판단에 동의합니다. 다만 이게 풀리기 전까지는 프론트도 실행 화면을 실제 데이터로 보여 줄 수 없습니다.
+당시에는 승인하면 예외가 났습니다. 빈 계획을 성공으로 돌려주지 않으려고 일부러 실패시켜 두신 것으로 읽었고, 그 판단에 동의합니다. **지금은 구현돼서 실행계획이 나옵니다.**
 
 **② `State` enum 이 닭강정집 상태만 압니다.** → **아직 그대로입니다.**
 
@@ -85,10 +84,17 @@ return simulationApiClient.execute(sessionId);
 
 `getProfile` 을 세 번째 인자로 넘깁니다. 팀 백엔드에는 프로필 저장소가 없어서 후보 필터·추천·승인 때마다 내용을 함께 보내야 하고, 그 내용을 들고 있는 곳이 화면이라서요.
 
-**아직 바꾸지 않은 이유는 둘입니다.**
+**배포본은 아직 목입니다.** 운영 배포(`main`)가 `dev` 보다 한참 뒤처져 컨트롤러가 하나도 없어서, 지금 바꾸면 배포된 앱이 첫 화면부터 멈춥니다.
 
-1. **`matchedOptions` 가 없습니다.** 확인 카드가 조건별로 "그대로예요 / 오늘은 없어요" 를 못 보여 줍니다 (아래 참고).
-2. **운영 배포(`main`)에 컨트롤러가 아직 없습니다.** `dev` 에만 있습니다.
+대신 **로컬에서 `dev` 를 돌려 붙이는 길**을 열어 두었습니다.
+
+```bash
+npm run dev:team
+```
+
+`VITE_BACKEND=team` 으로 팀 백엔드를 쓰고, 개발 서버가 `/api/bff` 를 `KIOBRIDGE_API_BASE`(기본 `http://localhost:8080`)로 넘깁니다. 배포본의 BFF 함수가 하는 일을 개발 서버가 대신하는 것이라 CORS 가 없습니다.
+
+`main` 이 배포되면 `client.ts` 의 스위치를 걷어내고 팀 백엔드를 기본으로 삼겠습니다.
 
 둘이 풀리면 이 한 줄만 바꾸면 됩니다.
 
@@ -158,6 +164,88 @@ sessionId · profile · sessionContext · recommendation · userDecision
 ### `display` 문제는 풀렸습니다 — `candidate-filters` 에서 받습니다
 
 `Recommendation` 에는 여전히 상품 ID 만 있지만, `candidate-filters` 응답의 `eligibleCandidates` 에 `name`·`price` 가 함께 오는 걸 확인했습니다. 거기서 이름·가격을 만듭니다. **실격 위험은 없어졌습니다.**
+
+### 로컬에서 `dev` 로 끝까지 붙여 봤습니다 (2026-08-09)
+
+운영 배포(`main`)에 컨트롤러가 아직 없어서, `dev` 를 로컬에서 돌려 붙였습니다.
+**네 경로 전부 200 이고 화면이 실제 백엔드 데이터로 그려집니다.**
+
+```
+POST /internal/simulation/session       200
+POST /api/v1/candidate-filters          200
+POST /api/v1/recommendations            200
+POST /internal/orchestrator/approve     200
+```
+
+확인 화면에 이렇게 나옵니다 — 전부 서버가 준 값입니다.
+
+```
+매운 뼈 닭강정   5,500원
+매운 순살 닭강정  6,000원
+형태  순살  → 고르신 메뉴와 달라요
+반영: 선호하신 이용 방식과 일치하는 메뉴라 우선 추천드립니다.
+제외: [PEANUT] 알레르기와 겹쳐서 제외됐어요.
+제외: 품절 닭강정은 지금 팔지 않아서 뺐어요
+```
+
+### 붙여 보고 찾은 것 — 백엔드 쪽 넷
+
+**① 승인이 스키마에서 막힙니다.**
+
+```
+/userDecision/note must be string
+/executionPlan/actions/0/target/groupId must be string   (0·1·6·7·8·9)
+```
+
+`note` 는 프론트가 아예 안 보내도 같은 오류가 납니다. 서버가 `UserDecision` 을 다시 만들면서 `note: null` 을 실어 보내는 것 같습니다. `@JsonInclude(NON_NULL)` 이면 해결될 것 같습니다.
+
+`groupId` 는 `buildExecutionPlan` 이 만드는 action 의 `target` 에 빠져 있습니다. **이 둘만 고쳐지면 실행까지 갑니다.**
+
+**② 지금 팔지 않는 후보가 추천에 올라옵니다.**
+
+```
+CHICKEN-008  품절 닭강정  available=false
+→ eligibleCandidates 에 남아 있고 alternativeCandidateIds 에도 들어옵니다
+```
+
+심사 필수 기준이 **선택 불가능 후보 추천 0건** 입니다. 프론트에서도 한 번 더 거르고 있지만, 서버가 원천에서 빼 주시는 게 맞습니다.
+
+**③ `explanation` 이 사람이 읽을 문장이 아닙니다.**
+
+```
+explanation: "ruleId=CHICKEN_ALLERGEN_HARD_CONSTRAINT, sourceValue=[PEANUT], candidateValue=[PEANUT]"
+reasonText : "[PEANUT] 알레르기와 겹쳐서 제외됐어요."
+```
+
+`reasonText` 를 쓰도록 고쳤습니다. 다만 그 문장에도 `[PEANUT]` 이 그대로 들어 있습니다. **어르신 화면에 나가는 글이라 "땅콩" 이면 더 좋겠습니다.**
+
+**④ 형태(`boneType`)가 순위에 반영되지 않습니다.**
+
+순살을 저장한 프로필인데 1순위가 '매운 뼈 닭강정' 이었습니다.
+
+```
+scoreBreakdown: { priceScore, serviceTypeMatch, spicyLevelMatch }   ← boneTypeMatch 없음
+```
+
+### 프론트에서 고친 것
+
+- `reasonText` 를 쓰도록 바꿨습니다. 규칙 추적 문자열이 화면에 나가지 않습니다.
+- `available:false` 후보를 후보 목록과 추천 양쪽에서 뺍니다. 뺀 이유는 사용자에게 말해 줍니다.
+- 같은 후보의 제외 사유가 후보 필터·추천 양쪽에서 와서 **두 번 보이던 것**을 합쳤습니다.
+- `note: null` 을 안 보냅니다.
+
+### `matchedOptions` 를 만들 수 있게 됐습니다
+
+`candidate-filters` 응답에 후보별 값이 함께 오는 걸 확인했습니다.
+
+```jsonc
+"attributes": { "spicyLevel": "HOT", "boneType": "BONELESS", "allergenIds": [] },
+"supportedOptions": { "SERVICE_TYPE": ["DINE_IN","TAKE_OUT"], "CUP": ["PAPER","REGULAR"] }
+```
+
+**사용자가 고른 값과 같은 어휘라 그대로 비교할 수 있습니다.** 이름 문자열로 짐작하는 게 아니라서 안전합니다. 이걸로 확인 카드의 조건별 판단을 채웠고, 위 화면의 "형태 순살 → 고르신 메뉴와 달라요" 가 그 결과입니다.
+
+`Recommendation` 에 직접 넣어 주시면 그때 이 계산은 걷어내겠습니다.
 
 ### 아직 남은 것
 

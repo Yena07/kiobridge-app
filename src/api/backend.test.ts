@@ -515,12 +515,78 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
         { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000 },
         { candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500 },
       ],
-      excludedCandidates: [{ candidateId: "CHICKEN-005", reasonCode: "ALLERGEN", explanation: "땅콩 때문에 뺐어요" }],
+      excludedCandidates: [{
+        candidateId: "CHICKEN-005", reasonCode: "ALLERGEN",
+        // 서버가 주는 explanation 은 규칙 추적용 문자열이다. 사람에게 보여 줄 문장은 reasonText 다.
+        explanation: "ruleId=CHICKEN_ALLERGEN_HARD_CONSTRAINT, sourceValue=[PEANUT]",
+        reasonText: "[PEANUT] 알레르기와 겹쳐서 제외됐어요.",
+      }],
     }]);
     const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
     expect(r.survivingCandidateIds).toEqual(["CHICKEN-001", "CHICKEN-003"]);
     expect(r.display?.["CHICKEN-001"]).toEqual({ displayName: "매운 순살 닭강정", priceText: "6,000원" });
-    expect(r.excluded[0].explanation).toBe("땅콩 때문에 뺐어요");
+    // 규칙 추적 문자열이 화면으로 새지 않는다.
+    expect(r.excluded[0].explanation).toBe("[PEANUT] 알레르기와 겹쳐서 제외됐어요.");
+    expect(JSON.stringify(r.excluded)).not.toContain("ruleId=");
+  });
+
+  it("지금 팔지 않는 후보는 담을 수 있는 목록에서 뺀다", async () => {
+    // 심사 필수 기준: 선택 불가능 후보 추천 0건.
+    // 서버가 available:false 를 eligibleCandidates 에 남겨 보내는 걸 확인했다.
+    const { b } = 캡처([{
+      eligibleCandidates: [
+        { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
+        { candidateId: "CHICKEN-008", name: "품절 닭강정", price: 6000, available: false },
+      ],
+      excludedCandidates: [],
+    }]);
+    const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    expect(r.survivingCandidateIds).toEqual(["CHICKEN-001"]);
+    expect(r.display?.["CHICKEN-008"]).toBeUndefined();
+    // 조용히 사라지면 "왜 없지?" 가 된다. 뺀 이유를 말해 준다.
+    expect(r.excluded.map((e) => e.explanation).join()).toContain("지금 팔지 않아서");
+  });
+
+  it("품절 후보가 추천에 실려 와도 화면으로 내보내지 않는다", async () => {
+    const { b } = 캡처([
+      {
+        eligibleCandidates: [
+          { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
+          { candidateId: "CHICKEN-008", name: "품절 닭강정", price: 6000, available: false },
+        ],
+        excludedCandidates: [],
+      },
+      { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-008"] },
+    ]);
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    expect(rec.alternativeCandidateIds).toEqual([]);
+  });
+
+  it("후보가 들고 있는 값으로 조건별 일치를 만든다", async () => {
+    // 이름 문자열로 짐작하지 않는다. 서버가 준 attributes 는 사용자가 고른 값과
+    // 같은 어휘라 그대로 비교할 수 있다.
+    const { b } = 캡처([
+      {
+        eligibleCandidates: [{
+          candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true,
+          attributes: { spicyLevel: "HOT", boneType: "BONE" },
+          supportedOptions: { SERVICE_TYPE: ["DINE_IN", "TAKE_OUT"], CUP: ["PAPER"] },
+        }],
+        excludedCandidates: [],
+      },
+      { ...목추천, recommendedCandidateId: "CHICKEN-003" },
+    ]);
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    const 표 = Object.fromEntries(rec.matchedOptions.map((o) => [o.label, o]));
+    // 프로필은 포장하기·매운맛·순살이다. 이 후보는 뼈라 형태만 어긋난다.
+    expect(표["맵기"].matched).toBe(true);
+    expect(표["형태"].matched).toBe(false);
+    expect(표["이용 방식"].matched).toBe(true);
+    // 화면에는 enum 이 아니라 사용자가 고른 한글이 보여야 한다.
+    expect(표["형태"].value).toBe("순살");
+    expect(rec.unmatchedLabelsByCandidate?.["CHICKEN-003"]).toEqual(["형태"]);
   });
 
   it("추천에는 생존 후보를 보내지 않는다 — 서버가 다시 계산한다", async () => {

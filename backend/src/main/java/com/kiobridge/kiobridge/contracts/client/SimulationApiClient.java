@@ -87,6 +87,14 @@ public class SimulationApiClient {
             .body(ExecuteResult.class);
     }
 
+    /** GET /api/v1/sessions/:sessionId — 세션 상태 조회. environmentId를 클라이언트 재신고 없이 다시 확인할 때 쓴다. */
+    public SessionStatusResponse getSession(String sessionId) {
+        return restClient.get()
+            .uri("/api/v1/sessions/{sessionId}", sessionId)
+            .retrieve()
+            .body(SessionStatusResponse.class);
+    }
+
     /** GET /api/v1/sessions/:sessionId/evidence — evidence 조회 */
     public Evidence getEvidence(String sessionId) {
         return restClient.get()

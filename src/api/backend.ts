@@ -1,5 +1,5 @@
 import type {
-  ApproveInput, CartResult, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
+  ApproveInput, CartResult, MappedOption, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
 import { toCanonicalProfile, toChickenStoreContext } from "@/api/canonical";
 import { KioBridgeError, type KioBridgeApi } from "@/api/client";
@@ -206,7 +206,17 @@ export function createApi(
       });
 
       // 무엇을 왜 뺐는지는 후보 필터와 추천 양쪽에서 온다. 둘 다 사용자에게 보여 준다.
-      const 제외 = [...filtered.excluded, ...rec.excludedCandidates];
+      //
+      // 같은 후보를 양쪽이 다 빼면 같은 문장이 두 번 나온다. 실제로 그랬다 —
+      // "[PEANUT] 알레르기와 겹쳐서 제외됐어요." 가 나란히 두 줄로 보였다.
+      // 사용자에게 같은 말을 두 번 하지 않는다.
+      const 본후보 = new Set<string>();
+      const 제외: typeof rec.excludedCandidates = [];
+      for (const e of [...filtered.excluded, ...rec.excludedCandidates]) {
+        if (본후보.has(e.candidateId)) continue;
+        본후보.add(e.candidateId);
+        제외.push(e);
+      }
       const reasons: MappingResponse["reasons"] = [
         ...rec.recommendationReasons.map((text) => ({ kind: "used" as const, text })),
         ...제외.map((e) => ({ kind: "excluded" as const, text: e.explanation })),
@@ -432,13 +442,33 @@ interface KitCandidate {
   name?: string;
   price?: number;
   available?: boolean;
+  /** 후보가 실제로 갖고 있는 값. 사용자가 고른 값과 같은 어휘라 그대로 비교할 수 있다. */
+  attributes?: { spicyLevel?: string; boneType?: string; allergenIds?: string[] };
+  /** 이 후보가 받아 주는 선택지. 이용 방식·컵은 여기에 있다. */
+  supportedOptions?: Record<string, string[]>;
+}
+
+/**
+ * 제외 사유.
+ *
+ * explanation 은 규칙 추적용 문자열이다("ruleId=..., sourceValue=[PEANUT]").
+ * 사람이 읽는 문장은 reasonText 에 따로 온다. 화면에는 reasonText 를 쓴다.
+ */
+interface KitExcluded {
+  candidateId: string;
+  reasonCode?: string;
+  reasonText?: string;
+  explanation?: string;
 }
 
 /** POST /api/v1/candidate-filters 응답 (CandidateFilterResult). */
 interface CandidateFilterResponse {
   eligibleCandidates?: KitCandidate[];
-  excludedCandidates?: { candidateId: string; reasonCode?: string; explanation?: string }[];
+  excludedCandidates?: KitExcluded[];
 }
+
+/** 사람이 읽을 문장만 고른다. 없으면 비운다 — 규칙 추적 문자열을 보여 주지 않는다. */
+const 사유문장 = (e: KitExcluded): string => e.reasonText ?? "";
 
 /** POST /api/v1/recommendations 응답 (Recommendation). */
 interface RecommendationResponse {
@@ -449,6 +479,42 @@ interface RecommendationResponse {
   unmetConditions?: string[];
   confidence?: number;
   requiresReconfirmation?: boolean;
+}
+
+/**
+ * 후보가 들고 있는 값과 사용자가 고른 값을 축별로 맞춰 본다.
+ *
+ * 이름 문자열로 짐작하지 않는다 — 예전에 그렇게 했다가 온도가 ICE 인
+ * '아이스 아메리카노' 를 고른 분께 "달라요" 라고 말한 적이 있다.
+ * 여기서 보는 건 서버가 준 attributes·supportedOptions 로, 사용자가 고른 값과
+ * 같은 어휘다. 같은 말끼리 비교하는 것이라 짐작이 아니다.
+ *
+ * 서버가 값을 안 주는 축은 넣지 않는다. 모르는 것을 '맞았다' 고 하지 않는다.
+ */
+function 확인표(c: KitCandidate | undefined, p: ProfileData): MappedOption[] {
+  if (!c) return [];
+  const ctx = toChickenStoreContext(p);
+  const 축: { label: string; 고른: string | number | null; 후보: string | undefined; 어긋날때: string }[] = [
+    { label: "이용 방식", 고른: ctx.preferences.serviceType, 후보: c.supportedOptions?.SERVICE_TYPE?.join(","), 어긋날때: "오늘은 이 방식이 안 돼요" },
+    { label: "맵기", 고른: ctx.preferences.spicyLevel, 후보: c.attributes?.spicyLevel, 어긋날때: "오늘은 이 조합이 없어요" },
+    { label: "형태", 고른: ctx.preferences.boneType, 후보: c.attributes?.boneType, 어긋날때: "오늘은 이 조합이 없어요" },
+    { label: "컵", 고른: ctx.preferences.cupOption, 후보: c.supportedOptions?.CUP?.join(","), 어긋날때: "오늘은 이 컵이 없어요" },
+  ];
+  const 행: MappedOption[] = [];
+  for (const a of 축) {
+    // 사용자가 고르지 않았거나(NO_PREFERENCE) 서버가 값을 안 준 축은 판단하지 않는다.
+    if (a.고른 === "NO_PREFERENCE" || a.고른 == null || a.후보 === undefined) continue;
+    // supportedOptions 는 여러 값이라 포함 여부로, attributes 는 한 값이라 같은지로 본다.
+    const matched = a.후보.includes(",") ? a.후보.split(",").includes(String(a.고른)) : a.후보 === a.고른;
+    // 화면에는 사용자가 고른 그 한글 값을 보여 준다. enum 을 그대로 보여 주지 않는다.
+    const 보일값 = p.selections?.[a.label]?.[0];
+    if (!보일값) continue;
+    행.push({ label: a.label, value: 보일값, matched, ...(matched ? {} : { note: a.어긋날때 }) });
+  }
+  const 수량 = p.selections?.["수량"]?.[0];
+  // 수량은 후보가 아니라 주문이 정하는 값이라 어긋날 수가 없다.
+  if (수량) 행.push({ label: "수량", value: 수량, matched: true });
+  return 행;
 }
 
 const 원 = (n: number | undefined) => (typeof n === "number" ? `${n.toLocaleString("ko-KR")}원` : "");
@@ -474,6 +540,8 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 실행결과 = new Map<string, ExecuteResult>();
   // 서버가 준 추천을 그대로 승인 요청에 되돌려 줘야 한다. 화면은 이 값을 보지 않는다.
   const 추천 = new Map<string, RecommendationResponse>();
+  // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
+  const 후보 = new Map<string, Map<string, KitCandidate>>();
 
   /**
    * reviewSnapshot 을 장바구니 요약으로 옮긴다.
@@ -535,19 +603,31 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const r = await 보내기<CandidateFilterResponse>("/api/v1/candidate-filters", {
         environmentId, sessionContext: toChickenStoreContext(profile),
       });
+
+      // 지금 팔지 않는 것은 후보가 아니다. 심사 필수 기준이 '선택 불가능 후보
+      // 추천 0건' 이고, 서버가 available:false 를 남겨 보내는 걸 확인했다.
+      // 서버가 나중에 걸러 주더라도 여기 검사는 남긴다 — 한쪽만 막으면 언젠가 샌다.
+      const 담을수있는 = (r.eligibleCandidates ?? []).filter((c) => c?.candidateId && c.available !== false);
+
       const display: Record<string, { displayName: string; priceText: string }> = {};
-      for (const c of r.eligibleCandidates ?? []) {
-        if (c?.candidateId && c.name) display[c.candidateId] = { displayName: c.name, priceText: 원(c.price) };
+      for (const c of 담을수있는) {
+        if (c.name) display[c.candidateId] = { displayName: c.name, priceText: 원(c.price) };
       }
-      return {
-        survivingCandidateIds: (r.eligibleCandidates ?? []).map((c) => c.candidateId).filter(Boolean),
-        excluded: (r.excludedCandidates ?? []).map((e) => ({
-          candidateId: e.candidateId,
-          reasonCode: e.reasonCode ?? "EXCLUDED",
-          explanation: e.explanation ?? "",
-        })).filter((e) => e.explanation),
-        display,
-      };
+      후보.set(profile.id, new Map(담을수있는.map((c) => [c.candidateId, c])));
+
+      const 뺀것 = (r.excludedCandidates ?? []).map((e) => ({
+        candidateId: e.candidateId,
+        reasonCode: e.reasonCode ?? "EXCLUDED",
+        explanation: 사유문장(e),
+      })).filter((e) => e.explanation);
+      // 품절이라 뺀 것도 사용자에게 말해 준다. 조용히 사라지면 "왜 없지?" 가 된다.
+      for (const c of (r.eligibleCandidates ?? [])) {
+        if (c?.available === false && c.name) {
+          뺀것.push({ candidateId: c.candidateId, reasonCode: "UNAVAILABLE", explanation: `${c.name}은 지금 팔지 않아서 뺐어요` });
+        }
+      }
+
+      return { survivingCandidateIds: 담을수있는.map((c) => c.candidateId), excluded: 뺀것, display };
     },
 
     /**
@@ -565,21 +645,35 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         sessionContext: toChickenStoreContext(profile),
       });
       추천.set(profile.id, r);
+      const 알려진후보 = 후보.get(profile.id);
+      // 서버가 담을 수 없는 후보를 추천에 실어 보내면 여기서 뺀다.
+      // 실제로 품절(available:false)이 대안에 올라오는 걸 확인했다.
+      const 담을수있나 = (id: string) => !알려진후보 || 알려진후보.has(id);
+      const 고름 = r.recommendedCandidateId && 담을수있나(r.recommendedCandidateId)
+        ? r.recommendedCandidateId : null;
+
       return {
-        recommendedCandidateId: r.recommendedCandidateId,
-        alternativeCandidateIds: r.alternativeCandidateIds ?? [],
+        recommendedCandidateId: 고름,
+        alternativeCandidateIds: (r.alternativeCandidateIds ?? []).filter(담을수있나),
         excludedCandidates: (r.excludedCandidates ?? []).map((e) => ({
           candidateId: e.candidateId,
           reasonCode: e.reasonCode ?? "EXCLUDED",
-          explanation: e.explanation ?? "",
+          explanation: 사유문장(e),
         })).filter((e) => e.explanation),
         recommendationReasons: r.recommendationReasons ?? [],
         confidence: r.confidence ?? 0,
         requiresReconfirmation: r.requiresReconfirmation ?? false,
         // 이름·가격은 candidate-filters 에서 온다. 추천 응답에는 없다.
         display: {},
-        // 조건별로 맞았는지는 서버가 아직 알려 주지 않는다. 짐작하지 않는다.
-        matchedOptions: [],
+        // 후보가 들고 있는 값과 사용자가 고른 값을 축별로 맞춰 본다.
+        // 서버가 matchedOptions 를 주면 그때는 이걸 걷어내고 그대로 쓴다.
+        matchedOptions: 고름 ? 확인표(알려진후보?.get(고름), profile) : [],
+        // 후보를 고르는 화면에서도 어느 축이 어긋나는지 보여 준다.
+        unmatchedLabelsByCandidate: Object.fromEntries(
+          [고름, ...(r.alternativeCandidateIds ?? [])]
+            .filter((id): id is string => id !== null && 담을수있나(id))
+            .map((id) => [id, 확인표(알려진후보?.get(id), profile).filter((o) => !o.matched).map((o) => o.label)]),
+        ),
       };
     },
 
@@ -605,12 +699,8 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         sessionContext: toChickenStoreContext(profile),
         // 사용자가 다른 후보를 골랐으면 그것이 1순위다. 서버가 조립할 때 그 값을 쓴다.
         recommendation: input.candidateId ? { ...rec, recommendedCandidateId: input.candidateId } : rec,
-        userDecision: {
-          approved: true,
-          decision: "APPROVE",
-          confirmedAt: new Date().toISOString(),
-          note: null,
-        },
+        // note 는 선택 필드다. null 을 보내면 킷 스키마가 'must be string' 으로 막는다.
+        userDecision: { approved: true, decision: "APPROVE", confirmedAt: new Date().toISOString() },
       });
       실행결과.set(sessionId, r);
     },

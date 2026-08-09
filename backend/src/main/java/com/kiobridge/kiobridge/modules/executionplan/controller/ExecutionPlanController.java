@@ -32,8 +32,9 @@ public class ExecutionPlanController {
     /** POST /internal/plan/build — STEP 9 실행계획 생성. */
     @PostMapping("/plan/build")
     public BuildExecutionPlanResponse buildPlan(@RequestBody BuildExecutionPlanRequest request) {
-        ExecutionPlan executionPlan =
-            executionPlanService.buildExecutionPlan(request.userDecision(), request.recommendation());
+        ExecutionPlan executionPlan = executionPlanService.buildExecutionPlan(
+            request.sessionId(), request.recommendation(), request.userDecision(), request.sessionContext()
+        );
         return new BuildExecutionPlanResponse(executionPlan);
     }
 
@@ -41,7 +42,9 @@ public class ExecutionPlanController {
     @PostMapping("/simulation/session")
     public CreateSessionResponse createSession(@RequestBody CreateSessionRequest request) {
         SessionCreateResponse session = executionPlanService.createSession(request.environmentId());
-        return new CreateSessionResponse(session.sessionId(), session.initialState(), session.submissionEndpoint());
+        return new CreateSessionResponse(
+            session.sessionId(), session.environmentId(), session.initialState(), session.submissionEndpoint()
+        );
     }
 
     /** POST /internal/simulation/submit-and-run — 제출 -> 검증 -> (통과 시) 실행. */

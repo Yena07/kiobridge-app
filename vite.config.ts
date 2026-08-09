@@ -47,4 +47,37 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  server: {
+    /*
+     * 개발 서버에서도 /api/bff 가 백엔드로 가게 한다.
+     *
+     * 배포본에서는 Vercel 서버 함수(api/bff.ts)가 이 일을 한다. 개발 서버는
+     * 그 함수를 돌리지 않으므로 여기서 같은 모양으로 넘겨 준다. 브라우저는
+     * 양쪽 모두 같은 출처로만 요청하게 되어 CORS 가 발생하지 않는다.
+     *
+     * 주소는 KIOBRIDGE_API_BASE 로 준다. 기본은 로컬 백엔드(:8080)다.
+     * 운영 배포(main)에 컨트롤러가 올라가기 전까지는 dev 를 로컬에서 돌려
+     * 붙이는 것이 유일한 연동 시험 방법이다.
+     */
+    proxy: {
+      '/api/bff': {
+        target: process.env.KIOBRIDGE_API_BASE ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/bff/, ''),
+        configure: (proxy) => {
+          // 배포본 BFF 는 클라이언트 헤더를 백엔드로 넘기지 않는다. 여기도 맞춘다.
+          //
+          // 안 떼면 브라우저의 Origin 이 그대로 가서 백엔드 CORS 필터가 403 을 준다.
+          // 백엔드는 allowed-origin 을 하나만 받는데(기본 :5173) 우리 개발 서버는
+          // 다른 포트다. 서버끼리 주고받는 요청에는 Origin 이 있을 이유가 없다.
+          proxy.on('proxyReq', (req) => {
+            req.removeHeader('origin')
+            req.removeHeader('referer')
+            req.removeHeader('cookie')
+          })
+        },
+      },
+    },
+  },
 })
