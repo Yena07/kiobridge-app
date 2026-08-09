@@ -128,20 +128,27 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
  * 상한이 없으면 큰 본문 하나로 이 프로세스의 메모리가 계속 늘어난다.
  * 이 함수는 인증 없이 열려 있고, 허용 경로 하나만 알면 누구든 부를 수 있다.
  * 이 앱이 보내는 제출물은 수십 KB 라 1MB 를 넘으면 우리 요청이 아니다.
+ * 바이트로 센다 — 글자 수로 재면 한글에서 상한이 셋 배가 된다.
  */
 const 최대본문 = 1_000_000;
 
 function 본문읽기(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    let 모음 = "";
-    req.on("data", (c) => {
-      모음 += c;
-      if (모음.length > 최대본문) {
+    // 글자 수가 아니라 바이트로 센다. 한글은 UTF-8 로 한 글자가 3바이트라,
+    // 글자 수로 재면 100만 자 = 약 3MB 까지 통과한다. 상한이 셋 배가 되는 셈이다.
+    const 조각: Buffer[] = [];
+    let 바이트 = 0;
+    req.on("data", (c: Buffer) => {
+      바이트 += c.length;
+      if (바이트 > 최대본문) {
         req.destroy();
         reject(Object.assign(new Error("BODY_TOO_LARGE"), { name: "BodyTooLarge" }));
+        return;
       }
+      조각.push(c);
     });
-    req.on("end", () => resolve(모음));
+    // 여기서 한 번에 문자열로 만든다. 조각 경계에서 한글이 잘리는 일이 없다.
+    req.on("end", () => resolve(Buffer.concat(조각).toString("utf8")));
     req.on("error", reject);
   });
 }
