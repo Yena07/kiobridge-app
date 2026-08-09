@@ -364,6 +364,7 @@ export function createApi(
       const ids = [...세션.keys()];
       세션.clear();
       만료.clear();
+      환경.clear();
       if (backend.forgetSession) {
         await Promise.all(ids.map((id) => backend.forgetSession!(id)));
       }
@@ -506,8 +507,13 @@ function 확인표(c: KitCandidate | undefined, p: ProfileData): MappedOption[] 
   ];
   const 행: MappedOption[] = [];
   for (const a of 축) {
-    // 사용자가 고르지 않았거나(NO_PREFERENCE) 서버가 값을 안 준 축은 판단하지 않는다.
-    if (a.고른 === "NO_PREFERENCE" || a.고른 == null || a.후보 === undefined) continue;
+    // 판단하지 않고 넘기는 세 경우.
+    //   NO_PREFERENCE  사용자가 안 골랐다
+    //   UNKNOWN        골랐는데 우리가 enum 으로 못 옮겼다
+    //   후보값 없음     서버가 그 축을 안 줬다
+    // UNKNOWN 을 그냥 두면 "오늘은 이 조합이 없어요" 가 나가는데, 사실은
+    // 앱이 그 선택지를 못 읽은 것이다. 모르는 것을 안 맞았다고 말하지 않는다.
+    if (a.고른 === "NO_PREFERENCE" || a.고른 === "UNKNOWN" || a.고른 == null || a.후보 === undefined) continue;
     // supportedOptions 는 여러 값이라 포함 여부로, attributes 는 한 값이라 같은지로 본다.
     const matched = a.후보.includes(",") ? a.후보.split(",").includes(String(a.고른)) : a.후보 === a.고른;
     // 화면에는 사용자가 고른 그 한글 값을 보여 준다. enum 을 그대로 보여 주지 않는다.
@@ -522,6 +528,27 @@ function 확인표(c: KitCandidate | undefined, p: ProfileData): MappedOption[] 
 }
 
 const 원 = (n: number | undefined) => (typeof n === "number" ? `${n.toLocaleString("ko-KR")}원` : "");
+
+/**
+ * 받침이 있으면 '은', 없으면 '는'.
+ *
+ * 어르신이 읽는 문장이라 조사가 틀리면 기계가 찍어 낸 티가 난다.
+ * 한글이 아닌 이름은 판별할 방법이 없어 받침 없는 쪽으로 둔다.
+ */
+/** 사용자가 고른 후보를 1순위로 올린다. 대안 목록도 함께 맞춘다. */
+function 고른것반영(rec: RecommendationResponse, 고른: string | undefined): RecommendationResponse {
+  if (!고른 || 고른 === rec.recommendedCandidateId) return rec;
+  const 대안 = (rec.alternativeCandidateIds ?? []).filter((id) => id !== 고른);
+  // 원래 1순위는 사라지지 않는다. 대안으로 내려간다.
+  if (rec.recommendedCandidateId && rec.recommendedCandidateId !== 고른) 대안.unshift(rec.recommendedCandidateId);
+  return { ...rec, recommendedCandidateId: 고른, alternativeCandidateIds: 대안 };
+}
+
+const 은는 = (w: string) => {
+  const c = w.charCodeAt(w.length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return "는";
+  return (c - 0xac00) % 28 === 0 ? "는" : "은";
+};
 
 export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 보내기 = async <T>(path: string, body?: unknown): Promise<T> => {
@@ -562,7 +589,20 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
   // 정규화를 거친 프로필·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
+  // 키는 환경 + 정규화에 넣은 입력 전체다. 프로필 id 만 쓰면 프로필을 고치거나
+  // 다른 키오스크에 붙었을 때 낡은 값을 그대로 쓰게 된다.
   const 정규화됨 = new Map<string, { profile: CanonicalProfile; sessionContext: ChickenStoreSessionContext }>();
+  // 승인은 매핑 때 쓴 그 키를 찾아야 한다. 프로필별로 마지막 키를 기억해 둔다.
+  const 마지막키 = new Map<string, string>();
+
+  const 캐시키 = (environmentId: string, p: ProfileData) => {
+    // collectedAt 은 부를 때마다 달라진다(현재 시각). 키에 넣으면 캐시가 한 번도
+    // 안 맞는다. 결과를 바꾸는 건 고른 조건과 접근성 설정이라 그것만 넣는다.
+    const { collectedAt: _버림, ...프로필 } = toProfileNormalizationInput(p);
+    const 키 = `${environmentId}|${JSON.stringify(프로필)}|${JSON.stringify(toContextNormalizationInput(p).contextInput)}`;
+    마지막키.set(p.id, 키);
+    return 키;
+  };
 
   /**
    * 서버의 정규화 경로를 거친다.
@@ -575,7 +615,10 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
    * 그걸 그대로 후보 필터·추천·승인에 쓴다. 결과는 프로필당 한 번만 받아 둔다.
    */
   const 정규화 = async (environmentId: string, p: ProfileData) => {
-    const 있음 = 정규화됨.get(p.id);
+    // 같은 프로필이라도 붙은 키오스크가 다르면 표준형이 달라질 수 있다.
+    // 프로필 내용을 고쳤을 때도 낡은 값을 쓰면 안 된다. 둘 다 키에 넣는다.
+    const 키 = 캐시키(environmentId, p);
+    const 있음 = 정규화됨.get(키);
     if (있음) return 있음;
 
     const pr = await 보내기<{
@@ -636,7 +679,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     }
 
     const out = { profile: pr.profile, sessionContext: sr.sessionContext };
-    정규화됨.set(p.id, out);
+    정규화됨.set(키, out);
     return out;
   };
 
@@ -667,6 +710,24 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   };
 
   return {
+    /**
+     * 이 계층이 들고 있는 것을 비운다.
+     *
+     * 화면의 '이 기기에서 정보 지우기' 가 여기까지 닿아야 한다. 안 그러면
+     * 정규화된 프로필과 세션 맥락(고른 알레르기·맵기 전부)이 메모리에 그대로
+     * 남는다. 화면이 약속한 일이 실제로 일어나지 않는 것이다.
+     *
+     * 세션 하나만 지우라고 불려도 프로필 단위 캐시까지 비운다. 이 계층은
+     * 한 번에 한 사람을 도우므로, 남겨 둘 이유가 없다.
+     */
+    async forgetSession(sessionId) {
+      실행결과.delete(sessionId);
+      추천.clear();
+      후보.clear();
+      정규화됨.clear();
+      마지막키.clear();
+    },
+
     async createSession({ environmentId, claimCode }) {
       // claimCode 를 버리면 QR 로 읽은 그 키오스크와 무관하게 세션이 열린다.
       // 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻이다.
@@ -719,7 +780,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       // 품절이라 뺀 것도 사용자에게 말해 준다. 조용히 사라지면 "왜 없지?" 가 된다.
       for (const c of (r.eligibleCandidates ?? [])) {
         if (c?.available === false && c.name) {
-          뺀것.push({ candidateId: c.candidateId, reasonCode: "UNAVAILABLE", explanation: `${c.name}은 지금 팔지 않아서 뺐어요` });
+          뺀것.push({ candidateId: c.candidateId, reasonCode: "UNAVAILABLE", explanation: `${c.name}${은는(c.name)} 지금 팔지 않아서 뺐어요` });
         }
       }
 
@@ -790,14 +851,19 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
 
       // 매핑 때 받아 둔 정규화 결과를 그대로 쓴다. 여기서 다시 만들면
       // 확인 화면이 본 조건과 실제로 제출되는 조건이 갈라질 수 있다.
-      const 정 = 정규화됨.get(profile.id);
+      const 키 = 마지막키.get(profile.id);
+      const 정 = 키 ? 정규화됨.get(키) : undefined;
       if (!정) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
       const r = await 보내기<ExecuteResult>("/internal/orchestrator/approve", {
         sessionId,
         profile: 정.profile,
         sessionContext: 정.sessionContext,
         // 사용자가 다른 후보를 골랐으면 그것이 1순위다. 서버가 조립할 때 그 값을 쓴다.
-        recommendation: input.candidateId ? { ...rec, recommendedCandidateId: input.candidateId } : rec,
+        //
+        // 1순위만 덮으면 그 후보가 대안에도 남아 두 필드가 겹친다.
+        // 백엔드 RecommendationValidator 가 ALTERNATIVE_DUPLICATES_RECOMMENDED 로 막는다.
+        // 고른 것을 대안에서 빼고, 원래 1순위를 대안으로 옮긴다.
+        recommendation: 고른것반영(rec, input.candidateId),
         // note 는 선택 필드다. null 을 보내면 킷 스키마가 'must be string' 으로 막는다.
         userDecision: { approved: true, decision: "APPROVE", confirmedAt: new Date().toISOString() },
       });
@@ -834,10 +900,14 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       if (!e) return { state: "running", reachedStep: 0 };
 
       // 킷의 stopType 은 NORMAL_BOUNDARY_STOP · SAFETY_STOP · NONE 이고
-      // result 는 PASS · FAIL 이다. 안전 중단과 그냥 실패는 사용자에게
-      // 할 말이 다르므로 SAFETY_STOP 만 중단 화면으로 보낸다.
+      // result 는 PASS · FAIL 이다.
+      //
+      // 안전 중단과 그냥 실패는 사용자에게 할 말이 다르다. 다만 실패를 계속
+      // '진행 중' 으로 두면 화면이 90초를 기다리다 일반 오류로 끝난다.
+      // 끝난 일은 끝났다고 말한다. 문구만 다르게 쓴다.
+      const 안전중단 = e.stopType === "SAFETY_STOP";
       const state: EvidenceSummary["state"] =
-        e.result === "PASS" ? "cart_ready" : e.stopType === "SAFETY_STOP" ? "aborted" : "running";
+        e.result === "PASS" ? "cart_ready" : e.result === "FAIL" ? "aborted" : "running";
 
       return {
         state,
@@ -848,10 +918,14 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
           ? {
               abort: {
                 code: e.stopType ?? "UNKNOWN",
-                title: "안전을 위해 중단되었습니다",
+                title: 안전중단 ? "안전을 위해 중단되었습니다" : "끝까지 담지 못했어요",
                 // 서버가 이유를 주면 그대로 쓴다. 지어내지 않는다.
-                message: e.stopReason ?? "예상하지 못한 화면이 감지되어 작동을 멈췄어요.",
-                userAction: "직원 초기화를 기다려 주세요",
+                message: e.stopReason ?? (안전중단
+                  ? "예상하지 못한 화면이 감지되어 작동을 멈췄어요."
+                  : "키오스크가 예상과 다르게 움직여서 멈췄어요."),
+                // 안전 중단은 기계가 중간 상태일 수 있어 직원 초기화가 필요하다.
+                // 그냥 실패는 화면을 확인하는 것부터 하면 된다.
+                userAction: 안전중단 ? "직원 초기화를 기다려 주세요" : "키오스크 화면을 확인하고, 어려우면 직원에게 도움을 청해 주세요",
               },
             }
           : {}),

@@ -2480,6 +2480,9 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
  */
 function 연동표시() {
   const [, 다시그리기] = useState(0);
+  // 화면이 좁으면 접어 둔다. 펼친 채로 두면 휴대폰 틀의 아래 버튼을 덮어
+  // 터치를 가로챈다. 200% 확대처럼 CSS 뷰포트가 작아질 때 실제로 그렇다.
+  const [펼침, 펼치기] = useState(false);
   useEffect(() => 연동기록.구독(() => 다시그리기((n) => n + 1)), []);
   const 목록 = 연동기록.읽기();
   const 성공 = 목록.filter((x) => typeof x.상태 === "number" && x.상태 < 400).length;
@@ -2487,16 +2490,31 @@ function 연동표시() {
   return (
     <div
       style={{
-        position: "fixed", right: 12, bottom: 12, zIndex: 60, width: 340, maxHeight: "60vh",
-        overflowY: "auto", background: "#0b0b0c", color: "#e8e8ea", borderRadius: 10,
+        position: "fixed", right: 12, bottom: 12, zIndex: 60,
+        // 좁은 화면에서는 폭을 줄인다. 340px 고정이면 작은 뷰포트를 다 덮는다.
+        width: "min(340px, calc(100vw - 24px))",
+        maxHeight: 펼침 ? "60vh" : undefined,
+        overflowY: 펼침 ? "auto" : undefined,
+        background: "#0b0b0c", color: "#e8e8ea", borderRadius: 10,
         padding: 12, fontSize: 12, lineHeight: 1.5, fontFamily: "ui-monospace, monospace",
         boxShadow: "0 8px 28px rgba(0,0,0,.35)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <button
+        type="button"
+        onClick={() => 펼치기((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 펼침 ? 8 : 0,
+          background: "none", border: "none", color: "inherit", font: "inherit",
+          padding: 0, cursor: "pointer", width: "100%", textAlign: "left",
+        }}
+      >
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#37d67a", flexShrink: 0 }} />
         <strong style={{ fontSize: 13 }}>실서버에 붙어 있습니다</strong>
-      </div>
+        <span style={{ marginLeft: "auto", color: "#9a9aa2" }}>{성공}/{목록.length} {펼침 ? "▾" : "▸"}</span>
+      </button>
+      {!펼침 ? null : (
+      <>
       <div style={{ color: "#9a9aa2", marginBottom: 8 }}>
         목이 아니라 팀 백엔드로 보냅니다 · /api/bff → KIOBRIDGE_API_BASE
       </div>
@@ -2518,6 +2536,8 @@ function 연동표시() {
             </div>
           ))}
         </>
+      )}
+      </>
       )}
     </div>
   );

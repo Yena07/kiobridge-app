@@ -109,6 +109,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const text = await 응답.text();
     return 보내기(응답.status, text, 응답.headers.get("content-type") ?? "application/json");
   } catch (e) {
+    if ((e as Error)?.name === "BodyTooLarge") {
+      return 보내기(413, { code: "BODY_TOO_LARGE", message: "보낸 내용이 너무 커요" });
+    }
     const 시간초과 = (e as Error)?.name === "AbortError";
     return 보내기(시간초과 ? 504 : 502, {
       code: 시간초과 ? "TIMEOUT" : "UPSTREAM_ERROR",
@@ -119,11 +122,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 }
 
-/** Node 요청은 스트림이라 직접 모아야 한다. */
+/**
+ * Node 요청은 스트림이라 직접 모아야 한다.
+ *
+ * 상한이 없으면 큰 본문 하나로 이 프로세스의 메모리가 계속 늘어난다.
+ * 이 함수는 인증 없이 열려 있고, 허용 경로 하나만 알면 누구든 부를 수 있다.
+ * 이 앱이 보내는 제출물은 수십 KB 라 1MB 를 넘으면 우리 요청이 아니다.
+ */
+const 최대본문 = 1_000_000;
+
 function 본문읽기(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let 모음 = "";
-    req.on("data", (c) => { 모음 += c; });
+    req.on("data", (c) => {
+      모음 += c;
+      if (모음.length > 최대본문) {
+        req.destroy();
+        reject(Object.assign(new Error("BODY_TOO_LARGE"), { name: "BodyTooLarge" }));
+      }
+    });
     req.on("end", () => resolve(모음));
     req.on("error", reject);
   });

@@ -81,7 +81,7 @@ export const 수량숫자 = (v: string | undefined): number | null => {
  */
 export function toCanonicalProfile(
   p: ProfileData,
-  opts: { providerId?: string; collectedAt?: string; largeText?: boolean } = {},
+  opts: { providerId?: string; collectedAt?: string; largeText?: boolean; personalization?: boolean } = {},
 ): CanonicalProfile {
   return {
     profileId: p.id,
@@ -100,8 +100,20 @@ export function toCanonicalProfile(
     },
     // 이 앱은 터치로 조작하고 화면 글은 한국어다. 승인은 사람이 반드시 누른다.
     interaction: { preferredInput: "TOUCH", language: "ko-KR", confirmationRequired: true },
-    // 프로필은 메모리에만 두고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
-    consent: { personalization: true, retentionPolicy: "SESSION_ONLY" },
+    consent: {
+      /*
+       * 화면에 '개인화에 동의하십니까' 라는 항목은 없다. 대신 사용자가 조건을
+       * 저장하고 '이 프로필로 주문하기' 를 눌러 그 조건으로 골라 달라고 한다.
+       * 그 행동 자체가 이 주문에 한한 동의라고 보고 true 로 둔다.
+       *
+       * 동의 항목을 따로 묻게 되면 그 값을 여기로 넘긴다. 기본값을 false 로
+       * 두지 않는 이유는, 앱이 실제로 개인화하고 있는데 안 한다고 적는 것도
+       * 사실과 다르기 때문이다.
+       */
+      personalization: opts.personalization ?? true,
+      // 프로필은 메모리에만 두고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
+      retentionPolicy: "SESSION_ONLY",
+    },
   };
 }
 

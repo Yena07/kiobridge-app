@@ -497,11 +497,28 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(e.abort?.message).toBe("예상하지 못한 화면이 나왔어요");
   });
 
-  it("그냥 실패는 중단 화면으로 보내지 않는다", async () => {
-    // SAFETY_STOP 이 아닌 FAIL 은 "직원을 불러 주세요" 를 띄울 근거가 아니다.
+  it("그냥 실패도 끝난 일로 말하되, 안전 중단과는 다르게 말한다", async () => {
+    // 계속 '진행 중' 으로 두면 화면이 90초를 기다리다 일반 오류로 끝난다.
+    // 끝난 일은 끝났다고 말한다. 다만 문구가 달라야 한다 — 안전 중단은
+    // 기계가 중간 상태일 수 있어 직원 초기화가 필요하고, 그냥 실패는 아니다.
     const b = 붙이기();
     await 승인(b, { valid: true, evidence: { result: "FAIL", stopType: "NONE", executedActions: [] } });
-    expect((await b.getEvidence("s1")).state).toBe("running");
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("aborted");
+    expect(e.abort?.title).toBe("끝까지 담지 못했어요");
+    expect(e.abort?.userAction).not.toContain("초기화");
+  });
+
+  it("안전 중단은 직원 초기화를 안내한다", async () => {
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      evidence: { result: "FAIL", stopType: "SAFETY_STOP", executedActions: [{}] },
+    });
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("aborted");
+    expect(e.abort?.title).toBe("안전을 위해 중단되었습니다");
+    expect(e.abort?.userAction).toContain("초기화");
   });
 
   it("cartItems 가 없는 환경에서는 개수·금액을 지어내지 않는다", async () => {
@@ -593,6 +610,66 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b, calls } = 캡처();
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
     expect(calls.some((c) => c.url.includes("candidate-filters"))).toBe(true);
+  });
+
+  it("고른 후보를 대안에서 빼고 원래 1순위를 대안으로 옮긴다", async () => {
+    // 1순위만 덮으면 그 후보가 대안에도 남아 두 필드가 겹친다.
+    // 백엔드 RecommendationValidator 가 ALTERNATIVE_DUPLICATES_RECOMMENDED 로 막는다.
+    const { b, calls } = 캡처({
+      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-003"] },
+    });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.submit("s1", {
+      pairingId: "s1", profileId: "p1", mappingResult: "clarification",
+      candidateId: "CHICKEN-003", profile: 목프로필,
+    });
+    const rec = calls.find((c) => c.url.includes("orchestrator/approve"))!.body.recommendation as Record<string, unknown>;
+    expect(rec.recommendedCandidateId).toBe("CHICKEN-003");
+    expect(rec.alternativeCandidateIds).toEqual(["CHICKEN-001"]);
+  });
+
+  it("모르는 값(UNKNOWN)을 '안 맞음' 으로 단정하지 않는다", async () => {
+    // 사용자가 고른 선택지를 우리가 enum 으로 못 옮긴 것이지, 오늘 그 조합이
+    // 없다는 뜻이 아니다. 근거 없는 판단을 사용자에게 말하지 않는다.
+    const 모르는맵기 = { ...목프로필, selections: { ...목프로필.selections, "맵기": ["아주매운맛"] } };
+    const { b } = 캡처({
+      "candidate-filters": {
+        eligibleCandidates: [{
+          candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true,
+          attributes: { spicyLevel: "HOT", boneType: "BONELESS" },
+        }],
+        excludedCandidates: [],
+      },
+      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-003" },
+    });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 모르는맵기 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 모르는맵기 });
+    expect(rec.matchedOptions.find((o) => o.label === "맵기")).toBeUndefined();
+  });
+
+  it("정보 지우기가 이 계층의 캐시까지 비운다", async () => {
+    // 화면이 '모두 지워요' 라고 약속한다. 정규화된 프로필과 세션 맥락이
+    // 메모리에 남으면 그 문장이 사실이 아니게 된다.
+    const { b } = 캡처();
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.forgetSession!("s1");
+    // 추천 기록이 비었으므로 승인이 재료를 못 찾는다.
+    await expect(
+      b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 }),
+    ).rejects.toThrow();
+  });
+
+  it("프로필을 고치면 정규화를 다시 받는다", async () => {
+    // 캐시 키가 프로필 id 뿐이면 고친 조건이 반영되지 않는다.
+    const { b, calls } = 캡처();
+    const 부르기 = (p: typeof 목프로필) => b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: p });
+    await 부르기(목프로필);
+    await 부르기(목프로필);
+    const 두번째 = calls.length;
+    await 부르기({ ...목프로필, selections: { ...목프로필.selections, "맵기": ["순한맛"] } });
+    // 같은 프로필은 캐시를 쓰고(호출이 안 늘고), 고친 프로필은 다시 받는다.
+    expect(두번째).toBe(2);
+    expect(calls.length).toBe(3);
   });
 
   it("서버가 못 쓰겠다고 하면 거기서 멈춘다", async () => {

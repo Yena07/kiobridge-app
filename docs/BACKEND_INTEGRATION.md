@@ -13,7 +13,7 @@
 
 **세션 생성이 실제로 됩니다.**
 
-```
+```text
 POST /internal/simulation/session   {"environmentId":"chicken-store","claimCode":"kb_demo"}
 → {"sessionId":"SIM-20260808-001","initialState":"SERVICE_TYPE",
    "submissionEndpoint":"/api/v1/sessions/SIM-20260808-001/submission"}
@@ -38,7 +38,7 @@ throw new UnsupportedOperationException(
 
 **② `State` enum 이 닭강정집 상태만 압니다.** → **아직 그대로입니다.**
 
-```
+```text
 Cannot deserialize value of type `State` from String "WELCOME":
 not one of the values accepted for Enum class:
 [STOP, SERVICE_TYPE, MENU_SELECTION_WITH_CART, CART_REVIEW,
@@ -136,7 +136,7 @@ public record ExecuteResult(boolean valid, JsonNode run, JsonNode evidence, Vali
 
 **② 승인 경로 교체** — `submit()` 이 이제 `/internal/orchestrator/approve` 로 다섯 조각을 갖춰 보냅니다.
 
-```
+```text
 sessionId · profile · sessionContext · recommendation · userDecision
 ```
 
@@ -168,9 +168,9 @@ sessionId · profile · sessionContext · recommendation · userDecision
 ### 로컬에서 `dev` 로 끝까지 붙여 봤습니다 (2026-08-09)
 
 운영 배포(`main`)에 컨트롤러가 아직 없어서, `dev` 를 로컬에서 돌려 붙였습니다.
-**네 경로 전부 200 이고 화면이 실제 백엔드 데이터로 그려집니다.**
+**아래 일곱 요청이 모두 200 이고 화면이 실제 백엔드 데이터로 그려집니다.**
 
-```
+```text
 POST /internal/simulation/session              200
 POST /api/v1/profile-normalizations            200
 POST /api/v1/session-context-normalizations    200
@@ -185,7 +185,7 @@ POST /internal/orchestrator/approve            200
 개별 정규화는 프로필과 세션 맥락을 각자 반쪽만 봅니다. 합쳐야 보이는 게 있고,
 **알레르기가 그렇습니다.**
 
-```
+```text
 정상 입력           status=VALID                     recommendationReady=true
 알레르기 UNKNOWN    status=RECONFIRMATION_REQUIRED   recommendationReady=false
   HARD_CONSTRAINT_UNKNOWN
@@ -199,7 +199,7 @@ POST /internal/orchestrator/approve            200
 
 확인 화면에 이렇게 나옵니다 — 전부 서버가 준 값입니다.
 
-```
+```text
 매운 뼈 닭강정   5,500원
 매운 순살 닭강정  6,000원
 형태  순살  → 고르신 메뉴와 달라요
@@ -212,7 +212,7 @@ POST /internal/orchestrator/approve            200
 
 **① 승인이 스키마에서 막힙니다.**
 
-```
+```text
 /userDecision/note must be string
 /executionPlan/actions/0/target/groupId must be string   (0·1·6·7·8·9)
 ```
@@ -223,7 +223,7 @@ POST /internal/orchestrator/approve            200
 
 **② 지금 팔지 않는 후보가 추천에 올라옵니다.**
 
-```
+```text
 CHICKEN-008  품절 닭강정  available=false
 → eligibleCandidates 에 남아 있고 alternativeCandidateIds 에도 들어옵니다
 ```
@@ -232,7 +232,7 @@ CHICKEN-008  품절 닭강정  available=false
 
 **③ `explanation` 이 사람이 읽을 문장이 아닙니다.**
 
-```
+```text
 explanation: "ruleId=CHICKEN_ALLERGEN_HARD_CONSTRAINT, sourceValue=[PEANUT], candidateValue=[PEANUT]"
 reasonText : "[PEANUT] 알레르기와 겹쳐서 제외됐어요."
 ```
@@ -243,7 +243,7 @@ reasonText : "[PEANUT] 알레르기와 겹쳐서 제외됐어요."
 
 순살을 저장한 프로필인데 1순위가 '매운 뼈 닭강정' 이었습니다.
 
-```
+```text
 scoreBreakdown: { priceScore, serviceTypeMatch, spicyLevelMatch }   ← boneTypeMatch 없음
 ```
 
@@ -269,23 +269,21 @@ scoreBreakdown: { priceScore, serviceTypeMatch, spicyLevelMatch }   ← boneType
 
 ### 아직 남은 것
 
-**① `matchedOptions` — 이게 마지막 한 조각입니다.**
+**① 후보별 축 일치를 `Recommendation` 에 직접 넣어 주시면 좋겠습니다.**
 
-확인 화면은 "저장하신 조건을 이렇게 썼습니다" 를 **항목별로** 보여 줍니다.
+지금은 프론트가 `candidate-filters` 의 `attributes`·`supportedOptions` 로 직접 계산해서 확인 카드를 채우고 있습니다.
 
+```text
+이용 방식  포장하기   그대로예요
+맵기      매운맛     그대로예요
+형태      뼈        오늘은 이 조합이 없어요
 ```
-이용 방식  포장하기      그대로예요
-맵기      매운맛        그대로예요
-형태      뼈           오늘은 이 조합이 없어요   ← 이 판단
-```
 
-`Recommendation` 에 후보별로 어떤 축이 맞고 안 맞았는지가 없어서, 지금은 이 표를 채울 수 없습니다. 프론트가 이름으로 짐작하지는 않습니다 — 예전에 그렇게 했다가 온도가 `ICE` 인 '아이스 아메리카노' 를 고른 분께 "달라요" 라고 말한 적이 있습니다.
-
-`recommendationReasons` 문장만으로도 화면은 돌아가지만, 이 표가 있어야 확인 카드가 완성됩니다.
+서버가 후보별로 어떤 축이 맞고 안 맞았는지 알려 주시면 **이 계산을 걷어냅니다.** 같은 판단을 두 곳에서 하면 언젠가 갈라지고, 그때 화면이 서버와 다른 말을 하게 됩니다.
 
 **② `State` enum 이 닭강정집 전용입니다.**
 
-```
+```text
 SERVICE_TYPE MENU_SELECTION OPTION_SELECTION OPTION_CONFIRM
 MENU_SELECTION_WITH_CART CART_REVIEW STOP
 ```
@@ -319,7 +317,7 @@ cors:
 
 지금은 저희가 Vercel 환경변수에 주소만 넣으면 됩니다.
 
-```
+```text
 KIOBRIDGE_API_BASE = https://<백엔드 주소>
 ```
 
@@ -332,9 +330,9 @@ KIOBRIDGE_API_BASE = https://<백엔드 주소>
 | 메서드 | 명세서 경로 | 팀 백엔드 (지금) |
 | --- | --- | --- |
 | `createSession` | `POST /api/v1/sessions` | `POST /internal/simulation/session` |
-| `filterCandidates` | `POST /api/v1/candidate-filters` | **경로 없음** |
-| `recommend` | `POST /api/v1/recommendations` | **경로 없음** |
-| `submit` | `POST /api/v1/sessions/:id/submission` | `POST /internal/simulation/submit-and-run` (셋이 한 번에) |
+| `filterCandidates` | `POST /api/v1/candidate-filters` | 같음 (`#41`) |
+| `recommend` | `POST /api/v1/recommendations` | 같음 (`#41`) |
+| `submit` | `POST /api/v1/sessions/:id/submission` | `POST /internal/orchestrator/approve` (조립·제출·검증·실행 한 번에) |
 | `validate` | `POST /api/v1/sessions/:id/validate` | 위 응답의 `valid` · `validation` |
 | `execute` | `POST /api/v1/sessions/:id/execute` | 위 응답의 `evidence.runId` |
 | `getEvidence` | `GET /internal/simulation/evidence/{id}` | 위 응답의 `evidence` — **따로 부르지 않습니다** |
@@ -397,7 +395,7 @@ KIOBRIDGE_API_BASE = https://<백엔드 주소>
 
 ## 2. 질문 목록이 겹칩니다 — 조율이 필요합니다
 
-```
+```text
 GET /api/v1/environments/{environmentId}/input-options
     "프론트 입력 폼에 필요한 공식 enum 기반 선택지 반환"    담당: Chahyunwoo
 ```
