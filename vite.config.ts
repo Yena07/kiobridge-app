@@ -36,7 +36,19 @@ function 저작자표시복사() {
   }
 }
 
-export default defineConfig({
+/*
+ * mode 는 npm 스크립트가 정한다.
+ *   npm run dev       →  기본 — 목으로 돈다
+ *   npm run dev:team  →  --mode team — 팀 백엔드로 붙는다
+ *
+ * .env 파일에 두지 않는다. 팀 저장소는 .env* 를 통째로 무시해서 그 파일이
+ * 따라가지 못하고, 그러면 거기서는 dev:team 이 조용히 목으로 돈다.
+ * 어느 구현을 쓸지 고르는 스위치일 뿐이라 비밀값도 아니다.
+ */
+export default defineConfig(({ mode }) => ({
+  define: {
+    'import.meta.env.VITE_BACKEND': JSON.stringify(mode === 'team' ? 'team' : ''),
+  },
   plugins: [react(), tailwindcss(), 저작자표시복사()],
   resolve: {
     alias: {
@@ -80,4 +92,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
