@@ -1,5 +1,5 @@
 ﻿import type {
-  ApproveInput, CartResult, MappedOption, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
+  ApproveInput, CartResult, MappedOption, RejectInput, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
 import {
   toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput,
@@ -69,6 +69,15 @@ export interface Backend {
 
   /** GET /internal/simulation/evidence/{sessionId} */
   getEvidence(sessionId: string): Promise<EvidenceSummary>;
+
+  /**
+   * 사용자가 승인하지 않겠다고 한 것을 서버에 남긴다.
+   *
+   * 킷 계약의 UserDecision.decision 이 APPROVE·REJECT·MODIFY 셋이다.
+   * 거절은 빈 실행계획으로 제출된다 — 검증까지만 가고 실행은 건너뛴다.
+   * 구현하지 않으면 화면은 그냥 되돌아간다. 사람을 붙잡지는 않는다.
+   */
+  reject?(sessionId: string, payload: unknown): Promise<void>;
 
   /**
    * 이 세션에 남은 사용자 정보를 서버에서 지운다.
@@ -355,6 +364,27 @@ export function createApi(
       }
       // 실행 조회는 sessionId 기준이므로 화면이 들고 다닐 값에 함께 실어 둔다.
       return { planId: `${input.pairingId}::${planId}` };
+    },
+
+    /**
+     * 승인하지 않겠다는 결정을 서버에 남긴다.
+     *
+     * 실패해도 던지지 않는다. 사용자는 이미 "그만두겠다" 고 했고, 그 뒤에
+     * 오류 화면을 띄우면 나가려는 사람을 붙잡는 셈이다. 기록은 서버 사정이지
+     * 사용자가 감당할 일이 아니다.
+     */
+    async reject(input) {
+      const s = 세션.get(input.pairingId);
+      // 매핑도 안 한 상태면 거절할 대상이 없다. 조용히 끝낸다.
+      if (!s || s.profileId !== input.profileId) return;
+      세션.delete(input.pairingId);
+      if (!backend.reject) return;
+      try {
+        const profile = getProfile?.(input.profileId);
+        await backend.reject(input.pairingId, { ...input, ...(profile ? { profile } : {}) });
+      } catch {
+        // 기록에 실패해도 화면은 되돌아간다.
+      }
     },
 
     // 서버에 지우기 경로가 생기면 여기서 함께 부른다. 지금은 이 계층이 들고 있는
@@ -890,6 +920,36 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       if (!r) throw new KioBridgeError("PLAN_NOT_FOUND", "실행 정보를 찾을 수 없어요", false);
       // runId 는 이 실행 하나를 가리키는 값이다. 없으면 세션으로 대신한다.
       return { planId: r.evidence?.runId ?? sessionId };
+    },
+
+    /**
+     * POST /internal/orchestrator/approve — approved: false 로 보낸다.
+     *
+     * 같은 경로다. 백엔드가 userDecision.approved 를 보고 빈 실행계획을 만들어
+     * 제출·검증까지만 가고 실행은 건너뛴다(ExecutionPlanService).
+     * 키오스크는 건드려지지 않는다.
+     */
+    async reject(sessionId, payload) {
+      const input = payload as RejectInput & { profile?: ProfileData };
+      const profile = input.profile;
+      if (!profile) return;
+      const 키 = 마지막키.get(profile.id);
+      const 정 = 키 ? 정규화됨.get(키) : undefined;
+      const rec = 추천.get(profile.id);
+      // 매핑을 안 거쳤으면 서버에 보낼 재료가 없다. 기록을 포기하고 넘어간다.
+      if (!정 || !rec) return;
+      await 보내기("/internal/orchestrator/approve", {
+        sessionId,
+        profile: 정.profile,
+        sessionContext: 정.sessionContext,
+        recommendation: rec,
+        userDecision: {
+          approved: false,
+          decision: "REJECT",
+          confirmedAt: new Date().toISOString(),
+          ...(input.note ? { note: input.note } : {}),
+        },
+      });
     },
 
     // 증거는 submit-and-run 응답에 이미 실려 왔다. 따로 조회하지 않는다.

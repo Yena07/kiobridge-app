@@ -2105,6 +2105,21 @@ function OrderConfirmScreen({
 
   // P0-4: 실행 계획 생성은 이 핸들러 안에서만 일어난다.
   // 매핑 조회(useEffect)는 계획을 만들지 않으므로 승인 전 실행 경로가 존재하지 않는다.
+  /**
+   * 승인하지 않고 되돌아간다.
+   *
+   * 그냥 화면만 닫으면 서버는 사용자가 무엇을 보고 무엇을 거절했는지 모른다.
+   * 대신 눌러 주는 앱에서 '아니오' 는 '예' 만큼 중요한 기록이라 남긴다.
+   *
+   * 기다리지 않고 바로 되돌아간다. 그만두겠다는 사람을 붙잡지 않는다.
+   * 기록이 실패해도 화면은 이미 나가 있다 — 그건 서버 사정이지
+   * 사용자가 감당할 일이 아니다.
+   */
+  const 거절하기 = () => {
+    onBack();
+    void api.reject({ pairingId, profileId: profile.id }).catch(() => {});
+  };
+
   const approve = (extra: Omit<ApproveInput, "pairingId" | "profileId" | "mappingResult"> = {}) => {
     if (!mapping || approving.current) return;
     approving.current = true;
@@ -2142,7 +2157,7 @@ function OrderConfirmScreen({
          * 목은 이제 그 경우를 not_found 로 답하지만, 화면이 서버를 믿고 단정할 이유는 없다.
          */}
         {mapping?.result === "exact" && mapping.item && (
-          <OrderExact item={mapping.item} reasons={mapping.reasons} onApprove={() => approve()} onCancel={onBack} />
+          <OrderExact item={mapping.item} reasons={mapping.reasons} onApprove={() => approve()} onCancel={거절하기} />
         )}
         {mapping?.result === "clarification" && (
           <OrderClarification
@@ -2151,17 +2166,17 @@ function OrderConfirmScreen({
             reasons={mapping.reasons}
             options={mapping.profileOptions}
             onApprove={(candidateId) => approve({ candidateId })}
-            onCancel={onBack}
+            onCancel={거절하기}
           />
         )}
-        {mapping?.result === "not_found" && <OrderNotFound message={mapping.message} onCancel={onBack} />}
+        {mapping?.result === "not_found" && <OrderNotFound message={mapping.message} onCancel={거절하기} />}
         {mapping?.result === "changed" && mapping.item && (
           <OrderChanged
             item={mapping.item}
             diffNote={mapping.diffNote}
             reasons={mapping.reasons}
             onApprove={() => approve({ acknowledgedDiff: true })}
-            onCancel={onBack}
+            onCancel={거절하기}
           />
         )}
         {/*
@@ -2181,7 +2196,7 @@ function OrderConfirmScreen({
             reasons={mapping.reasons}
             /* 사용자가 카드를 눌러 "이 메뉴가 맞다"고 짚어야만 여기까지 온다. 그 사실을 서버에도 알린다. */
             onApprove={() => approve({ confirmedLowConfidence: true })}
-            onCancel={onBack}
+            onCancel={거절하기}
           />
         )}
       </div>

@@ -110,6 +110,19 @@ export interface PairingResult {
 
 // 승인 화면마다 사용자가 확인하는 것이 다르다. 그 사실을 여기에 실어 보낸다.
 // 서버가 승인 조건을 다시 볼 수 있어야 하므로 화면 안에만 남겨 두지 않는다.
+/**
+ * 승인하지 않겠다는 결정.
+ *
+ * 화면은 확인 카드의 모든 갈래에서 이걸 누를 수 있어야 한다. 무엇을 담을지
+ * 보여 준 뒤에 되돌릴 방법이 없으면, 승인은 형식일 뿐이다.
+ */
+export interface RejectInput {
+  pairingId: string;
+  profileId: string;
+  /** 왜 거절했는지. 화면이 묻지 않으면 비워 둔다 — 지어내지 않는다. */
+  note?: string;
+}
+
 export interface ApproveInput {
   pairingId: string;
   profileId: string;

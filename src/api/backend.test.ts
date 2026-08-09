@@ -672,6 +672,27 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     expect(calls.length).toBe(3);
   });
 
+  it("거절은 approved:false 로 같은 경로에 나간다", async () => {
+    // 킷 계약의 UserDecision 은 APPROVE·REJECT·MODIFY 셋이다.
+    // 거절은 빈 실행계획으로 제출돼 검증까지만 가고 실행은 건너뛴다.
+    const { b, calls } = 캡처();
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.reject!("s1", { pairingId: "s1", profileId: "p1", profile: 목프로필 });
+    const 거절 = calls.find((c) => c.url.includes("orchestrator/approve"))!;
+    expect(거절.body.userDecision).toMatchObject({ approved: false, decision: "REJECT" });
+    // 승인과 같은 재료를 보낸다. 서버가 무엇을 보고 거절했는지 알아야 한다.
+    for (const k of ["sessionId", "profile", "sessionContext", "recommendation"]) {
+      expect(거절.body).toHaveProperty(k);
+    }
+  });
+
+  it("매핑을 안 거쳤으면 거절도 조용히 넘어간다", async () => {
+    // 보여 준 적 없는 것을 거절할 수는 없다. 서버에 보낼 재료도 없다.
+    const { b, calls } = 캡처();
+    await b.reject!("s1", { pairingId: "s1", profileId: "p1", profile: 목프로필 });
+    expect(calls).toEqual([]);
+  });
+
   it("서버가 못 쓰겠다고 하면 거기서 멈춘다", async () => {
     // 조용히 넘기면 승인 직전에 터진다. 그때는 되돌릴 게 더 많다.
     const { b } = 캡처({

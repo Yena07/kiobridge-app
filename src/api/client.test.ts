@@ -312,6 +312,27 @@ describe("승인 검사 — 서버가 자기 답을 기준으로 본다", () => 
     expect(결과.filter((r) => r.status === "fulfilled")).toHaveLength(1);
   });
 
+  it("거절하면 그 세션으로는 다시 승인할 수 없다", async () => {
+    // 사용자가 아니라고 한 것을 뒤에서 되살리지 않는다.
+    registerProfile(매운);
+    await api.requestMapping(PAIRING, "p1");
+    await api.reject({ pairingId: PAIRING, profileId: "p1" });
+    await expect(
+      api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" }),
+    ).rejects.toThrow();
+  });
+
+  it("다른 프로필로는 거절할 수 없다", async () => {
+    registerProfile(매운);
+    registerProfile(순한);
+    await api.requestMapping(PAIRING, "p1");
+    await api.reject({ pairingId: PAIRING, profileId: "p2" });
+    // p2 의 거절은 p1 세션을 건드리지 않는다. 승인이 그대로 된다.
+    await expect(
+      api.approve({ pairingId: PAIRING, profileId: "p1", mappingResult: "exact" }),
+    ).resolves.toBeTruthy();
+  });
+
   it("클라이언트가 mappingResult 를 속여도 서버 판단을 따른다", async () => {
     // 화면이 changed 를 받았는데 exact 라고 보내며 확인 표시를 빼면 통과해서는 안 된다.
     setScenario({ mapping: "changed" });

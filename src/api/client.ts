@@ -1,5 +1,5 @@
 import type {
-  ApproveInput, CartResult, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
+  ApproveInput, CartResult, RejectInput, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
 import { buildCart, buildMapping } from "@/api/mock";
 import { STEPS } from "@/domain/catalog";
@@ -45,6 +45,16 @@ export interface KioBridgeApi {
    * 사용자가 승인 버튼을 누르기 전에 이 함수를 호출하는 코드 경로가 있으면 요건 위반이다.
    */
   approve(input: ApproveInput): Promise<PlanCreated>;
+  /**
+   * 사용자가 "이대로는 안 담겠다" 고 한 것을 서버에 남긴다.
+   *
+   * 그냥 뒤로 가면 서버는 사용자가 무엇을 봤고 무엇을 거절했는지 모른다.
+   * 대신 눌러 주는 앱에서 '아니오' 는 '예' 만큼 중요한 기록이다.
+   *
+   * 거절은 빈 실행계획으로 제출된다 — 키오스크를 건드리지 않는다.
+   * 실패해도 화면은 그대로 돌아간다. 그만두겠다는 사람을 붙잡지 않는다.
+   */
+  reject(input: RejectInput): Promise<void>;
   getPlanStatus(planId: string): Promise<PlanStatus>;
   /**
    * '이 기기에서 정보 지우기'. 서버에 남은 것까지 함께 지운다.
@@ -275,6 +285,20 @@ export const mockApi: KioBridgeApi = {
       cart: buildCart({ ...담을것, 수량: session.수량 }),
     });
     return { planId };
+  },
+
+  /**
+   * 거절을 기록한다. 목에는 서버가 없으니 이 세션을 끝난 것으로 표시만 한다.
+   *
+   * 담지 않았으므로 장바구니도 계획도 만들지 않는다. 다시 승인하려면
+   * 메뉴를 처음부터 다시 찾아야 한다 — 사용자가 아니라고 한 것을
+   * 뒤에서 되살리지 않는다.
+   */
+  async reject(input) {
+    const session = sessions.get(input.pairingId);
+    if (!session) return;                       // 이미 없는 세션이면 조용히 끝낸다
+    if (session.profileId !== input.profileId) return;
+    sessions.delete(input.pairingId);
   },
 
   async forgetAll() {
