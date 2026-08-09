@@ -1,9 +1,10 @@
-import type {
+﻿import type {
   ApproveInput, CartResult, MappedOption, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
 import { toCanonicalProfile, toChickenStoreContext } from "@/api/canonical";
 import { KioBridgeError, type KioBridgeApi } from "@/api/client";
 import { STEPS } from "@/domain/catalog";
+import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 
 /**
  * 팀 API 명세서의 경로와 1:1 로 맞춘 계층.
@@ -521,12 +522,27 @@ const 원 = (n: number | undefined) => (typeof n === "number" ? `${n.toLocaleStr
 
 export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 보내기 = async <T>(path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(baseUrl + path, {
-      // body 가 없으면 조회다. 명세의 evidence 는 GET 이라 POST 로 부르면 405 가 난다.
-      method: body === undefined ? "GET" : "POST",
-      headers: { "content-type": "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    const 방법 = body === undefined ? "GET" : "POST";
+    // 개발 중에 어디로 무엇이 나갔는지 눈으로 보기 위해서만 잰다.
+    const 시작 = 팀백엔드모드 ? performance.now() : 0;
+    const 적기 = (상태: number | "실패") => {
+      if (!팀백엔드모드) return;
+      연동기록.남기기({ 방법, 경로: path, 상태, 걸린시간: Math.round(performance.now() - 시작), 시각: Date.now() });
+    };
+
+    let res: Response;
+    try {
+      res = await fetch(baseUrl + path, {
+        // body 가 없으면 조회다. 명세의 evidence 는 GET 이라 POST 로 부르면 405 가 난다.
+        method: 방법,
+        headers: { "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    } catch (e) {
+      적기("실패");
+      throw e;
+    }
+    적기(res.status);
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
       throw new KioBridgeError(b.code ?? `HTTP_${res.status}`, b.message ?? "요청을 처리하지 못했어요", res.status >= 500);
