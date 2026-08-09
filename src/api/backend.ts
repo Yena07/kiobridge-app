@@ -603,6 +603,38 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       throw new KioBridgeError("RECONFIRM_REQUIRED", 첫줄 ?? "저장하신 조건을 다시 확인해 주세요", true);
     }
 
+    // 마지막 관문. 프로필과 세션 맥락을 합쳐 놓고 다시 본다.
+    //
+    // 개별 정규화는 각자 반쪽만 검사한다. 합쳐야 보이는 게 있다 —
+    // 특히 알레르기가 UNKNOWN 이면 여기서만 걸린다.
+    //
+    //   HARD_CONSTRAINT_UNKNOWN
+    //   "allergenIds 가 UNKNOWN 입니다. 임의로 추론하지 말고 재확인하거나
+    //    안전한 대체경로를 사용하세요."
+    //
+    // 이 문을 건너뛰면, 앱이 모르는 알레르기를 가진 분에게 그대로 음식을
+    // 추천하게 된다. 그건 이 앱이 절대 하면 안 되는 일이다.
+    const vr = await 보내기<{
+      status: string;
+      recommendationReady: boolean;
+      contractValidation?: { valid: boolean; errors?: { code?: string; message?: string }[] };
+    }>("/api/v1/canonical-inputs/validate", {
+      environmentId, profile: pr.profile, sessionContext: sr.sessionContext,
+    });
+
+    if (!vr.recommendationReady) {
+      const 오류 = vr.contractValidation?.errors ?? [];
+      const 알레르기모름 = 오류.some((e) => e.code === "HARD_CONSTRAINT_UNKNOWN");
+      // 서버 문구는 개발자용이다. 사용자에게는 무엇을 하면 되는지로 바꿔 말한다.
+      throw new KioBridgeError(
+        오류[0]?.code ?? "NOT_RECOMMENDATION_READY",
+        알레르기모름
+          ? "저장하신 알레르기 중에 저희가 확인하지 못한 것이 있어요. 프로필에서 다시 골라 주시거나 직원에게 도움을 청해 주세요."
+          : "저장하신 조건을 다시 확인해 주세요.",
+        true,
+      );
+    }
+
     const out = { profile: pr.profile, sessionContext: sr.sessionContext };
     정규화됨.set(p.id, out);
     return out;

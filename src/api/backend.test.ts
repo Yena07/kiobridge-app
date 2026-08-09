@@ -407,6 +407,8 @@ const 정규화응답 = {
     reconfirmationFields: [],
     contractValidation: { valid: true, errors: [] },
   },
+  // 담당1의 마지막 관문. 프로필과 맥락을 합쳐 놓고 다시 본다.
+  통합: { status: "VALID", recommendationReady: true, contractValidation: { valid: true, errors: [] } },
 };
 
 /** 경로를 보고 답한다. 순서에 기대면 정규화가 끼는 순간 전부 어긋난다. */
@@ -414,6 +416,7 @@ const 경로별응답 = (over: Record<string, unknown> = {}) => (url: string, bo
   for (const [조각, 값] of Object.entries(over)) if (url.includes(조각)) return 값;
   if (url.includes("profile-normalizations")) return 정규화응답.프로필;
   if (url.includes("session-context-normalizations")) return 정규화응답.맥락;
+  if (url.includes("canonical-inputs/validate")) return 정규화응답.통합;
   if (url.includes("candidate-filters")) return { eligibleCandidates: [], excludedCandidates: [] };
   if (url.includes("recommendations")) return 목추천;
   if (body.userDecision) return 실행성공;
@@ -458,9 +461,10 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     await b.validate("s1");
     await b.execute("s1");
     await b.getEvidence("s1");
-    // 정규화 2번 + 추천 1번 + 승인 1번. 증거를 따로 조회하지 않으므로 그 뒤로는 늘지 않는다.
-    expect(승인후).toBe(4);
-    expect((globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(4);
+    // 정규화 2번 + 통합 검증 1번 + 추천 1번 + 승인 1번.
+    // 증거를 따로 조회하지 않으므로 그 뒤로는 늘지 않는다.
+    expect(승인후).toBe(5);
+    expect((globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(5);
   });
 
   it("검증에서 막히면 실행하지 않았다는 사실이 그대로 올라온다", async () => {
@@ -528,7 +532,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) => {
       const url = String(u);
       const body = JSON.parse(String(init?.body ?? "{}"));
-      if (!url.includes("-normalizations")) calls.push({ url, body });
+      if (!url.includes("-normalizations") && !url.includes("canonical-inputs/validate")) calls.push({ url, body });
       return 응답(답(url, body));
     }) as unknown as typeof fetch;
     return { b: createTeamBackend("/api/bff"), calls };
@@ -562,6 +566,33 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const 추천요청 = calls.find((c) => c.url.includes("recommendations"))!;
     expect((추천요청.body.profile as Record<string, unknown>).source)
       .toMatchObject({ providerId: "WHATTHEBUG" });
+  });
+
+  it("추천 준비가 안 됐다고 하면 추천으로 넘어가지 않는다", async () => {
+    // 개별 정규화는 각자 반쪽만 본다. 합쳐야 보이는 게 있고, 알레르기가
+    // UNKNOWN 인 경우가 그렇다. 이 문을 건너뛰면 앱이 모르는 알레르기를 가진
+    // 분에게 그대로 음식을 추천하게 된다.
+    const { b, calls } = 캡처({
+      "canonical-inputs/validate": {
+        status: "RECONFIRMATION_REQUIRED",
+        recommendationReady: false,
+        contractValidation: {
+          valid: false,
+          errors: [{ code: "HARD_CONSTRAINT_UNKNOWN", message: "allergenIds 가 UNKNOWN 입니다." }],
+        },
+      },
+    });
+    await expect(
+      b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 }),
+    ).rejects.toThrow("알레르기");
+    // 후보 필터도 추천도 부르지 않는다.
+    expect(calls).toEqual([]);
+  });
+
+  it("추천 준비가 됐을 때만 다음으로 간다", async () => {
+    const { b, calls } = 캡처();
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    expect(calls.some((c) => c.url.includes("candidate-filters"))).toBe(true);
   });
 
   it("서버가 못 쓰겠다고 하면 거기서 멈춘다", async () => {

@@ -171,11 +171,31 @@ sessionId · profile · sessionContext · recommendation · userDecision
 **네 경로 전부 200 이고 화면이 실제 백엔드 데이터로 그려집니다.**
 
 ```
-POST /internal/simulation/session       200
-POST /api/v1/candidate-filters          200
-POST /api/v1/recommendations            200
-POST /internal/orchestrator/approve     200
+POST /internal/simulation/session              200
+POST /api/v1/profile-normalizations            200
+POST /api/v1/session-context-normalizations    200
+POST /api/v1/canonical-inputs/validate         200
+POST /api/v1/candidate-filters                 200
+POST /api/v1/recommendations                   200
+POST /internal/orchestrator/approve            200
 ```
+
+### `recommendationReady` 를 확인하고 넘어갑니다
+
+개별 정규화는 프로필과 세션 맥락을 각자 반쪽만 봅니다. 합쳐야 보이는 게 있고,
+**알레르기가 그렇습니다.**
+
+```
+정상 입력           status=VALID                     recommendationReady=true
+알레르기 UNKNOWN    status=RECONFIRMATION_REQUIRED   recommendationReady=false
+  HARD_CONSTRAINT_UNKNOWN
+  "allergenIds 가 UNKNOWN 입니다. 임의로 추론하지 말고 재확인하거나
+   안전한 대체경로를 사용하세요."
+```
+
+프론트 변환기는 모르는 알레르기를 `UNKNOWN` 으로 보냅니다 — 조용히 버리면 그분의
+알레르기가 서버에 전달되지 않아서요. 그래서 이 관문이 실제로 필요합니다.
+**`recommendationReady` 가 false 면 후보 필터도 추천도 부르지 않습니다.**
 
 확인 화면에 이렇게 나옵니다 — 전부 서버가 준 값입니다.
 
