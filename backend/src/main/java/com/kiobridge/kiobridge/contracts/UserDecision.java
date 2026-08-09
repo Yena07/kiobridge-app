@@ -1,5 +1,7 @@
 package com.kiobridge.kiobridge.contracts;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -12,7 +14,11 @@ import java.util.Set;
  * 스키마에 없는 필드를 넣으면 Kit이 그대로 거부한다 (예전 rejectedReason/modifiedFields가 그랬음).
  *
  * approved=false 인 경우 ExecutionPlan.actions() 는 반드시 빈 리스트여야 한다 (Kit 검증 규칙).
+ *
+ * confirmedAt/note는 optional이지만 스키마 타입이 순수 "string"이라 null을 허용하지 않는다.
+ * @JsonInclude(NON_NULL) 없이 note=null을 직렬화하면 Kit이 "note must be string"으로 거부한다.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record UserDecision(
     boolean approved,
     String decision,     // "APPROVE" | "REJECT" | "MODIFY"

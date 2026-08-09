@@ -18,7 +18,8 @@ public class ChickenStoreExclusionMessages {
 
     private static final Map<String, String> TEMPLATES = Map.of(
         "ALLERGEN_CONFLICT", "%s 알레르기와 겹쳐서 제외됐어요.",
-        "PRICE_LIMIT_EXCEEDED", "설정하신 가격 한도를 넘어서 제외됐어요."
+        "PRICE_LIMIT_EXCEEDED", "설정하신 가격 한도를 넘어서 제외됐어요.",
+        "CANDIDATE_UNAVAILABLE", "지금은 품절이라 제외됐어요."
     );
 
     private static final String DEFAULT_MESSAGE = "선택하신 조건과 맞지 않아 제외됐어요.";

@@ -14,6 +14,7 @@ import java.util.List;
 import static com.kiobridge.kiobridge.modules.recommendation.engine.ChickenStoreTestFixtures.allCandidateScopeRules;
 import static com.kiobridge.kiobridge.modules.recommendation.engine.ChickenStoreTestFixtures.candidate;
 import static com.kiobridge.kiobridge.modules.recommendation.engine.ChickenStoreTestFixtures.sessionContext;
+import static com.kiobridge.kiobridge.modules.recommendation.engine.ChickenStoreTestFixtures.unavailableCandidate;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -90,6 +91,29 @@ class CandidateFilterServiceTest {
             .extracting(RuleEvaluationResult::errorCode)
             .containsExactly("ALLERGEN_CONFLICT");
         assertThat(result.requiresReconfirmation()).isTrue();
+    }
+
+    @Test
+    void available가_false인_후보는_규칙과_무관하게_CANDIDATE_UNAVAILABLE로_제외된다() {
+        var ctx = sessionContext(List.of(AllergenId.PEANUT), new BigDecimal("15000"), ServiceType.TAKE_OUT, SpicyLevel.HOT);
+
+        var soldOut = unavailableCandidate("chicken-sold-out", 9000, List.of("MILK"),
+            List.of("TAKE_OUT"), List.of("HOT"));
+        var eligible = candidate("chicken-ok", 9000, List.of("MILK"), List.of("TAKE_OUT"), List.of("HOT"));
+
+        CandidateFilterResult result = filterService.filter(
+            List.of(soldOut, eligible),
+            allCandidateScopeRules(),
+            ctx
+        );
+
+        assertThat(result.eligibleCandidates())
+            .extracting(Candidate::candidateId)
+            .containsExactly("chicken-ok");
+
+        assertThat(result.excludedCandidates())
+            .extracting(ExcludedCandidate::candidateId, ExcludedCandidate::reasonCode)
+            .containsExactly(org.assertj.core.groups.Tuple.tuple("chicken-sold-out", "CANDIDATE_UNAVAILABLE"));
     }
 
     @Test

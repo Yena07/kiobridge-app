@@ -147,11 +147,22 @@ final class ChickenStoreTestFixtures {
 
     static Candidate candidate(String candidateId, double price, List<String> allergenIds,
                                 List<String> supportedServiceTypes, List<String> supportedSpicyLevels) {
+        return candidate(candidateId, true, price, allergenIds, supportedServiceTypes, supportedSpicyLevels);
+    }
+
+    /** available=false(품절) 후보. CANDIDATE_UNAVAILABLE 하드 제외 검증용. */
+    static Candidate unavailableCandidate(String candidateId, double price, List<String> allergenIds,
+                                           List<String> supportedServiceTypes, List<String> supportedSpicyLevels) {
+        return candidate(candidateId, false, price, allergenIds, supportedServiceTypes, supportedSpicyLevels);
+    }
+
+    private static Candidate candidate(String candidateId, boolean available, double price, List<String> allergenIds,
+                                        List<String> supportedServiceTypes, List<String> supportedSpicyLevels) {
         return new Candidate(
             candidateId,
             candidateId + "-name",
             "chicken-store",
-            true,
+            available,
             "PUBLIC",
             price,
             candidateId + " 설명",

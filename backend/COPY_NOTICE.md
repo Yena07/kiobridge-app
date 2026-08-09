@@ -4,9 +4,13 @@
 로컬에서 프론트와 붙여 보려고 그대로 복사해 둔 것입니다.
 
 ```
-원본   watTHEBUG/kioBridge  dev  3391987  [FEAT] orchestrator구현 (#43)
+원본   watTHEBUG/kioBridge  dev  c1817fd  [FIX] 통합 테스트 중 버그 수정 (#45)
 복사   2026-08-09
 ```
+
+빌드 산출물(`build/`, `.gradle/`)은 복사하지 않습니다. 만들어지는 것이라
+저장소에 둘 이유가 없고, 팀 저장소도 무시합니다. 그래서 이 폴더는 **소스 기준으로**
+팀 `dev` 와 같습니다.
 
 ## 여기서 고치지 마세요
 
@@ -52,8 +56,11 @@ npm run dev:team
 
 `dev:team` 은 두 가지를 한다.
 
-- `VITE_BACKEND=team` — `client.ts` 가 목 대신 `createTeamBackend()` 를 쓴다.
+- `--mode team` — `client.ts` 가 목 대신 `createTeamBackend()` 를 쓴다.
 - Vite 개발 서버가 `/api/bff` 를 `KIOBRIDGE_API_BASE`(기본 `http://localhost:8080`)로
   넘긴다. 배포본의 BFF 함수가 하는 일을 개발 서버가 대신하는 것이라 CORS 가 없다.
+
+화면 오른쪽 아래에 **실서버에 붙어 있습니다** 패널이 뜨고, 오간 요청이 한 줄씩 쌓입니다.
+목으로 돌면 요청이 아예 없으므로 그 패널이 곧 증거입니다.
 
 `npm run dev` 는 그대로 목으로 돕니다.

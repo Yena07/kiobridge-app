@@ -29,6 +29,7 @@ import java.util.Objects;
 public class CandidateFilterService {
 
     private static final String BLOCK = "BLOCK";
+    private static final String CANDIDATE_UNAVAILABLE = "CANDIDATE_UNAVAILABLE";
 
     private final RuleEvaluator ruleEvaluator;
     private final ChickenStoreExclusionMessages exclusionMessages;
@@ -54,6 +55,18 @@ public class CandidateFilterService {
         Map<String, List<RuleEvaluationResult>> reconfirmationsByCandidateId = new LinkedHashMap<>();
 
         for (Candidate candidate : candidates) {
+            // available === false는 CompatibilityRule과 무관한, Kit이 정의한 별도의 STEP4 하드 제외 기준이다
+            // (ERROR_CATALOG.md: CANDIDATE_UNAVAILABLE). 품절 후보는 규칙 평가 자체를 생략하고 바로 제외한다.
+            if (Boolean.FALSE.equals(candidate.available())) {
+                excluded.add(new ExcludedCandidate(
+                    candidate.candidateId(),
+                    CANDIDATE_UNAVAILABLE,
+                    "available=false",
+                    exclusionMessages.resolve(CANDIDATE_UNAVAILABLE, null)
+                ));
+                continue;
+            }
+
             boolean blocked = false;
             List<RuleEvaluationResult> warnings = new ArrayList<>();
             List<RuleEvaluationResult> reconfirmations = new ArrayList<>();
