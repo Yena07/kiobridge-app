@@ -20,10 +20,32 @@
 
 ```bash
 npm i
-npm run dev      # 개발 서버
+npm run dev      # 개발 서버 (목으로 구동)
 npm run build    # 빌드
 npm test         # 테스트
 npm run typecheck
+```
+
+### 실제 백엔드로 붙여 볼 때
+
+킷 → 백엔드 → 프론트 순서로 띄웁니다. **킷이 먼저입니다** — 백엔드가 부팅하며 킷을 부릅니다.
+
+```bash
+cd <킷> && npm run start:api        # :4000
+cd backend && ./gradlew bootRun     # :8080  (JDK 21)
+npm run dev:team                    # :5199  목이 아니라 팀 백엔드로
+```
+
+붙었는지 확인하는 명령이 따로 있습니다.
+
+```bash
+npm run check:backend
+```
+
+앱이 부르는 경로를 앱이 부르는 순서로 불러 보고, 200 인지만이 아니라 **후보에 이름이 있는지·품절이 섞였는지·실제로 담기는지**까지 봅니다. 배포본을 볼 때는 주소를 넘깁니다.
+
+```bash
+node tools/check-backend.mjs https://kiobridge-app.vercel.app
 ```
 
 Node 20 LTS 또는 22 LTS. **24 이상은 쓰지 마세요** (시뮬레이션 킷 공식 지원 범위 밖).
@@ -39,6 +61,7 @@ Node 20 LTS 또는 22 LTS. **24 이상은 쓰지 마세요** (시뮬레이션 �
 | `src/domain/catalog.tsx` | 장소별 질문 목록 (시뮬레이션 킷 fixture 축과 일치) |
 | `src/design/tokens.ts` | 색·타이포 (WCAG AA 통과값) |
 | `api/bff.ts` | 백엔드로 대신 보내 주는 서버 함수. 이것 덕분에 CORS 가 없습니다 |
+| `tools/check-backend.mjs` | 백엔드가 제대로 붙었는지 한 번에 확인 |
 | `backend/` | **팀 백엔드 사본** — 로컬에서 붙여 보려고 복사만 해 둔 것. 여기서 고치지 않습니다 ([COPY_NOTICE](backend/COPY_NOTICE.md)) |
 
 ## 백엔드 붙이기
