@@ -130,3 +130,78 @@ export function toChickenStoreContext(p: ProfileData): ChickenStoreSessionContex
 
 /** 백엔드가 이 프로필을 다룰 수 있는가. 지금 대응 타입이 있는 건 닭강정집뿐이다. */
 export const 백엔드가아는장소 = (p: ProfileData): boolean => p.place === "음식점";
+
+
+// ─── 정규화 경로에 넣을 원자료 ────────────────────────────────────────────────
+//
+// 백엔드에 정규화 경로가 따로 있다(profile-normalizations · session-context-normalizations).
+// 거기에 넣으면 서버가 CanonicalProfile 을 만들어 주고, 킷 스키마로 검증까지 해 준다.
+// providerId 같은 값도 서버 설정(kiobridge.team-id)에서 채워 주므로 우리가 짐작하지 않는다.
+//
+// 위의 toCanonicalProfile·toChickenStoreContext 는 그 경로를 못 쓸 때를 위한 대비책이다.
+
+export interface ProfileNormalizationInput {
+  profileId: string;
+  collectionChannel: "WEB_FORM";
+  collectedAt: string;
+  accessibility: CanonicalProfile["accessibility"];
+  interaction: CanonicalProfile["interaction"];
+  consent: CanonicalProfile["consent"];
+}
+
+export interface ContextNormalizationInput {
+  contextInput: {
+    serviceType: ServiceType;
+    spicyLevel: SpicyLevel;
+    boneType: BoneType;
+    cupOption: CupOption;
+    quantity?: number;
+    allergenIds: AllergenId[];
+  };
+  /**
+   * 이 값들을 어떻게 얻었는지.
+   *
+   * 이 앱에서는 사용자가 화면에서 직접 눌러 고른다. 추론한 게 아니라
+   * 확신도 1.0 · 사용자 확인 완료가 사실이다. 낮춰 적으면 서버가
+   * 재확인을 요구하는데, 이미 사용자가 고른 것을 또 묻게 된다.
+   */
+  collectionMetadata: { source: "WEB_FORM"; confidence: number; confirmedByUser: boolean; capturedAt?: string };
+}
+
+export function toProfileNormalizationInput(
+  p: ProfileData,
+  opts: { collectedAt?: string; largeText?: boolean } = {},
+): ProfileNormalizationInput {
+  const c = toCanonicalProfile(p, opts);
+  // providerId 와 dataClassification 은 서버가 채운다. 보내지 않는다.
+  return {
+    profileId: c.profileId,
+    collectionChannel: c.source.collectionChannel,
+    collectedAt: c.source.collectedAt,
+    accessibility: c.accessibility,
+    interaction: c.interaction,
+    consent: c.consent,
+  };
+}
+
+export function toContextNormalizationInput(
+  p: ProfileData,
+  opts: { capturedAt?: string } = {},
+): ContextNormalizationInput {
+  const ctx = toChickenStoreContext(p);
+  const { quantity, ...나머지 } = ctx.preferences;
+  return {
+    contextInput: {
+      ...나머지,
+      // 수량은 @Min(1) 이라 null 을 보내면 거절당한다. 안 고르면 아예 뺀다.
+      ...(quantity == null ? {} : { quantity }),
+      allergenIds: ctx.hardConstraints.allergenIds,
+    },
+    collectionMetadata: {
+      source: "WEB_FORM",
+      confidence: 1,
+      confirmedByUser: true,
+      ...(opts.capturedAt ? { capturedAt: opts.capturedAt } : {}),
+    },
+  };
+}

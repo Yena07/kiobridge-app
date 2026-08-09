@@ -385,26 +385,60 @@ const 목추천 = {
   requiresReconfirmation: false,
 };
 
+/** 서버가 정규화해서 돌려주는 값. 이걸 그대로 다음 호출에 쓴다. */
+const 정규화응답 = {
+  프로필: {
+    status: "VALID",
+    profile: {
+      profileId: "p1", dataClassification: "SYNTHETIC_PROFILE",
+      // providerId 는 서버 설정에서 온다. 프론트가 짐작하지 않는다.
+      source: { collectionChannel: "WEB_FORM", providerId: "WHATTHEBUG", collectedAt: "2026-08-01T05:30:00Z" },
+      accessibility: {}, interaction: {}, consent: {},
+    },
+    contractValidation: { valid: true, errors: [] },
+  },
+  맥락: {
+    status: "VALID",
+    sessionContext: {
+      intent: { task: "ORDER_FOOD" },
+      preferences: { serviceType: "TAKE_OUT", spicyLevel: "HOT", boneType: "BONELESS", quantity: 2 },
+      hardConstraints: { allergenIds: [] },
+    },
+    reconfirmationFields: [],
+    contractValidation: { valid: true, errors: [] },
+  },
+};
+
+/** 경로를 보고 답한다. 순서에 기대면 정규화가 끼는 순간 전부 어긋난다. */
+const 경로별응답 = (over: Record<string, unknown> = {}) => (url: string, body: Record<string, unknown>) => {
+  for (const [조각, 값] of Object.entries(over)) if (url.includes(조각)) return 값;
+  if (url.includes("profile-normalizations")) return 정규화응답.프로필;
+  if (url.includes("session-context-normalizations")) return 정규화응답.맥락;
+  if (url.includes("candidate-filters")) return { eligibleCandidates: [], excludedCandidates: [] };
+  if (url.includes("recommendations")) return 목추천;
+  if (body.userDecision) return 실행성공;
+  return {};
+};
+
 describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다", () => {
-  const 붙이기 = (응답들: unknown[]) => {
-    let i = 0;
-    globalThis.fetch = vi.fn(async () => 응답(응답들[Math.min(i++, 응답들.length - 1)])) as typeof fetch;
+  const 붙이기 = (over: Record<string, unknown> = {}) => {
+    const 답 = 경로별응답(over);
+    globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) =>
+      응답(답(String(u), JSON.parse(String(init?.body ?? "{}"))))) as unknown as typeof fetch;
     return createTeamBackend("/api/bff");
   };
 
-  /** 승인 전에 추천을 한 번 받아 둔다. 실제 흐름과 같은 순서다. */
+  /** 승인 전에 매핑을 한 번 거친다. 실제 흐름과 같은 순서다. */
   const 승인 = async (b: ReturnType<typeof createTeamBackend>, 실행응답: unknown) => {
-    globalThis.fetch = vi.fn(async (_u: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body ?? "{}"));
-      // 승인 요청에는 userDecision 이 실려 있다. 그걸로 어느 호출인지 가른다.
-      return 응답(body.userDecision ? 실행응답 : 목추천);
-    }) as unknown as typeof fetch;
+    const 답 = 경로별응답({ "orchestrator/approve": 실행응답 });
+    globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) =>
+      응답(답(String(u), JSON.parse(String(init?.body ?? "{}"))))) as unknown as typeof fetch;
     await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
     await b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 });
   };
 
   it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
-    const b = 붙이기([]);
+    const b = 붙이기();
     await 승인(b, 실행성공);
     expect(await b.validate("s1")).toEqual({ valid: true });
     expect(await b.execute("s1")).toEqual({ planId: "run_77" });
@@ -418,21 +452,21 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
   });
 
   it("증거를 따로 조회하지 않는다 — 요청은 한 번뿐이다", async () => {
-    const b = 붙이기([]);
+    const b = 붙이기();
     await 승인(b, 실행성공);
     const 승인후 = (globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
     await b.validate("s1");
     await b.execute("s1");
     await b.getEvidence("s1");
-    // 추천 1번 + 승인 1번. 증거를 따로 조회하지 않으므로 그 뒤로는 늘지 않는다.
-    expect(승인후).toBe(2);
-    expect((globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(2);
+    // 정규화 2번 + 추천 1번 + 승인 1번. 증거를 따로 조회하지 않으므로 그 뒤로는 늘지 않는다.
+    expect(승인후).toBe(4);
+    expect((globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(4);
   });
 
   it("검증에서 막히면 실행하지 않았다는 사실이 그대로 올라온다", async () => {
     // valid:false 는 백엔드가 실행 단계로 가지 않았다는 뜻이다.
     // 사용자에게 "다시 해 보세요" 라고 말할 수 있는 근거가 이것뿐이다.
-    const b = 붙이기([]);
+    const b = 붙이기();
     await 승인(b, {
       valid: false,
       validation: { valid: false, errors: [{ path: "$.plan[0]", code: "BAD", message: "담을 수 없는 메뉴예요" }] },
@@ -445,7 +479,7 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
   });
 
   it("안전 중단만 중단 화면으로 보낸다", async () => {
-    const b = 붙이기([]);
+    const b = 붙이기();
     await 승인(b, {
       valid: true,
       evidence: {
@@ -461,14 +495,14 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
 
   it("그냥 실패는 중단 화면으로 보내지 않는다", async () => {
     // SAFETY_STOP 이 아닌 FAIL 은 "직원을 불러 주세요" 를 띄울 근거가 아니다.
-    const b = 붙이기([]);
+    const b = 붙이기();
     await 승인(b, { valid: true, evidence: { result: "FAIL", stopType: "NONE", executedActions: [] } });
     expect((await b.getEvidence("s1")).state).toBe("running");
   });
 
   it("cartItems 가 없는 환경에서는 개수·금액을 지어내지 않는다", async () => {
     // 닭강정집 말고는 reviewSnapshot 이 라벨-값 쌍만 준다.
-    const b = 붙이기([]);
+    const b = 붙이기();
     await 승인(b, {
       valid: true,
       evidence: { result: "PASS", executedActions: [{}], reviewSnapshot: { "접수 번호": "A-12" } },
@@ -479,7 +513,7 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
   });
 
   it("QR 로 읽은 claimCode 를 세션 요청에 함께 보낸다", async () => {
-    const b = 붙이기([{ sessionId: "sess_1", initialState: "IDLE", submissionEndpoint: "/x" }]);
+    const b = 붙이기({ "simulation/session": { sessionId: "sess_1", initialState: "IDLE", submissionEndpoint: "/x" } });
     await b.createSession({ environmentId: "chicken-store", claimCode: "kb_demo" });
     const [, init] = (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
     expect(JSON.parse(String(init.body))).toEqual({ environmentId: "chicken-store", claimCode: "kb_demo" });
@@ -487,30 +521,66 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
 });
 
 describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
-  const 캡처 = (응답들: unknown[]) => {
+  /** 정규화를 뺀 '진짜 호출' 만 모은다. 순서가 아니라 경로로 답한다. */
+  const 캡처 = (over: Record<string, unknown> = {}) => {
     const calls: { url: string; body: Record<string, unknown> }[] = [];
-    let i = 0;
+    const 답 = 경로별응답(over);
     globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) => {
-      calls.push({ url: String(u), body: JSON.parse(String(init?.body ?? "{}")) });
-      return 응답(응답들[Math.min(i++, 응답들.length - 1)]);
+      const url = String(u);
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      if (!url.includes("-normalizations")) calls.push({ url, body });
+      return 응답(답(url, body));
     }) as unknown as typeof fetch;
     return { b: createTeamBackend("/api/bff"), calls };
   };
 
-  it("후보 필터가 한글 선택지를 enum 으로 바꿔 보낸다", async () => {
-    const { b, calls } = 캡처([{ eligibleCandidates: [], excludedCandidates: [] }]);
+  it("한글 선택지를 enum 으로 바꿔 정규화 경로로 보낸다", async () => {
+    // 표준형은 서버가 만든다. 프론트는 원자료를 enum 으로 바꿔 넣기만 한다.
+    const 정규화요청: Record<string, unknown>[] = [];
+    const 답 = 경로별응답();
+    globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      if (String(u).includes("session-context-normalizations")) 정규화요청.push(body);
+      return 응답(답(String(u), body));
+    }) as unknown as typeof fetch;
+    const b = createTeamBackend("/api/bff");
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
-    expect(calls[0].url).toBe("/api/bff/api/v1/candidate-filters");
-    expect((calls[0].body.sessionContext as Record<string, unknown>).preferences).toEqual({
+
+    expect(정규화요청[0].contextInput).toEqual({
       serviceType: "TAKE_OUT", spicyLevel: "HOT", boneType: "BONELESS",
-      cupOption: "NO_PREFERENCE", quantity: 2,
+      cupOption: "NO_PREFERENCE", quantity: 2, allergenIds: [],
     });
+    // 사용자가 화면에서 직접 골랐다. 추론한 게 아니므로 확신도를 낮춰 적지 않는다.
+    expect(정규화요청[0].collectionMetadata).toMatchObject({ source: "WEB_FORM", confidence: 1, confirmedByUser: true });
+  });
+
+  it("정규화가 만든 표준형을 그대로 다음 호출에 쓴다", async () => {
+    // 프론트가 만든 것을 보내면 providerId 를 짐작해야 하고, 킷 스키마에 맞는지
+    // 아무도 확인하지 않는다. 서버가 만들어 준 것을 그대로 쓴다.
+    const { b, calls } = 캡처();
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    const 추천요청 = calls.find((c) => c.url.includes("recommendations"))!;
+    expect((추천요청.body.profile as Record<string, unknown>).source)
+      .toMatchObject({ providerId: "WHATTHEBUG" });
+  });
+
+  it("서버가 못 쓰겠다고 하면 거기서 멈춘다", async () => {
+    // 조용히 넘기면 승인 직전에 터진다. 그때는 되돌릴 게 더 많다.
+    const { b } = 캡처({
+      "profile-normalizations": {
+        status: "INVALID", profile: {},
+        contractValidation: { valid: false, errors: [{ message: "profileId 가 비었습니다" }] },
+      },
+    });
+    await expect(
+      b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 }),
+    ).rejects.toThrow("profileId 가 비었습니다");
   });
 
   it("후보 필터 응답에서 이름·가격을 만든다", async () => {
     // 추천 응답에는 이름이 없다. 이게 없으면 화면에 상품 ID 밖에 보여 줄 게 없고
     // 그건 실격 조건이다.
-    const { b } = 캡처([{
+    const { b } = 캡처({ "candidate-filters": {
       eligibleCandidates: [
         { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000 },
         { candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500 },
@@ -521,7 +591,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
         explanation: "ruleId=CHICKEN_ALLERGEN_HARD_CONSTRAINT, sourceValue=[PEANUT]",
         reasonText: "[PEANUT] 알레르기와 겹쳐서 제외됐어요.",
       }],
-    }]);
+    } });
     const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
     expect(r.survivingCandidateIds).toEqual(["CHICKEN-001", "CHICKEN-003"]);
     expect(r.display?.["CHICKEN-001"]).toEqual({ displayName: "매운 순살 닭강정", priceText: "6,000원" });
@@ -533,13 +603,13 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   it("지금 팔지 않는 후보는 담을 수 있는 목록에서 뺀다", async () => {
     // 심사 필수 기준: 선택 불가능 후보 추천 0건.
     // 서버가 available:false 를 eligibleCandidates 에 남겨 보내는 걸 확인했다.
-    const { b } = 캡처([{
+    const { b } = 캡처({ "candidate-filters": {
       eligibleCandidates: [
         { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
         { candidateId: "CHICKEN-008", name: "품절 닭강정", price: 6000, available: false },
       ],
       excludedCandidates: [],
-    }]);
+    } });
     const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
     expect(r.survivingCandidateIds).toEqual(["CHICKEN-001"]);
     expect(r.display?.["CHICKEN-008"]).toBeUndefined();
@@ -548,16 +618,16 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   });
 
   it("품절 후보가 추천에 실려 와도 화면으로 내보내지 않는다", async () => {
-    const { b } = 캡처([
-      {
+    const { b } = 캡처({
+      "candidate-filters": {
         eligibleCandidates: [
           { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
           { candidateId: "CHICKEN-008", name: "품절 닭강정", price: 6000, available: false },
         ],
         excludedCandidates: [],
       },
-      { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-008"] },
-    ]);
+      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-008"] },
+    });
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
     expect(rec.alternativeCandidateIds).toEqual([]);
@@ -566,8 +636,8 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   it("후보가 들고 있는 값으로 조건별 일치를 만든다", async () => {
     // 이름 문자열로 짐작하지 않는다. 서버가 준 attributes 는 사용자가 고른 값과
     // 같은 어휘라 그대로 비교할 수 있다.
-    const { b } = 캡처([
-      {
+    const { b } = 캡처({
+      "candidate-filters": {
         eligibleCandidates: [{
           candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true,
           attributes: { spicyLevel: "HOT", boneType: "BONE" },
@@ -575,8 +645,8 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
         }],
         excludedCandidates: [],
       },
-      { ...목추천, recommendedCandidateId: "CHICKEN-003" },
-    ]);
+      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-003" },
+    });
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
     const 표 = Object.fromEntries(rec.matchedOptions.map((o) => [o.label, o]));
@@ -591,7 +661,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
 
   it("추천에는 생존 후보를 보내지 않는다 — 서버가 다시 계산한다", async () => {
     // 클라이언트가 보낸 필터 결과를 서버가 믿으면 알레르기 필터를 우회할 수 있다.
-    const { b, calls } = 캡처([목추천]);
+    const { b, calls } = 캡처();
     await b.recommend({
       environmentId: "chicken-store", profileId: "p1",
       survivingCandidateIds: ["CHICKEN-001"], profile: 목프로필,
@@ -603,7 +673,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   });
 
   it("승인은 orchestrator/approve 로 조각을 갖춰 보낸다", async () => {
-    const { b, calls } = 캡처([목추천, 실행성공]);
+    const { b, calls } = 캡처();
     await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
     await b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 });
 
@@ -620,7 +690,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   });
 
   it("사용자가 고른 후보가 1순위로 바뀌어 나간다", async () => {
-    const { b, calls } = 캡처([목추천, 실행성공]);
+    const { b, calls } = 캡처();
     await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
     await b.submit("s1", {
       pairingId: "s1", profileId: "p1", mappingResult: "clarification",
@@ -630,21 +700,21 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   });
 
   it("프로필 없이 부르면 조용히 넘어가지 않는다", async () => {
-    const { b } = 캡처([{}]);
+    const { b } = 캡처();
     await expect(b.filterCandidates({ environmentId: "chicken-store", profileId: "p1" })).rejects.toThrow();
     await expect(b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [] })).rejects.toThrow();
   });
 
   it("추천 없이 승인하면 거절한다", async () => {
     // 매핑을 건너뛰고 승인만 부르는 경로가 생기면 서버가 조립할 재료가 없다.
-    const { b } = 캡처([실행성공]);
+    const { b } = 캡처();
     await expect(
       b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 }),
     ).rejects.toThrow();
   });
 
   it("세션 응답의 environmentId 를 그대로 올린다", async () => {
-    const { b } = 캡처([{ sessionId: "s1", environmentId: "hospital", initialState: "X", submissionEndpoint: "/y" }]);
+    const { b } = 캡처({ "simulation/session": { sessionId: "s1", environmentId: "hospital", initialState: "X", submissionEndpoint: "/y" } });
     const s = await b.createSession({ environmentId: "chicken-store", claimCode: "kb" });
     // 화면이 보낸 값이 아니라 서버가 정한 값이 이긴다.
     expect(s.environmentId).toBe("hospital");

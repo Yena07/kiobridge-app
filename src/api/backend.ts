@@ -1,7 +1,10 @@
 ﻿import type {
   ApproveInput, CartResult, MappedOption, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
 } from "@/domain/types";
-import { toCanonicalProfile, toChickenStoreContext } from "@/api/canonical";
+import {
+  toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput,
+  type CanonicalProfile, type ChickenStoreSessionContext,
+} from "@/api/canonical";
 import { KioBridgeError, type KioBridgeApi } from "@/api/client";
 import { STEPS } from "@/domain/catalog";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
@@ -558,6 +561,52 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 추천 = new Map<string, RecommendationResponse>();
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
+  // 정규화를 거친 프로필·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
+  const 정규화됨 = new Map<string, { profile: CanonicalProfile; sessionContext: ChickenStoreSessionContext }>();
+
+  /**
+   * 서버의 정규화 경로를 거친다.
+   *
+   * 우리가 CanonicalProfile 을 직접 만들어 보내면 두 가지가 어긋난다.
+   *   - providerId 를 짐작해야 한다. 그건 서버 설정(kiobridge.team-id)에 있다.
+   *   - 킷 스키마에 맞는지 아무도 확인하지 않는다. 승인 때 가서야 터진다.
+   *
+   * 정규화 경로는 원자료를 받아 표준형을 만들어 주고 킷으로 검증까지 해 준다.
+   * 그걸 그대로 후보 필터·추천·승인에 쓴다. 결과는 프로필당 한 번만 받아 둔다.
+   */
+  const 정규화 = async (environmentId: string, p: ProfileData) => {
+    const 있음 = 정규화됨.get(p.id);
+    if (있음) return 있음;
+
+    const pr = await 보내기<{
+      status: string; profile: CanonicalProfile;
+      contractValidation?: { valid: boolean; errors?: { message?: string }[] };
+    }>("/api/v1/profile-normalizations", { environmentId, profileInput: toProfileNormalizationInput(p) });
+
+    const sr = await 보내기<{
+      status: string; sessionContext: ChickenStoreSessionContext;
+      reconfirmationFields?: { path?: string; message?: string }[];
+      contractValidation?: { valid: boolean; errors?: { message?: string }[] };
+    }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p) });
+
+    // 서버가 못 쓰겠다고 하면 거기서 멈춘다. 조용히 넘기면 승인 직전에 터진다.
+    for (const r of [pr, sr]) {
+      if (r.status === "INVALID" || r.contractValidation?.valid === false) {
+        const 첫줄 = r.contractValidation?.errors?.[0]?.message;
+        throw new KioBridgeError("PROFILE_INVALID", 첫줄 ?? "저장하신 조건을 서버가 읽지 못했어요", false);
+      }
+    }
+    // 재확인이 필요하다는 건 우리가 확신도를 낮게 적었을 때만 나온다.
+    // 이 앱은 사용자가 직접 눌러 고르므로 여기 걸리면 보내는 쪽이 잘못된 것이다.
+    if (sr.status === "RECONFIRMATION_REQUIRED") {
+      const 첫줄 = sr.reconfirmationFields?.[0]?.message;
+      throw new KioBridgeError("RECONFIRM_REQUIRED", 첫줄 ?? "저장하신 조건을 다시 확인해 주세요", true);
+    }
+
+    const out = { profile: pr.profile, sessionContext: sr.sessionContext };
+    정규화됨.set(p.id, out);
+    return out;
+  };
 
   /**
    * reviewSnapshot 을 장바구니 요약으로 옮긴다.
@@ -616,9 +665,8 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      */
     async filterCandidates({ environmentId, profile }) {
       if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
-      const r = await 보내기<CandidateFilterResponse>("/api/v1/candidate-filters", {
-        environmentId, sessionContext: toChickenStoreContext(profile),
-      });
+      const { sessionContext } = await 정규화(environmentId, profile);
+      const r = await 보내기<CandidateFilterResponse>("/api/v1/candidate-filters", { environmentId, sessionContext });
 
       // 지금 팔지 않는 것은 후보가 아니다. 심사 필수 기준이 '선택 불가능 후보
       // 추천 0건' 이고, 서버가 available:false 를 남겨 보내는 걸 확인했다.
@@ -655,10 +703,9 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      */
     async recommend({ environmentId, profile }) {
       if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      const 정 = await 정규화(environmentId, profile);
       const r = await 보내기<RecommendationResponse>("/api/v1/recommendations", {
-        environmentId,
-        profile: toCanonicalProfile(profile),
-        sessionContext: toChickenStoreContext(profile),
+        environmentId, profile: 정.profile, sessionContext: 정.sessionContext,
       });
       추천.set(profile.id, r);
       const 알려진후보 = 후보.get(profile.id);
@@ -709,10 +756,14 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const rec = 추천.get(profile.id);
       if (!rec) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
 
+      // 매핑 때 받아 둔 정규화 결과를 그대로 쓴다. 여기서 다시 만들면
+      // 확인 화면이 본 조건과 실제로 제출되는 조건이 갈라질 수 있다.
+      const 정 = 정규화됨.get(profile.id);
+      if (!정) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
       const r = await 보내기<ExecuteResult>("/internal/orchestrator/approve", {
         sessionId,
-        profile: toCanonicalProfile(profile),
-        sessionContext: toChickenStoreContext(profile),
+        profile: 정.profile,
+        sessionContext: 정.sessionContext,
         // 사용자가 다른 후보를 골랐으면 그것이 1순위다. 서버가 조립할 때 그 값을 쓴다.
         recommendation: input.candidateId ? { ...rec, recommendedCandidateId: input.candidateId } : rec,
         // note 는 선택 필드다. null 을 보내면 킷 스키마가 'must be string' 으로 막는다.
