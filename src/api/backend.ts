@@ -434,6 +434,9 @@ export function createApi(
       // 화면이 주문에 쓰라고 등록해 둔 주문표 사본. 여기 남으면 '모두 지워요' 가
       // 사실이 아니다. 목(mockApi)은 이미 지우고 있었고 이 경로만 빠져 있었다.
       clearSheets();
+      // 오간 기록에는 요청.응답 본문이 통째로 들어 있다 — 고른 조건도 거기 있다.
+      // 화면에서 지웠다고 말해 놓고 구석 패널에 그대로 남으면 그 말이 거짓이 된다.
+      연동기록.비우기();
       if (backend.forgetSession) {
         await Promise.all((ids.length > 0 ? ids : [""]).map((id) => backend.forgetSession!(id)));
       }
@@ -453,6 +456,9 @@ export function createApi(
         return {
           state: "aborted", steps,
           abort: { ...(e.abort ?? { code: "UNKNOWN", title: "안전을 위해 중단되었습니다", message: "예상하지 못한 화면이 감지되어 작동을 멈췄어요.", userAction: "직원 초기화를 기다려 주세요" }), recoverable: false },
+          // 중단됐을 때야말로 "이게 키오스크가 한 말이다" 를 보여 줄 자리다.
+          // 잘 된 경우에만 싣고 여기서 빠뜨리면, 정작 확인이 필요한 쪽이 비어 있다.
+          ...(e.serverStatus ? { serverStatus: e.serverStatus } : {}),
         };
       }
       if (e.state === "cart_ready") {
@@ -716,7 +722,15 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       throw new KioBridgeError(b.code ?? `HTTP_${res.status}`, b.message ?? "요청을 처리하지 못했어요", res.status >= 500);
     }
     if (t === null) throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
-    return (t ? JSON.parse(t) : undefined) as T;
+    if (!t) return undefined as T;
+    try {
+      return JSON.parse(t) as T;
+    } catch {
+      // 200 인데 JSON 이 아닌 것(프록시가 끼워 넣은 HTML 같은 것)이 올 수 있다.
+      // 막아 두지 않으면 SyntaxError 가 그대로 올라가 "Unexpected token '<'" 가
+      // 어르신 화면에 뜬다. account.ts 는 이미 막아 두었고 여기만 빠져 있었다.
+      throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
+    }
   };
 
   // 승인이 조립·제출·검증·실행을 한 번에 하므로 3단계로 나눌 수 없다. 응답을
@@ -1103,8 +1117,18 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         // 또 쓰면 같은 말이 두 번 나온다. 그래서 성공했을 때는 왜 이 메뉴였는지를
         // 말해 주는 recommendation 만 한 줄로 올린다.
         ...(state === "cart_ready" && 요약?.recommendation ? { note: 요약.recommendation } : {}),
-        // 서버 문장을 그대로 싣는다. 화면이 '서버가 보내온 말' 이라고 밝히고 인용한다.
-        ...(요약?.status ? { serverStatus: 요약.status } : {}),
+        /*
+         * 서버 문장을 그대로 싣되, 아는 문장만 싣는다.
+         *
+         * 화면은 이 값을 따옴표로 감싸 그대로 보여 준다. 서버가 언젠가 결제 완료
+         * 같은 문장을 담아 보내면 그게 곧바로 화면에 뜬다 — 결제 표현은 있기만 해도
+         * 실격이라, 서버를 믿고 통과시킬 수 있는 값이 아니다.
+         *
+         * 앱말투 표에 있는 넷만 인용한다. 모르는 문장은 아예 안 보여 준다 —
+         * 그 경우 화면은 원래 우리 문구로 말한다. 서버가 문구를 바꾸면 이 줄이
+         * 조용히 사라지는데, 잘못된 말을 띄우는 것보다 안 띄우는 편이 낫다.
+         */
+        ...(요약?.status && 앱말투[요약.status] ? { serverStatus: 요약.status } : {}),
         ...(state === "cart_ready" ? { cart: 장바구니(e.reviewSnapshot) } : {}),
         ...(state === "aborted"
           ? {

@@ -12,7 +12,7 @@
  * 안 남겼다는 사실은 '가림' 으로 표시해서 '비어 있는 것' 과 구분한다.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { 연동기록, 팀백엔드모드, type 오간것 } from "@/api/devlog";
 
 // ─── 경로마다 누가 만들었고 무엇을 하는지 ─────────────────────────────────────
@@ -218,7 +218,10 @@ function 한줄({ x, 방금 = false }: { x: 오간것; 방금?: boolean }) {
    */
   const [새것, 새것으로] = useState(방금);
   useEffect(() => {
-    if (!방금) return;
+    // 방금 이 참에서 거짓으로 바뀌면 앞 이펙트의 정리 함수가 타이머를 이미 껐다.
+    // 그때 그냥 반환하면 새것 이 참으로 남아 밝은 채로 굳는다 — 2초 안에 다음
+    // 요청이 나가면 앞 줄이 계속 밝아서, 무엇이 새로 온 것인지 구분이 안 된다.
+    if (!방금) { 새것으로(false); return; }
     새것으로(true);
     const t = setTimeout(() => 새것으로(false), 2000);
     return () => clearTimeout(t);
@@ -241,6 +244,7 @@ function 한줄({ x, 방금 = false }: { x: 오간것; 방금?: boolean }) {
           display: "flex", gap: 10, alignItems: "baseline", width: "100%", textAlign: "left",
           background: "none", border: "none", color: "inherit", font: "inherit",
           padding: "8px 0", cursor: "pointer",
+          minHeight: 44,
         }}
       >
         <span style={{ color: 성공 ? 색.좋음 : 색.나쁨, width: 34, flexShrink: 0 }}>{String(x.상태)}</span>
@@ -314,13 +318,33 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
   // 나란히 볼 때는 오간 것이 주인공이라 설명표를 접어 둔다. 겹으로 볼 때는 펼친다.
   const [설명펼침, 설명펼치기] = useState(!나란히);
   useEffect(() => 연동기록.구독(() => 다시그리기((n) => n + 1)), []);
+
+  /*
+   * 겹 모드는 앱 전체를 덮는다. 그런데 Esc 도 안 먹고 포커스도 안 옮기면,
+   * 키보드만 쓰는 사람은 덮인 화면 뒤쪽 버튼들로 Tab 이 돌아다니게 된다.
+   * 자기가 어디에 있는지도, 어떻게 닫는지도 알 수 없다.
+   *
+   * 나란히 모드는 덮지 않으므로 그대로 둔다 — 앱을 쓰면서 보라고 만든 것이라
+   * 포커스를 뺏으면 오히려 방해가 된다.
+   */
+  const 뿌리 = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (나란히 || !onClose) return;
+    뿌리.current?.focus({ preventScroll: true });
+    const 키 = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", 키);
+    return () => window.removeEventListener("keydown", 키);
+  }, [나란히, onClose]);
   const 목록 = 연동기록.읽기();
   const 성공 = 목록.filter((x) => typeof x.상태 === "number" && x.상태 < 400).length;
   // 방금 들어온 줄을 잠깐 밝게 둔다. 눌렀을 때 무언가 나갔다는 걸 눈으로 잡으라고.
   const 최신 = 목록[0]?.시각;
 
   return (
-    <div style={나란히 ? {
+    <div
+      ref={뿌리}
+      {...(나란히 ? {} : { tabIndex: -1, role: "dialog" as const, "aria-modal": true, "aria-label": "백엔드에서 온 것" })}
+      style={나란히 ? {
       // 앱 옆에 세워 둔다. 겹치지 않으므로 앱을 쓰면서 그대로 볼 수 있다.
       width: "min(460px, 40vw)", alignSelf: "stretch", maxHeight: "calc(100vh - 48px)",
       overflowY: "auto", borderRadius: 12,
@@ -378,6 +402,7 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
               style={{
                 background: "none", border: `1px solid ${색.선}`, borderRadius: 6,
                 color: 색.흐림, font: "inherit", padding: "2px 10px", cursor: "pointer",
+                minHeight: 44, minWidth: 44,
               }}
             >
               비우기
@@ -446,7 +471,13 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
                 줄을 누르면 담당·역할과 함께 보낸 것·받은 것이 그대로 펼쳐집니다.
               </p>
             )}
-            {목록.map((x) => <한줄 key={`${x.시각}-${x.경로}`} x={x} 방금={x.시각 === 최신} />)}
+            {/*
+              key 에 순번을 넣는다. Date.now() 는 밀리초라 같은 밀리초에 같은 경로로
+              두 번 나가면 key 가 겹치고, React 가 두 줄을 같은 것으로 보아 상태를
+              엉뚱하게 물려준다. 목록은 새것이 앞에 붙는 구조라 순번도 밀리지만,
+              겹치는 것보다는 낫다.
+            */}
+            {목록.map((x, i) => <한줄 key={`${x.시각}-${x.경로}-${i}`} x={x} 방금={x.시각 === 최신} />)}
           </>
         )}
       </div>

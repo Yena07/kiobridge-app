@@ -6,6 +6,7 @@ import { STEPS } from "@/domain/catalog";
 // backend.ts 도 이 파일의 KioBridgeError 를 가져간다(순환). 둘 다 함수 안에서만
 // 쓰므로 평가 시점에는 서로를 건드리지 않는다. 최상위에서 쓰면 그때 깨진다.
 import { createApi, createTeamBackend } from "@/api/backend";
+import { 연동기록 } from "@/api/devlog";
 
 export class KioBridgeError extends Error {
   constructor(readonly code: string, message: string, readonly recoverable: boolean) {
@@ -304,6 +305,9 @@ export const mockApi: KioBridgeApi = {
   async forgetAll() {
     // clearSheets 가 profiles·sessions·plans 를 모두 비운다.
     clearSheets();
+    // 오간 기록도 함께 비운다. 목에서는 나가는 요청이 없어 보통 비어 있지만,
+    // 두 경로가 하는 일이 다르면 언젠가 한쪽만 고치게 된다.
+    연동기록.비우기();
   },
 
   async getPlanStatus(planId) {

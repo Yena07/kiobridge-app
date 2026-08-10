@@ -2913,6 +2913,8 @@ function 연동표시({ onOpenLog, onOpenSide }: { onOpenLog: () => void; onOpen
           style={{
             flex: 1, background: "none", border: "1px solid #232326",
             borderRadius: 6, color: "#e8e8ea", font: "inherit", padding: "5px 0", cursor: "pointer",
+            // 심사 항목이 터치 영역 최소 44x44 다. 개발용 패널도 같은 화면 안에 있다.
+            minHeight: 44,
           }}
         >
           앱 옆에 띄우기
@@ -2923,6 +2925,7 @@ function 연동표시({ onOpenLog, onOpenSide }: { onOpenLog: () => void; onOpen
           style={{
             flex: 1, background: "none", border: "1px solid #232326",
             borderRadius: 6, color: "#e8e8ea", font: "inherit", padding: "5px 0", cursor: "pointer",
+            minHeight: 44,
           }}
         >
           크게 보기
@@ -3357,7 +3360,9 @@ export default function App() {
         앱을 덮는 겹으로 띄운다. 다른 주소로 옮기면 페이지가 새로 뜨고 기록은
         메모리에만 있어서 그때 다 사라진다 — 주문을 마치고 보러 가면 늘 0건이 된다.
       */}
-      {로그모드 === "겹" && <BackendLog onClose={() => set로그모드("닫힘")} />}
+      {로그모드 === "겹" && (
+        <BackendLog {...(팀백엔드모드 ? { onClose: () => set로그모드("닫힘") } : {})} />
+      )}
       {/*
         큰 글씨 모드. 화면 크기(휴대폰 틀)는 그대로 두고 안쪽 내용만 키운다.
         바깥 틀은 실제 크기(FRAME_W × FRAME_H)를 잡고, 안쪽은 그 크기를 배율로 나눠 잡는다.
@@ -3543,7 +3548,17 @@ export default function App() {
         그대로 볼 수 있다 — 눌러서 열어 봐야 하는 것과 달리, 누를 때마다
         무엇이 나가는지가 눈에 보인다.
       */}
-      {로그모드 === "나란히" && <BackendLog 나란히 onClose={() => set로그모드("닫힘")} />}
+      {/*
+        목 모드에서는 닫기를 주지 않는다.
+
+        여는 버튼은 연동표시 안에만 있고, 그 패널은 팀 백엔드 모드에서만 뜬다.
+        그래서 목으로 돌 때 ?log=side 로 열고 닫아 버리면 다시 여는 길이 없다 —
+        주소를 새로 치면 페이지가 새로 떠서 기록이 사라지므로 같은 자리로도 못 돌아간다.
+        여는 길이 없는 닫기 버튼은 두지 않는다.
+      */}
+      {로그모드 === "나란히" && (
+        <BackendLog 나란히 {...(팀백엔드모드 ? { onClose: () => set로그모드("닫힘") } : {})} />
+      )}
     </div>
   );
 }
