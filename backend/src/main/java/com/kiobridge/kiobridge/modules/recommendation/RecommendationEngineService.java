@@ -27,6 +27,9 @@ public class RecommendationEngineService {
     private static final String SPICY_LEVEL_MISMATCH_CODE = "SPICY_LEVEL_MISMATCH";
     private static final String SPICY_LEVEL_OPTION_KEY = "SPICY_LEVEL";
 
+    private static final String SERVICE_TYPE_PREFERENCE_RULE_ID = "CHICKEN_SERVICE_TYPE_PREFERENCE";
+    private static final String SPICY_LEVEL_PREFERENCE_RULE_ID = "CHICKEN_SPICY_LEVEL_PREFERENCE";
+
     private static final String SERVICE_TYPE_SCORE_KEY = "serviceTypeMatch";
     private static final String SPICY_LEVEL_SCORE_KEY = "spicyLevelMatch";
     private static final String PRICE_SCORE_KEY = "priceScore";
@@ -34,6 +37,7 @@ public class RecommendationEngineService {
     private static final double PREFERENCE_MATCH_BONUS = 1.0;
     private static final double PREFERENCE_MISMATCH_PENALTY = -0.3;
     private static final double PREFERENCE_PARTIAL_MISMATCH_PENALTY = -0.15;
+    private static final double PREFERENCE_UNKNOWN_SCORE = 0.0;
     private static final int ADJACENT_SPICY_LEVEL_DISTANCE = 1;
     private static final int UNRESOLVABLE_SPICY_LEVEL_DISTANCE = Integer.MAX_VALUE;
 
@@ -86,6 +90,8 @@ public class RecommendationEngineService {
 
         List<RuleEvaluationResult> recommendedWarnings =
             filterResult.warningsByCandidateId().getOrDefault(recommendedCandidateId, List.of());
+        List<RuleEvaluationResult> recommendedPasses =
+            filterResult.passesByCandidateId().getOrDefault(recommendedCandidateId, List.of());
         boolean recommendedNeedsReconfirmation =
             !filterResult.reconfirmationsByCandidateId().getOrDefault(recommendedCandidateId, List.of()).isEmpty();
 
@@ -97,7 +103,7 @@ public class RecommendationEngineService {
             buildAlternativeCandidateIds(rankedCandidates, recommendedCandidateId),
             filterResult.excludedCandidates(),
             topCandidate.scoreBreakdown(),
-            buildRecommendationReasons(recommendedWarnings, recommendedNeedsReconfirmation),
+            buildRecommendationReasons(recommendedWarnings, recommendedPasses, recommendedNeedsReconfirmation),
             buildUnmetConditions(recommendedWarnings, recommendedNeedsReconfirmation),
             confidence,
             requiresReconfirmation
@@ -122,29 +128,40 @@ public class RecommendationEngineService {
     private static ScoredCandidate scoreCandidate(Candidate candidate, ChickenStoreSessionContext ctx, CandidateFilterResult filterResult) {
         List<RuleEvaluationResult> warnings =
             filterResult.warningsByCandidateId().getOrDefault(candidate.candidateId(), List.of());
-        Map<String, Double> scoreBreakdown = buildScoreBreakdown(candidate, ctx, warnings);
+        List<RuleEvaluationResult> passes =
+            filterResult.passesByCandidateId().getOrDefault(candidate.candidateId(), List.of());
+        Map<String, Double> scoreBreakdown = buildScoreBreakdown(candidate, ctx, warnings, passes);
         double totalScore = scoreBreakdown.values().stream().mapToDouble(Double::doubleValue).sum();
         return new ScoredCandidate(candidate, totalScore, scoreBreakdown);
     }
 
-    private static Map<String, Double> buildScoreBreakdown(Candidate candidate, ChickenStoreSessionContext ctx, List<RuleEvaluationResult> warnings) {
+    private static Map<String, Double> buildScoreBreakdown(
+        Candidate candidate, ChickenStoreSessionContext ctx,
+        List<RuleEvaluationResult> warnings, List<RuleEvaluationResult> passes
+    ) {
         Map<String, Double> scoreBreakdown = new LinkedHashMap<>();
-        scoreBreakdown.put(SERVICE_TYPE_SCORE_KEY, scoreServiceType(warnings));
-        scoreBreakdown.put(SPICY_LEVEL_SCORE_KEY, scoreSpicyLevel(candidate, ctx, warnings));
+        scoreBreakdown.put(SERVICE_TYPE_SCORE_KEY, scoreServiceType(warnings, passes));
+        scoreBreakdown.put(SPICY_LEVEL_SCORE_KEY, scoreSpicyLevel(candidate, ctx, warnings, passes));
         scoreBreakdown.put(PRICE_SCORE_KEY, scorePrice(candidate, ctx));
         return Map.copyOf(scoreBreakdown);
     }
 
-    private static double scoreServiceType(List<RuleEvaluationResult> warnings) {
-        return hasWarning(warnings, SERVICE_TYPE_MISMATCH_CODE) ? PREFERENCE_MISMATCH_PENALTY : PREFERENCE_MATCH_BONUS;
+    private static double scoreServiceType(List<RuleEvaluationResult> warnings, List<RuleEvaluationResult> passes) {
+        if (hasWarning(warnings, SERVICE_TYPE_MISMATCH_CODE)) {
+            return PREFERENCE_MISMATCH_PENALTY;
+        }
+        return hasPass(passes, SERVICE_TYPE_PREFERENCE_RULE_ID) ? PREFERENCE_MATCH_BONUS : PREFERENCE_UNKNOWN_SCORE;
     }
 
-    private static double scoreSpicyLevel(Candidate candidate, ChickenStoreSessionContext ctx, List<RuleEvaluationResult> warnings) {
-        if (!hasWarning(warnings, SPICY_LEVEL_MISMATCH_CODE)) {
-            return PREFERENCE_MATCH_BONUS;
+    private static double scoreSpicyLevel(
+        Candidate candidate, ChickenStoreSessionContext ctx,
+        List<RuleEvaluationResult> warnings, List<RuleEvaluationResult> passes
+    ) {
+        if (hasWarning(warnings, SPICY_LEVEL_MISMATCH_CODE)) {
+            int distance = spicyLevelDistance(ctx.preferences().spicyLevel(), candidateSupportedSpicyLevels(candidate));
+            return distance <= ADJACENT_SPICY_LEVEL_DISTANCE ? PREFERENCE_PARTIAL_MISMATCH_PENALTY : PREFERENCE_MISMATCH_PENALTY;
         }
-        int distance = spicyLevelDistance(ctx.preferences().spicyLevel(), candidateSupportedSpicyLevels(candidate));
-        return distance <= ADJACENT_SPICY_LEVEL_DISTANCE ? PREFERENCE_PARTIAL_MISMATCH_PENALTY : PREFERENCE_MISMATCH_PENALTY;
+        return hasPass(passes, SPICY_LEVEL_PREFERENCE_RULE_ID) ? PREFERENCE_MATCH_BONUS : PREFERENCE_UNKNOWN_SCORE;
     }
 
     private static List<String> candidateSupportedSpicyLevels(Candidate candidate) {
@@ -191,6 +208,11 @@ public class RecommendationEngineService {
         return warnings.stream().anyMatch(warning -> errorCode.equals(warning.errorCode()));
     }
 
+    // PASS 결과는 errorCode가 항상 null이라(RuleEvaluationResult.pass() 참고) errorCode가 아닌 ruleId로 찾는다.
+    private static boolean hasPass(List<RuleEvaluationResult> passes, String ruleId) {
+        return passes.stream().anyMatch(pass -> ruleId.equals(pass.ruleId()));
+    }
+
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
@@ -221,12 +243,15 @@ public class RecommendationEngineService {
 
     // STEP6 recommendationReasons / unmetConditions, STEP7 alternativeCandidateIds
 
-    private static List<String> buildRecommendationReasons(List<RuleEvaluationResult> recommendedWarnings, boolean needsReconfirmation) {
+    private static List<String> buildRecommendationReasons(
+        List<RuleEvaluationResult> recommendedWarnings, List<RuleEvaluationResult> recommendedPasses,
+        boolean needsReconfirmation
+    ) {
         List<String> reasons = new ArrayList<>();
-        if (!hasWarning(recommendedWarnings, SERVICE_TYPE_MISMATCH_CODE)) {
+        if (hasPass(recommendedPasses, SERVICE_TYPE_PREFERENCE_RULE_ID)) {
             reasons.add(SERVICE_TYPE_MATCH_REASON);
         }
-        if (!hasWarning(recommendedWarnings, SPICY_LEVEL_MISMATCH_CODE)) {
+        if (hasPass(recommendedPasses, SPICY_LEVEL_PREFERENCE_RULE_ID)) {
             reasons.add(SPICY_LEVEL_MATCH_REASON);
         }
         if (reasons.isEmpty()) {

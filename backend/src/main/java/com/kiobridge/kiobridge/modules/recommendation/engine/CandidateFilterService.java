@@ -53,6 +53,7 @@ public class CandidateFilterService {
         List<ExcludedCandidate> excluded = new ArrayList<>();
         Map<String, List<RuleEvaluationResult>> warningsByCandidateId = new LinkedHashMap<>();
         Map<String, List<RuleEvaluationResult>> reconfirmationsByCandidateId = new LinkedHashMap<>();
+        Map<String, List<RuleEvaluationResult>> passesByCandidateId = new LinkedHashMap<>();
 
         for (Candidate candidate : candidates) {
             // available === false는 CompatibilityRule과 무관한, Kit이 정의한 별도의 STEP4 하드 제외 기준이다
@@ -70,6 +71,7 @@ public class CandidateFilterService {
             boolean blocked = false;
             List<RuleEvaluationResult> warnings = new ArrayList<>();
             List<RuleEvaluationResult> reconfirmations = new ArrayList<>();
+            List<RuleEvaluationResult> passes = new ArrayList<>();
 
             // RECONFIRM은 후보 제외 여부와 무관한 세션 단위 신호이므로, 이미 BLOCK이 확정된 후보라도
             // 나머지 규칙을 계속 평가해서 놓치지 않는다 (중간에 break하지 않음).
@@ -96,8 +98,10 @@ public class CandidateFilterService {
                         }
                     }
                     case RECONFIRM -> reconfirmations.add(result);
-                    case PASS, SKIPPED -> {
-                        // no-op
+                    case PASS -> passes.add(result);
+                    case SKIPPED -> {
+                        // SKIPPED는 "비교한 적이 없다"이지 "일치한다"가 아니다 — WARN/PASS 어느 쪽에도 담지 않는다.
+                        // (예: absentMeans=NONE, NO_PREFERENCE 같은 중립값, unknownPolicy=IGNORE/ALLOW, 후보 미선언 항목)
                     }
                 }
             }
@@ -110,10 +114,13 @@ public class CandidateFilterService {
                 if (!reconfirmations.isEmpty()) {
                     reconfirmationsByCandidateId.put(candidate.candidateId(), reconfirmations);
                 }
+                if (!passes.isEmpty()) {
+                    passesByCandidateId.put(candidate.candidateId(), passes);
+                }
             }
         }
 
-        return new CandidateFilterResult(eligible, excluded, warningsByCandidateId, reconfirmationsByCandidateId);
+        return new CandidateFilterResult(eligible, excluded, warningsByCandidateId, reconfirmationsByCandidateId, passesByCandidateId);
     }
 
     /**

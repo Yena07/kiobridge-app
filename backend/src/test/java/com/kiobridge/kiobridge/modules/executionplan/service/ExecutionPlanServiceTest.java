@@ -66,6 +66,22 @@ class ExecutionPlanServiceTest {
     }
 
     @Test
+    void userDecision이_null이면_approved_호출_전에_명시적_예외를_던진다() {
+        // CodeRabbit 지적: userDecision.approved()가 null 체크보다 먼저 호출되면
+        // 의미 없는 raw NullPointerException이 던져진다. requireNonNull이 먼저 실행돼야 한다.
+        assertThatThrownBy(() -> service.buildExecutionPlan(
+            SESSION_ID,
+            ExecutionPlanTestFixtures.recommendation(CANDIDATE_ID),
+            null,
+            fullPreferenceContext()
+        ))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("userDecision");
+
+        verifyNoInteractions(simulationApiClient);
+    }
+
+    @Test
     void approved가_true이고_모든_선호값이_있으면_10개_액션을_순서대로_조립한다() {
         stubValidSession();
         when(simulationApiClient.getFixture(ENVIRONMENT_ID))

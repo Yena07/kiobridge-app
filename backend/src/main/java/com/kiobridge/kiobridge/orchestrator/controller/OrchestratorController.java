@@ -1,6 +1,11 @@
 package com.kiobridge.kiobridge.orchestrator.controller;
 
+import com.kiobridge.kiobridge.contracts.Evidence;
 import com.kiobridge.kiobridge.contracts.client.dto.ExecuteResult;
+import com.kiobridge.kiobridge.modules.stateevidence.service.ApprovalResult;
+import com.kiobridge.kiobridge.modules.stateevidence.service.EvidenceParsingService;
+import com.kiobridge.kiobridge.modules.stateevidence.service.EvidenceSummary;
+import com.kiobridge.kiobridge.modules.stateevidence.service.EvidenceSummaryService;
 import com.kiobridge.kiobridge.orchestrator.controller.dto.OrchestratorRunRequest;
 import com.kiobridge.kiobridge.orchestrator.service.SubmissionOrchestrator;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,20 +27,36 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrchestratorController {
 
     private final SubmissionOrchestrator submissionOrchestrator;
+    private final EvidenceParsingService evidenceParsingService;
+    private final EvidenceSummaryService evidenceSummaryService;
 
-    public OrchestratorController(SubmissionOrchestrator submissionOrchestrator) {
+    public OrchestratorController(
+        SubmissionOrchestrator submissionOrchestrator,
+        EvidenceParsingService evidenceParsingService,
+        EvidenceSummaryService evidenceSummaryService
+    ) {
         this.submissionOrchestrator = submissionOrchestrator;
+        this.evidenceParsingService = evidenceParsingService;
+        this.evidenceSummaryService = evidenceSummaryService;
     }
 
     /** POST /internal/orchestrator/approve — STEP9 조립부터 실행까지 전체 승인 플로우. */
     @PostMapping("/approve")
-    public ExecuteResult approve(@RequestBody OrchestratorRunRequest request) {
-        return submissionOrchestrator.runApprovalFlow(
+    public ApprovalResult approve(@RequestBody OrchestratorRunRequest request) {
+        ExecuteResult result = submissionOrchestrator.runApprovalFlow(
             request.sessionId(),
             request.profile(),
             request.sessionContext(),
             request.recommendation(),
             request.userDecision()
         );
+
+        EvidenceSummary summary = null;
+        if (result.valid() && result.evidence() != null && !result.evidence().isNull()) {
+            Evidence evidence = evidenceParsingService.parse(result.evidence());
+            summary = evidenceSummaryService.summarize(evidence);
+        }
+
+        return new ApprovalResult(result.valid(), summary, result);
     }
 }

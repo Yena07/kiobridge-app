@@ -4,13 +4,28 @@
 로컬에서 프론트와 붙여 보려고 그대로 복사해 둔 것입니다.
 
 ```
-원본   watTHEBUG/kioBridge  dev  c1817fd  [FIX] 통합 테스트 중 버그 수정 (#45)
-복사   2026-08-09
+원본   watTHEBUG/kioBridge  dev  04b17d0  [FIX] recommendation PASS, SKIP 점수 수정 (#59)
+복사   2026-08-10
 ```
 
 빌드 산출물(`build/`, `.gradle/`)은 복사하지 않습니다. 만들어지는 것이라
 저장소에 둘 이유가 없고, 팀 저장소도 무시합니다. 그래서 이 폴더는 **소스 기준으로**
 팀 `dev` 와 같습니다.
+
+## 낡으면 무슨 일이 생기나
+
+2026-08-10 에 겪은 일입니다. 사본이 `#45` 시점에 멈춰 있었는데,
+그 사이 팀이 `#48`·`#50`·`#52`·`#54` 를 머지했습니다. 그래서 이 사본으로 띄운
+백엔드는 **`member` 모듈 자체가 없어서 로그인 API 가 없었고**, 승인 응답도
+`#48` 이전 모양(`{ valid, run, evidence, validation }`)이라 `summary` 가
+아예 오지 않았습니다.
+
+프론트는 멀쩡한데 화면에서만 안 되는 것처럼 보입니다. **연동이 안 되는 것 같으면
+이 사본이 언제 것인지부터 보세요.** 위의 커밋 해시와 팀 `dev` 를 비교하면 됩니다.
+
+```bash
+git -C <팀레포> fetch origin && git -C <팀레포> log --oneline -1 origin/dev
+```
 
 ## 여기서 고치지 마세요
 
@@ -34,7 +49,16 @@ git -C <팀레포> worktree add --detach C:\Users\bubut\kb\dev origin/dev
 robocopy C:\Users\bubut\kb\dev\backend backend /MIR /XD .git build .gradle
 ```
 
-`robocopy /MIR` 은 지워진 파일까지 맞춰 줍니다. 이 파일은 지워지므로 다시 두세요.
+워크트리가 이미 있으면 `git -C C:\Users\bubut\kb\dev checkout --detach origin/dev` 로
+옮기면 됩니다.
+
+`robocopy /MIR` 은 지워진 파일까지 맞춰 줍니다. **이 파일은 지워지므로 다시 두세요.**
+받아온 뒤에는 위의 커밋 해시와 날짜도 함께 고칩니다 — 안 고치면 다음 사람이
+낡았는지 알 방법이 없습니다.
+
+받아온 뒤 백엔드가 이미 떠 있으면 **다시 띄워야 합니다.** `bootRun` 은 이미
+컴파일된 `build/classes` 로 도는 프로세스라, 소스만 바꿔서는 아무것도 달라지지
+않습니다. 위에서 겪은 일이 정확히 이것입니다.
 
 ## 로컬에서 셋 다 띄우기
 
@@ -62,5 +86,8 @@ npm run dev:team
 
 화면 오른쪽 아래에 **실서버에 붙어 있습니다** 패널이 뜨고, 오간 요청이 한 줄씩 쌓입니다.
 목으로 돌면 요청이 아예 없으므로 그 패널이 곧 증거입니다.
+
+붙었는지 한 번에 확인하려면 `npm run check:backend` 를 쓰세요. 앱이 부르는 경로를
+앱이 부르는 순서로 불러 보고, 200 인지만이 아니라 실제로 담기는지까지 봅니다.
 
 `npm run dev` 는 그대로 목으로 돕니다.

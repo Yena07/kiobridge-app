@@ -71,6 +71,7 @@ public class ExecutionPlanService {
         UserDecision userDecision,
         SessionContextBase<?, ?, ?, ?> sessionContext
     ) {
+        Objects.requireNonNull(userDecision, "userDecision은 null일 수 없습니다.");
         if (!userDecision.approved()) {
             return ExecutionPlan.empty();
         }

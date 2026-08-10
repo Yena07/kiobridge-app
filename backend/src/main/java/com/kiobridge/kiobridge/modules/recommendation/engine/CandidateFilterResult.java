@@ -18,6 +18,12 @@ import java.util.stream.Collectors;
  * reconfirmationsByCandidateId — unknownPolicy==RECONFIRM으로 판정을 내릴 수 없었던 결과만 candidateId별로
  *                                모은 것. 어떤 후보가 어떤 규칙 때문에 재확인이 필요한지 알아야 unmetConditions/
  *                                recommendationReasons에 구체적인 문장을 만들 수 있어서 후보별로 유지한다.
+ * passesByCandidateId — 규칙을 실제로 비교해서 PASS로 판정된 결과만 candidateId별로 모은 것. WARN이 "없다"는
+ *                        사실만으로는 "선호와 일치한다"를 의미하지 않는다 — 값이 없거나(absentMeans=NONE),
+ *                        NO_PREFERENCE 같은 중립값이거나, unknownPolicy가 IGNORE/ALLOW거나, 후보가 그 항목
+ *                        자체를 선언 안 했으면 SKIPPED로 처리되어 warningsByCandidateId엔 아무것도 안 남지만
+ *                        실제로는 "비교한 적이 없다"일 뿐이다. STEP5가 "일치 보너스/일치 사유"를 붙이려면
+ *                        WARN 부재가 아니라 이 맵에 해당 ruleId의 PASS가 실제로 있는지로 판단해야 한다.
  *
  * 주의: 이 타입은 STEP4→STEP5 사이에서만 쓰는 내부 타입이다. Kit에 실제로 제출하는
  * Recommendation.requiresReconfirmation()은 schemas/core/recommendation.schema.json 상
@@ -29,13 +35,15 @@ public record CandidateFilterResult(
     List<Candidate> eligibleCandidates,
     List<ExcludedCandidate> excludedCandidates,
     Map<String, List<RuleEvaluationResult>> warningsByCandidateId,
-    Map<String, List<RuleEvaluationResult>> reconfirmationsByCandidateId
+    Map<String, List<RuleEvaluationResult>> reconfirmationsByCandidateId,
+    Map<String, List<RuleEvaluationResult>> passesByCandidateId
 ) {
     public CandidateFilterResult {
         Objects.requireNonNull(eligibleCandidates, "eligibleCandidates는 null일 수 없습니다.");
         Objects.requireNonNull(excludedCandidates, "excludedCandidates는 null일 수 없습니다.");
         Objects.requireNonNull(warningsByCandidateId, "warningsByCandidateId는 null일 수 없습니다.");
         Objects.requireNonNull(reconfirmationsByCandidateId, "reconfirmationsByCandidateId는 null일 수 없습니다.");
+        Objects.requireNonNull(passesByCandidateId, "passesByCandidateId는 null일 수 없습니다.");
 
         // 방어적 복사: 호출자가 반환된 결과의 리스트/맵을 변경해도 이 레코드 내부 상태는 영향받지 않도록 불변으로 저장한다.
         eligibleCandidates = List.copyOf(eligibleCandidates);
@@ -43,6 +51,8 @@ public record CandidateFilterResult(
         warningsByCandidateId = warningsByCandidateId.entrySet().stream()
             .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
         reconfirmationsByCandidateId = reconfirmationsByCandidateId.entrySet().stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
+        passesByCandidateId = passesByCandidateId.entrySet().stream()
             .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
     }
 

@@ -1,5 +1,8 @@
 package com.kiobridge.kiobridge.common.web;
 
+import com.kiobridge.kiobridge.modules.member.exception.DuplicateLoginIdException;
+import com.kiobridge.kiobridge.modules.member.exception.InvalidCredentialsException;
+import com.kiobridge.kiobridge.modules.member.exception.UserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -63,5 +66,46 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ApiErrorResponse> badRequest(String message) {
         return ResponseEntity.badRequest().body(new ApiErrorResponse("INVALID_REQUEST", message));
+    }
+
+    @ExceptionHandler(DuplicateLoginIdException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateLoginId(
+            DuplicateLoginIdException e
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(
+                        new ApiErrorResponse(
+                                "LOGIN_ID_DUPLICATED",
+                                e.getMessage()
+                        )
+                );
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
+            InvalidCredentialsException e
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(
+                        new ApiErrorResponse(
+                                "INVALID_CREDENTIALS",
+                                e.getMessage()
+                        )
+                );
+    }
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleUserNotFound(
+            UserNotFoundException e
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(
+                        new ApiErrorResponse(
+                                "USER_NOT_FOUND",
+                                e.getMessage()
+                        )
+                );
     }
 }
