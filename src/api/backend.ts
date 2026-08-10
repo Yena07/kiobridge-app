@@ -1079,9 +1079,20 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       // #48 이후에는 { valid, summary, raw } 로 감싸여 온다. 둘 다 받는다.
       실행결과.set(sessionId, r.raw ?? (r as unknown as ExecuteResult));
       if (r.summary) 서버요약.set(sessionId, r.summary);
-      // 성공하면 빈 배열이 온다. 배열인지 먼저 보고, 빈 것은 담지 않는다.
-      if (Array.isArray(r.validationMessages) && r.validationMessages.length > 0) {
+      /*
+       * 빈 배열도 그대로 담는다. 담지 않고 넘기면 앞 응답의 문장이 남는다.
+       *
+       * 검증에 막히면 approve() 가 s.executed 를 되돌려서 같은 세션으로 다시
+       * 승인할 수 있다. 그때 두 번째 응답이 빈 배열이면, 사용자는 이번에 막힌
+       * 이유가 아니라 **아까 막혔던 이유**를 읽는다.
+       *
+       * 필드가 아예 없으면(#66 이전 백엔드) 지운다 - 그래야 아래에서 있고 없고로
+       * 예전 경로를 쓸지 정할 수 있다. 길이로 정하면 빈 배열과 구분이 안 된다.
+       */
+      if (Array.isArray(r.validationMessages)) {
         검증문장.set(sessionId, r.validationMessages);
+      } else {
+        검증문장.delete(sessionId);
       }
     },
 
@@ -1105,10 +1116,13 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
        * 원문이 그대로 붙어 버린다.
        *
        * #66 이전 백엔드에는 필드가 없으므로 그때는 예전 경로로 물러난다.
+       *
+       * 물러날지는 **길이가 아니라 있고 없고**로 정한다. 길이로 정하면 서버가
+       * 준 빈 배열("이번엔 옮길 문장이 없다")과 필드 자체가 없는 것("이 서버는
+       * 옮겨 주지 않는다")이 같아진다. 앞의 경우까지 개발자용 원문으로 물러난다.
        */
-      const 옮긴문장 = 검증문장.get(sessionId) ?? [];
       const 원문 = (r.validation?.errors ?? []).map((e) => e.message);
-      const errors = (옮긴문장.length > 0 ? 옮긴문장 : 원문).filter(보여도되나);
+      const errors = (검증문장.has(sessionId) ? 검증문장.get(sessionId)! : 원문).filter(보여도되나);
       return { valid: false, ...(errors.length > 0 ? { errors } : {}) };
     },
 

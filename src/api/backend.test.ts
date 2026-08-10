@@ -616,6 +616,35 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(await b.validate("s1")).toEqual({ valid: false, errors: ["필수 정보가 빠졌습니다."] });
   });
 
+  it("두 번째 승인이 빈 배열로 오면 앞 실패의 문장이 남지 않는다", async () => {
+    /*
+     * 검증에 막히면 approve() 가 s.executed 를 되돌려서 같은 세션으로 다시
+     * 승인할 수 있다. 앞 문장을 안 지우면 사용자는 이번에 막힌 이유가 아니라
+     * 아까 막혔던 이유를 읽는다.
+     */
+    const b = 붙이기();
+    await 승인(b, { valid: false, validationMessages: ["필수 정보가 빠졌습니다."] });
+    expect(await b.validate("s1")).toEqual({ valid: false, errors: ["필수 정보가 빠졌습니다."] });
+
+    await 승인(b, { valid: false, validationMessages: [] });
+    expect(await b.validate("s1")).toEqual({ valid: false });
+  });
+
+  it("빈 배열이 오면 개발자용 원문으로 물러나지 않는다", async () => {
+    // 서버가 "이번엔 옮길 문장이 없다" 고 한 것이지, 옮겨 주지 않는 서버가 아니다.
+    // 길이로 판단하면 이 둘이 같아져서 킷 원문이 화면에 뜬다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: false,
+      validationMessages: [],
+      raw: {
+        valid: false,
+        validation: { valid: false, errors: [{ code: "SCHEMA_INVALID", message: "$.executionPlan[0].actionType must be string" }] },
+      },
+    });
+    expect(await b.validate("s1")).toEqual({ valid: false });
+  });
+
   it("보여 줄 문장이 하나도 안 남으면 errors 를 만들지 않는다", async () => {
     // 화면이 기본 문구로 말한다. 빈 칸을 띄우지 않는다.
     const b = 붙이기();
