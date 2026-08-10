@@ -2688,7 +2688,12 @@ function ExecSuccess({ cart, steps, note, serverStatus, onHome }: {
   );
 }
 
-function ExecFailed({ abort, steps, onHome }: { abort: AbortInfo; steps: StepStatus[]; onHome: () => void }) {
+function ExecFailed({ abort, steps, serverStatus, onHome }: {
+  abort: AbortInfo; steps: StepStatus[];
+  /** 서버가 매긴 상태 문장. 성공 화면과 같은 방식으로 인용한다. */
+  serverStatus?: string;
+  onHome: () => void;
+}) {
   return (
     <div className="flex flex-col gap-6">
       <StatusHero
@@ -2701,6 +2706,18 @@ function ExecFailed({ abort, steps, onHome }: { abort: AbortInfo; steps: StepSta
         <p style={{ ...TYPE.caption, color: TEXT_2, marginBottom: 10 }}>{abort.message}</p>
         <p style={{ fontSize: 12, color: TEXT_2, ...NUM }}>오류 코드: {abort.code}</p>
       </div>
+
+      {/*
+        서버가 매긴 상태를 그대로 인용한다. 성공 화면과 같은 방식이다.
+        멈춘 경우에는 화면에 개수.금액이 없어서 "키오스크가 뭐라고 했는지" 말고는
+        확인할 방법이 없다 - 오히려 여기가 이 줄이 가장 필요한 자리다.
+      */}
+      {serverStatus && (
+        <div style={{ borderRadius: RADIUS.card, padding: "14px 16px", backgroundColor: CANVAS }}>
+          <p style={{ ...TYPE.label, color: TEXT_2, marginBottom: 4 }}>키오스크가 보내온 결과</p>
+          <p style={{ ...TYPE.caption, color: TEXT_1 }}>“{serverStatus}”</p>
+        </div>
+      )}
 
       <StepCard statuses={steps} />
 
@@ -2845,7 +2862,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
           </div>
         )}
         {status.state === "aborted" && status.abort && (
-          <ExecFailed abort={status.abort} steps={status.steps} onHome={onHome} />
+          <ExecFailed abort={status.abort} steps={status.steps} serverStatus={status.serverStatus} onHome={onHome} />
         )}
       </div>
     </div>
@@ -3360,9 +3377,13 @@ export default function App() {
         앱을 덮는 겹으로 띄운다. 다른 주소로 옮기면 페이지가 새로 뜨고 기록은
         메모리에만 있어서 그때 다 사라진다 — 주문을 마치고 보러 가면 늘 0건이 된다.
       */}
-      {로그모드 === "겹" && (
-        <BackendLog {...(팀백엔드모드 ? { onClose: () => set로그모드("닫힘") } : {})} />
-      )}
+      {/*
+        겹 모드에는 목이든 실서버든 언제나 닫는 길을 준다.
+        앱 전체를 덮는 대화상자라 닫기가 없으면 키보드 사용자가 갇힌다 —
+        다시 못 여는 것보다 못 나가는 쪽이 훨씬 나쁘다. 다시 열려면 주소를
+        새로 치면 되고, 그때 기록이 사라지는 것은 감수할 만하다.
+      */}
+      {로그모드 === "겹" && <BackendLog onClose={() => set로그모드("닫힘")} />}
       {/*
         큰 글씨 모드. 화면 크기(휴대폰 틀)는 그대로 두고 안쪽 내용만 키운다.
         바깥 틀은 실제 크기(FRAME_W × FRAME_H)를 잡고, 안쪽은 그 크기를 배율로 나눠 잡는다.

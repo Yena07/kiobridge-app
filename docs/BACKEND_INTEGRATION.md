@@ -92,7 +92,16 @@ return simulationApiClient.execute(sessionId);
 npm run dev:team
 ```
 
-`VITE_BACKEND=team` 으로 팀 백엔드를 쓰고, 개발 서버가 `/api/bff` 를 `KIOBRIDGE_API_BASE`(기본 `http://localhost:8080`)로 넘깁니다. 배포본의 BFF 함수가 하는 일을 개발 서버가 대신하는 것이라 CORS 가 없습니다.
+`--mode team` 으로 팀 백엔드를 쓰고, 개발 서버가 `/api/bff` 를 `KIOBRIDGE_API_BASE`(기본 `http://localhost:8080`)로 넘깁니다. 배포본의 BFF 함수가 하는 일을 개발 서버가 대신하는 것이라 CORS 가 없습니다.
+
+목이냐 실서버냐를 정하는 것은 **빌드 모드 하나**입니다. `.env` 파일은 쓰지 않습니다 — 이 저장소가 `.env*` 를 무시해서 따라가지 못하기 때문입니다.
+
+| 명령 | `__TEAM_BACKEND__` | 무엇으로 도나 |
+| --- | --- | --- |
+| `npm run dev` · `npm run build` | `false` | 목(`src/api/mock.ts`) |
+| `npm run dev:team` · `npm run build:team` | `true` | 팀 백엔드 (`/api/bff` → `KIOBRIDGE_API_BASE`) |
+
+`vite.config.ts` 의 `define` 이 그 이름을 참/거짓으로 바꿔 넣습니다. 자세한 사정은 `src/api/globals.d.ts` 에 적어 두었습니다.
 
 `main` 이 배포되면 `client.ts` 의 스위치를 걷어내고 팀 백엔드를 기본으로 삼겠습니다.
 

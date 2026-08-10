@@ -41,6 +41,48 @@ export interface 오간것 {
 export const 본문을남길까 = (경로: string): boolean => !/\/api\/v1\/auth\//.test(경로);
 
 /**
+ * 본문에서 자유 입력 값을 가린다.
+ *
+ * 이 앱에서 사용자가 아무거나 적을 수 있는 칸은 `memo` 하나다("얼음 적게").
+ * 저장 전에 전화번호.주민등록번호.주소 모양은 걸러 막지만, **이름은 모양이
+ * 없어서 못 거른다.** 그런데 이 기록은 요청 본문을 통째로 들고 있고 화면과
+ * 시연 녹화에 그대로 뜬다 — 못 거른 것이 그대로 보이고 최대 60건 남는다.
+ *
+ * 무엇을 보냈는지는 알아야 하니 칸 자체는 남기고 값만 가린다. 로그의 쓸모는
+ * "서버가 준 값이 화면의 이 문장이 됐다" 를 보이는 것이라, memo 값이 보일
+ * 이유가 없다 — 그건 사용자가 적은 것이지 서버가 준 것이 아니다.
+ *
+ * 어디에 있든 가린다. profile-normalizations 의 profileInput, approve 의
+ * profile, users/{id}/profiles 의 본문에 각각 다른 깊이로 들어 있다.
+ */
+const 가릴칸 = new Set(["memo"]);
+
+const 걸어가며가리기 = (v: unknown): unknown => {
+  if (Array.isArray(v)) return v.map(걸어가며가리기);
+  if (v && typeof v === "object") {
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, x]) =>
+        가릴칸.has(k) ? [k, "***"] : [k, 걸어가며가리기(x)]),
+    );
+  }
+  return v;
+};
+
+const 가린본문 = (본문: string | undefined): string | undefined => {
+  if (!본문) return 본문;
+  try {
+    return JSON.stringify(걸어가며가리기(JSON.parse(본문)));
+  } catch {
+    /*
+     * JSON 이 아니면 통째로 버린다. 정규식으로 긁어내는 방법도 있지만,
+     * 모양을 모르는 본문에서 무엇이 남는지 장담할 수 없다. 가린다고 해 놓고
+     * 일부가 새는 것보다, 못 가리는 본문은 아예 안 보여 주는 편이 낫다.
+     */
+    return "(JSON 이 아니라 가리지 못했습니다 — 남기지 않습니다)";
+  }
+};
+
+/**
  * 경로에 실린 userId 를 가린다.
  *
  * 이 기록은 구석 패널과 ?log 화면에 그대로 뜬다. 시연 화면이나 녹화에도 같이 찍힌다.
@@ -63,7 +105,10 @@ const 듣는이 = new Set<() => void>();
 export const 연동기록 = {
   남기기(x: 오간것): void {
     // 오래된 것부터 버린다. 개발용이라 다 쌓아 둘 이유가 없다.
-    기록 = [{ ...x, 경로: 가린경로(x.경로) }, ...기록].slice(0, 최대);
+    기록 = [
+      { ...x, 경로: 가린경로(x.경로), 요청: 가린본문(x.요청), 응답: 가린본문(x.응답) },
+      ...기록,
+    ].slice(0, 최대);
     for (const f of 듣는이) f();
   },
   읽기: (): 오간것[] => 기록,
