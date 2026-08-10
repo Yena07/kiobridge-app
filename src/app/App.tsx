@@ -20,6 +20,7 @@ import {
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
+import { 접근성설정, type 접근성 } from "@/api/a11y";
 import BackendLog from "@/app/BackendLog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
@@ -1789,27 +1790,79 @@ function ToggleRow({
  * 여기 있는 항목은 전부 실제로 동작하는 것만 둔다. 준비 중인 기능을 목록에 올려 두면
  * 화면을 믿을 수 없게 된다. 큰 글씨는 앱 전체(휴대폰 틀 안)에 바로 적용된다.
  */
-function AccessibilityScreen({
-  largeText, onLargeText, onBack,
-}: {
-  largeText: boolean; onLargeText: (v: boolean) => void; onBack: () => void;
+/**
+ * 접근성 설정.
+ *
+ * 킷 계약이 요구하는 일곱 가지를 다 묻는다. 예전에는 '큰 글씨' 하나만 묻고
+ * 나머지 여섯을 false 로 박아 서버에 보냈다 — 백엔드는 받을 준비가 돼 있었는데
+ * 화면이 안 물어서 늘 "아무 도움도 필요 없음" 으로 나가고 있었다.
+ *
+ * 두 무리로 나눠 적는다.
+ *
+ *   이 앱이 바로 바꾸는 것   큰 글씨 · 고대비
+ *   키오스크에 전해 드릴 것   나머지 다섯
+ *
+ * 뒤의 다섯은 이 앱 화면을 바꾸지 않는다. 켰는데 아무 일도 안 일어나면 사용자는
+ * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
+ * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
+ */
+function AccessibilityScreen({ 설정, onChange, onBack }: {
+  설정: 접근성;
+  onChange: (한칸: Partial<접근성>) => void;
+  onBack: () => void;
 }) {
+  const 바로바꾸는것: { key: keyof 접근성; label: string; sub: string }[] = [
+    { key: "largeText", label: "큰 글씨", sub: "앱 전체의 글씨와 버튼을 크게 봐요" },
+    { key: "highContrast", label: "고대비", sub: "글씨와 배경의 차이를 더 뚜렷하게 해요" },
+  ];
+  const 전해드릴것: { key: keyof 접근성; label: string; sub: string }[] = [
+    { key: "simpleSteps", label: "쉬운 단계", sub: "한 번에 하나씩, 단계를 줄여 달라고 전해요" },
+    { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
+    { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 화면으로 알려 달라고 전해요" },
+    { key: "mobilitySupport", label: "시간 여유", sub: "서 있기나 손 조작이 힘들어요. 서두르지 말아 달라고 전해요" },
+    { key: "staffAssistancePreferred", label: "직원 도움", sub: "막히면 직원이 도와주는 편이 좋아요" },
+  ];
+
   return (
     <div className="flex flex-col h-full bg-white">
       <SubScreenHeader title="접근성 설정" onBack={onBack} />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 8 }}>이 앱이 바로 바꿔요</h2>
         <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
-          <ToggleRow
-            label="큰 글씨"
-            sub="앱 전체의 글씨와 버튼을 크게 봐요"
-            on={largeText}
-            onToggle={() => onLargeText(!largeText)}
-          />
+          {바로바꾸는것.map((r) => (
+            <ToggleRow
+              key={r.key}
+              label={r.label}
+              sub={r.sub}
+              on={설정[r.key]}
+              onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+            />
+          ))}
+        </div>
+
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24, marginBottom: 8 }}>키오스크에 전해 드려요</h2>
+        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 8, lineHeight: 1.7 }}>
+          아래는 이 앱 화면을 바꾸지 않아요. 주문할 때 키오스크에 함께 전해서,
+          메뉴를 고르고 안내하는 방식에 반영되도록 합니다.
+        </p>
+        <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
+          {전해드릴것.map((r) => (
+            <ToggleRow
+              key={r.key}
+              label={r.label}
+              sub={r.sub}
+              on={설정[r.key]}
+              onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+            />
+          ))}
         </div>
 
         <p style={{ fontSize: 13, color: TEXT_2, marginTop: 20, lineHeight: 1.7 }}>
           이 앱은 처음부터 큰 버튼과 또렷한 대비로 만들었어요.
           단계마다 한 가지만 물어보고, 상태는 색뿐 아니라 그림과 글씨로도 함께 알려드려요.
+        </p>
+        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
+          여기서 켠 것은 이 기기에만 있어요. 새로고침하면 처음 상태로 돌아가요.
         </p>
         <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
           화면이 어려우면 이 화면을 매장 직원에게 보여주세요. 직원이 이어서 도와드릴 수 있어요.
@@ -3120,7 +3173,15 @@ export default function App() {
    */
   const 계정세대 = useRef(0);
   /** 큰 글씨 모드. 휴대폰 틀 안 전체에 적용된다. */
-  const [largeText, setLargeText] = useState(false);
+  /*
+   * 접근성 설정. 저장소는 api/a11y.ts 에 있고 화면은 그걸 비춘다.
+   *
+   * 상태를 여기 두지 않는 이유는 연동 계층(backend.ts)도 이 값을 읽어야 해서다 —
+   * 서버로 보내는 표준형에 그대로 실린다. React 상태로만 두면 그쪽에서 못 읽는다.
+   */
+  const [접근성값, set접근성값] = useState<접근성>(() => 접근성설정.읽기());
+  useEffect(() => 접근성설정.구독(() => set접근성값({ ...접근성설정.읽기() })), []);
+  const largeText = 접근성값.largeText;
   const [sheets, setSheets] = useState<OrderSheet[]>(MOCK_SHEETS);
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
@@ -3397,6 +3458,18 @@ export default function App() {
             zoom: largeText ? LARGE_TEXT_SCALE : 1,
             width: largeText ? FRAME_W / LARGE_TEXT_SCALE : "100%",
             height: largeText ? FRAME_H / LARGE_TEXT_SCALE : FRAME_H,
+            /*
+             * 고대비. 화면 전체의 대비를 올린다.
+             *
+             * 색 토큰을 갈아 끼우는 방법도 있지만, 이 앱은 색을 상수로 인라인에
+             * 박아 써서 그러려면 화면 코드를 전부 손봐야 한다. filter 는 이미 그린
+             * 결과에 걸리므로 글씨.테두리.픽토그램.사진에 한 번에 적용된다.
+             *
+             * contrast 는 중간 회색을 축으로 벌린다 — 흰 바탕은 그대로 두고 옅은
+             * 회색 글씨(TEXT_2)와 테두리를 어둡게 만든다. 대비가 필요한 쪽이
+             * 정확히 그쪽이다. 1.35 를 넘기면 사진이 타서 메뉴를 못 알아본다.
+             */
+            filter: 접근성값.highContrast ? "contrast(1.3)" : undefined,
             // absolute 로 띄우는 것들(확인 시트·QR 스캐너)이 이 안에 갇히려면
             // 여기가 컨테이닝 블록이어야 한다. overflow-hidden 만으로는
             // 자기가 기준이 아니면 클리핑도 못 해서 화면 전체를 덮어 버린다.
@@ -3537,8 +3610,8 @@ export default function App() {
           )}
           {screen === "a11y" && (
             <AccessibilityScreen
-              largeText={largeText}
-              onLargeText={setLargeText}
+              설정={접근성값}
+              onChange={(한칸) => 접근성설정.바꾸기(한칸)}
               onBack={() => { setScreen("saved"); setTab("account"); }}
             />
           )}

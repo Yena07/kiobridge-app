@@ -1,3 +1,4 @@
+import { 기본접근성, type 접근성 } from "@/api/a11y";
 import type { OrderSheet } from "@/domain/types";
 
 /**
@@ -81,7 +82,7 @@ export const 수량숫자 = (v: string | undefined): number | null => {
  */
 export function toCanonicalProfile(
   p: OrderSheet,
-  opts: { providerId?: string; collectedAt?: string; largeText?: boolean; personalization?: boolean } = {},
+  opts: { providerId?: string; collectedAt?: string; 접근성?: Partial<접근성>; personalization?: boolean } = {},
 ): CanonicalProfile {
   return {
     profileId: p.id,
@@ -92,12 +93,14 @@ export function toCanonicalProfile(
       // 호출자가 시각을 주면 그걸 쓴다. 테스트가 시계에 의존하지 않게 한다.
       collectedAt: opts.collectedAt ?? new Date().toISOString(),
     },
-    accessibility: {
-      largeText: opts.largeText ?? false,
-      // 화면이 아직 묻지 않는 항목들이다. 묻지 않은 것을 true 로 보내지 않는다.
-      simpleSteps: false, visualGuidance: false, hearingSupport: false,
-      mobilitySupport: false, highContrast: false, staffAssistancePreferred: false,
-    },
+    /*
+     * 접근성 설정 화면에서 켠 것을 그대로 보낸다.
+     *
+     * 예전에는 largeText 하나만 받도록 열어 두고 나머지 여섯을 false 로 박아
+     * 두었다 — "화면이 아직 묻지 않는 항목" 이라서였다. 이제 화면이 일곱 다 묻는다.
+     * 안 켠 것은 여전히 false 다. 묻지 않은 것도, 안 켠 것도 true 로 보내지 않는다.
+     */
+    accessibility: { ...기본접근성, ...opts.접근성 },
     // 이 앱은 터치로 조작하고 화면 글은 한국어다. 승인은 사람이 반드시 누른다.
     interaction: { preferredInput: "TOUCH", language: "ko-KR", confirmationRequired: true },
     consent: {
@@ -182,7 +185,7 @@ export interface ContextNormalizationInput {
 
 export function toProfileNormalizationInput(
   p: OrderSheet,
-  opts: { collectedAt?: string; largeText?: boolean } = {},
+  opts: { collectedAt?: string; 접근성?: Partial<접근성> } = {},
 ): ProfileNormalizationInput {
   const c = toCanonicalProfile(p, opts);
   // providerId 와 dataClassification 은 서버가 채운다. 보내지 않는다.
