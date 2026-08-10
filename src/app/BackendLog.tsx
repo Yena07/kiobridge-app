@@ -330,10 +330,45 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
   const 뿌리 = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (나란히 || !onClose) return;
+    /*
+     * aria-modal 은 포커스를 가두지 않는다. 그 속성은 스크린리더에게 "뒤쪽은
+     * 없는 셈 쳐라" 고 말할 뿐이고, Tab 은 그대로 뒤쪽 앱 버튼으로 넘어간다.
+     * 화면은 덮여 있는데 포커스만 보이지 않는 곳으로 가 버리므로, 키보드만
+     * 쓰는 사람은 자기가 어디에 있는지 알 수 없다.
+     *
+     * 그래서 Tab 을 직접 잡아 이 겹 안에서만 돌게 한다. 닫을 때는 열기 전에
+     * 있던 자리로 포커스를 돌려준다 - 안 그러면 닫고 나서 문서 처음부터
+     * 다시 Tab 을 눌러야 한다.
+     */
+    const 열기전 = document.activeElement as HTMLElement | null;
     뿌리.current?.focus({ preventScroll: true });
-    const 키 = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+
+    const 잡을것 = () => {
+      const 안 = 뿌리.current;
+      if (!안) return [] as HTMLElement[];
+      return [...안.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+        .filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+    };
+
+    const 키 = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+      const 것들 = 잡을것();
+      if (것들.length === 0) { e.preventDefault(); 뿌리.current?.focus(); return; }
+      const 처음 = 것들[0];
+      const 마지막 = 것들[것들.length - 1];
+      const 지금 = document.activeElement;
+      // 겹 밖에 있으면 무조건 안으로 데려온다.
+      if (!뿌리.current?.contains(지금)) { e.preventDefault(); 처음.focus(); return; }
+      if (e.shiftKey && 지금 === 처음) { e.preventDefault(); 마지막.focus(); }
+      else if (!e.shiftKey && 지금 === 마지막) { e.preventDefault(); 처음.focus(); }
+    };
+
     window.addEventListener("keydown", 키);
-    return () => window.removeEventListener("keydown", 키);
+    return () => {
+      window.removeEventListener("keydown", 키);
+      열기전?.focus?.({ preventScroll: true });
+    };
   }, [나란히, onClose]);
   const 목록 = 연동기록.읽기();
   const 성공 = 목록.filter((x) => typeof x.상태 === "number" && x.상태 < 400).length;
@@ -368,6 +403,7 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
               style={{
                 marginLeft: "auto", background: "none", border: `1px solid ${색.선}`,
                 borderRadius: 6, color: 색.글, font: "inherit", padding: "4px 12px", cursor: "pointer",
+                minHeight: 44, minWidth: 44,
               }}
             >
               {나란히 ? "닫기" : "앱으로 돌아가기"}
@@ -418,6 +454,7 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
             display: "block", width: "100%", textAlign: "left", background: "none",
             border: "none", color: "inherit", font: "inherit", padding: 0, cursor: "pointer",
             fontSize: 15, fontWeight: 700, margin: "0 0 8px",
+            minHeight: 44,
           }}
         >
           어느 API 가 무엇을 하는지 {설명펼침 ? "▾" : "▸"}
