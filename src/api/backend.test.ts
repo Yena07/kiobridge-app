@@ -646,6 +646,41 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(e.한일?.map((x) => x.text)).toEqual(["한 단계 진행했어요", "매운맛"]);
   });
 
+  it("대문자 선택값을 코드로 오해하지 않는다", async () => {
+    /*
+     * ICE.HOT.Q1 은 사용자가 실제로 고른 값이다. 모양만 보고 코드로 몰면
+     * "하나 골랐어요" 로 뭉개지고, 고른 것이 화면에서 사라진다.
+     * 고른 값을 담는 동작에서는 모양을 따지지 않는다.
+     */
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true, raw: 실행성공,
+      runSteps: [
+        { actionIndex: 0, action: "select_option", label: "ICE", success: true },
+        { actionIndex: 1, action: "select_option", label: "Q1", success: true },
+        { actionIndex: 2, action: "select_menu", label: "AMERICANO", success: true },
+        { actionIndex: 3, action: "select_service", label: "TAKE_OUT", success: true },
+      ],
+    });
+    expect((await b.getEvidence("s1")).한일?.map((x) => x.text)).toEqual([
+      "ICE 골랐어요",
+      "Q1 골랐어요",
+      "AMERICANO 골랐어요",
+      "TAKE_OUT 골랐어요",
+    ]);
+  });
+
+  it("고른 값 자리에는 아는화면 표를 끼워 넣지 않는다", async () => {
+    // 표에 있는 말이라도 고른 값 자리면 고른 값이 이긴다. 메뉴 이름이 우연히
+    // 표의 열쇠와 같아도 그 메뉴를 골랐다는 사실을 덮으면 안 된다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true, raw: 실행성공,
+      runSteps: [{ actionIndex: 0, action: "select_option", label: "OPTION_CONFIRM", success: true }],
+    });
+    expect((await b.getEvidence("s1")).한일?.[0].text).toBe("OPTION_CONFIRM 골랐어요");
+  });
+
   it("#71 이전 응답이면 이 줄을 아예 만들지 않는다", async () => {
     const b = 붙이기();
     await 승인(b, { valid: true, raw: 실행성공 });

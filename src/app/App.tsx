@@ -2759,7 +2759,17 @@ function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
             >
               <span style={{ ...TYPE.caption, color: TEXT_3, ...NUM, minWidth: 18 }}>{i + 1}</span>
               <Pictogram name={d.ok ? "checkCircle" : "xCircle"} size={16} color={d.ok ? P : FAIL} style={{ marginTop: 2 }} />
-              <span style={{ ...TYPE.caption, color: TEXT_1, flex: 1 }}>{d.text}</span>
+              {/*
+                Pictogram 은 aria-hidden 이라 이 줄이 됐는지 안 됐는지가 색과
+                모양으로만 남아 있었다. 스크린리더에는 "종이컵 골랐어요" 만
+                들리고 성공.실패가 통째로 빠진다. 이 앱이 화면에 "상태는 색뿐
+                아니라 그림과 글씨로도 알린다" 고 적어 두고 여기서 어긴 셈이다.
+                실패한 줄은 눈으로도 바로 읽히도록 글씨색까지 바꾼다.
+              */}
+              <span style={{ ...TYPE.caption, color: d.ok ? TEXT_1 : FAIL, flex: 1 }}>
+                <b style={{ fontWeight: 700 }}>{d.ok ? "됨" : "실패"}</b>
+                {" · "}{d.text}
+              </span>
             </li>
           ))}
         </ol>
@@ -3006,6 +3016,12 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
                 결제는 키오스크에서 직접 하시면 돼요.
               </p>
             </div>
+            {/*
+              내역이 없다고 실행 내역까지 버리면 안 된다. done 은 cart 와 다른
+              데서 온 값이라 cart 가 비어도 살아 있다. 오히려 여기가 - 무엇이
+              담겼는지 못 보여 주는 자리가 - "무엇을 했는지" 가 가장 필요한 곳이다.
+            */}
+            {status.done && <div style={{ marginTop: 16 }}><DoneSteps done={status.done} /></div>}
             <div className="mt-auto" style={{ paddingTop: 24 }}>
               <PrimaryBtn onClick={onHome}>처음으로</PrimaryBtn>
             </div>
@@ -3024,6 +3040,8 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
                 직원에게 이 화면을 보여 주세요.
               </p>
             </div>
+            {/* 중단 사유를 못 받았어도 어디까지 갔는지는 알려 준다. */}
+            {status.done && <div style={{ marginTop: 16 }}><DoneSteps done={status.done} /></div>}
             <div className="mt-auto" style={{ paddingTop: 24 }}>
               <PrimaryBtn onClick={onHome}>처음으로</PrimaryBtn>
             </div>

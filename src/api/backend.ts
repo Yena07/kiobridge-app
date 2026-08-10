@@ -603,7 +603,21 @@ interface RunStep {
  * 그래서 문장은 action 에서 만들고, label 은 사람 말일 때만 끼워 넣는다.
  * 모르는 action 에 코드 label 만 있으면 무슨 일이 있었는지 지어내지 않는다.
  */
-const 코드꼴 = /^[A-Z][A-Z0-9_]*$/;
+/*
+ * 고른 값을 담아 오는 동작들.
+ *
+ * 이 셋에서는 label 이 사용자가 실제로 고른 값이다. 대문자든 한글이든 그대로
+ * 보여 준다 - 모양으로 코드인지 아닌지 가리면 안 된다.
+ *
+ * 처음에는 모든 동작에 /^[A-Z][A-Z0-9_]*$/ 를 걸어 대문자면 코드로 봤다.
+ * 그러면 `ICE`·`HOT`·`Q1` 같은 **진짜 고른 값**이 코드로 몰려 "하나 골랐어요"
+ * 로 뭉개진다. 카페 주문표에는 이미 ICE 가 들어 있다.
+ *
+ * 사용자가 고른 것을 화면에서 지우는 셈이라, 대신 눌러 주는 앱에서 가장 하면
+ * 안 되는 쪽이다. 판별은 아래 아는화면 처럼 **자리를 아는 곳에서만** 한다.
+ */
+const 고른값을담는동작 = new Set(["select_service", "select_menu", "select_option"]);
+
 /*
  * 아는 화면 코드만 갈라 준다.
  *
@@ -618,13 +632,11 @@ const 아는화면: Record<string, string> = {
   OPTION_CONFIRM: "옵션을 확정했어요",
   MENU_SELECTION_WITH_CART: "메뉴를 장바구니로 넘겼어요",
 };
-const 동작말 = (action: string, label: string, 사람말: boolean): string => {
-  if (!사람말 && 아는화면[label]) return 아는화면[label];
+const 동작말 = (action: string, label: string): string => {
+  // 고른 값 자리면 모양을 따지지 않는다. ICE 도 그대로 "ICE 골랐어요" 다.
+  if (고른값을담는동작.has(action)) return label ? `${label} 골랐어요` : "하나 골랐어요";
+  if (아는화면[label]) return 아는화면[label];
   switch (action) {
-    case "select_service":
-    case "select_menu":
-    case "select_option":
-      return 사람말 ? `${label} 골랐어요` : "하나 골랐어요";
     case "confirm_option":
       return "고른 것을 확정했어요";
     case "open_cart_review":
@@ -632,17 +644,15 @@ const 동작말 = (action: string, label: string, 사람말: boolean): string =>
     case "verify_cart":
       return "장바구니를 확인했어요";
     default:
-      return 사람말 ? label : "한 단계 진행했어요";
+      // 모르는 동작이다. label 이 코드꼴이면 무슨 일이 있었는지 지어내지 않는다.
+      return label && !/^[A-Z][A-Z0-9_]*$/.test(label) ? label : "한 단계 진행했어요";
   }
 };
 const 한일만들기 = (단계: RunStep[] | undefined): { text: string; ok: boolean }[] | undefined => {
   if (!단계 || 단계.length === 0) return undefined;
   return [...단계]
     .sort((a, b) => a.actionIndex - b.actionIndex)
-    .map((s) => {
-      const label = (s.label ?? "").trim();
-      return { text: 동작말(s.action, label, label.length > 0 && !코드꼴.test(label)), ok: s.success };
-    });
+    .map((s) => ({ text: 동작말(s.action, (s.label ?? "").trim()), ok: s.success }));
 };
 
 /** 킷 fixture 의 후보. candidate-filters 가 이 모양으로 돌려준다. */
