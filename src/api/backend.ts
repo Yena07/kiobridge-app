@@ -698,15 +698,24 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       throw e;
     }
 
-    // 본문은 한 번만 읽을 수 있다. 먼저 문자열로 받아 두고 성공.실패 양쪽에서 쓴다.
-    // 예전에는 실패 쪽에서 res.json() 을 따로 불러서, 기록에 남길 본문이 없었다.
-    const t = await res.text();
-    적기(res.status, t);
+    /*
+     * 본문은 한 번만 읽을 수 있다. 먼저 문자열로 받아 두고 성공.실패 양쪽에서 쓴다.
+     * 예전에는 실패 쪽에서 res.json() 을 따로 불러서, 기록에 남길 본문이 없었다.
+     *
+     * 읽는 것 자체도 실패할 수 있다(스트림이 중간에 끊기는 경우). 막아 두지 않으면
+     * !res.ok 분기에 닿기도 전에 TypeError 가 올라가서, 호출자는 HTTP 상태가 담긴
+     * KioBridgeError 대신 개발자 문장을 받는다. account.ts 는 이미 막아 두었는데
+     * 이쪽만 빠져 있었다.
+     */
+    const t = await res.text().catch(() => null);
+    적기(res.status, t ?? undefined);
 
     if (!res.ok) {
-      const b = (() => { try { return JSON.parse(t) as { code?: string; message?: string }; } catch { return {}; } })();
+      // 본문을 못 읽었어도 상태 코드는 안다. 그것만으로도 할 말이 있다.
+      const b = (() => { try { return JSON.parse(t ?? "") as { code?: string; message?: string }; } catch { return {}; } })();
       throw new KioBridgeError(b.code ?? `HTTP_${res.status}`, b.message ?? "요청을 처리하지 못했어요", res.status >= 500);
     }
+    if (t === null) throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
     return (t ? JSON.parse(t) : undefined) as T;
   };
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApi, createTeamBackend, type Backend, type EvidenceSummary, type RecommendationResult } from "./backend";
-import { getSheet, registerSheet } from "./client";
+import { KioBridgeError, getSheet, registerSheet } from "./client";
 import type { OrderSheet } from "@/domain/types";
 
 // 백엔드가 아직 없으므로, 명세서대로 응답하는 가짜를 만들어 조립이 맞는지 본다.
@@ -634,6 +634,38 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     await b.createSession({ environmentId: "chicken-store", claimCode: "kb_demo" });
     const [, init] = (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
     expect(JSON.parse(String(init.body))).toEqual({ environmentId: "chicken-store", claimCode: "kb_demo" });
+  });
+});
+
+describe("팀 백엔드 — 본문을 못 읽어도 계약을 지킨다", () => {
+  /*
+   * res.text() 도 실패할 수 있다(스트림이 중간에 끊기는 경우). 막아 두지 않으면
+   * !res.ok 분기에 닿기도 전에 TypeError 가 올라가서, 화면은 HTTP 상태가 담긴
+   * KioBridgeError 대신 개발자 문장을 받는다.
+   */
+  const 못읽는응답 = (status: number) => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => ({}),
+      text: async () => { throw new TypeError("network error"); },
+    }) as unknown as Response) as unknown as typeof fetch;
+  };
+
+  it("실패 응답이면 본문을 못 읽어도 HTTP 상태로 말한다", async () => {
+    못읽는응답(500);
+    const b = createTeamBackend("/api/bff");
+    const e = await b.createSession({ environmentId: "chicken-store", claimCode: "kb" }).catch((x) => x);
+    expect(e).toBeInstanceOf(KioBridgeError);
+    expect((e as KioBridgeError).code).toBe("HTTP_500");
+  });
+
+  it("성공 응답인데 본문을 못 읽으면 BAD_RESPONSE 다", async () => {
+    못읽는응답(200);
+    const b = createTeamBackend("/api/bff");
+    const e = await b.createSession({ environmentId: "chicken-store", claimCode: "kb" }).catch((x) => x);
+    expect(e).toBeInstanceOf(KioBridgeError);
+    expect((e as KioBridgeError).code).toBe("BAD_RESPONSE");
   });
 });
 
