@@ -67,11 +67,21 @@ describe("연동기록 — 자유 입력은 본문에서도 가린다", () => {
     expect(응답).not.toContain("김할머니");
     expect(응답).toContain('"memo":"***"');
 
+    /*
+     * not.toContain 하나로는 부족하다. 응답이 undefined 여도 통과한다 - 가리기가
+     * 통째로 빠져도 초록이다. 무엇으로 바뀌었는지까지 본다.
+     *
+     * 기록 자체는 남는다. 본문만 통째로 갈린다 - 무엇을 불렀는지는 알아야
+     * 로그가 쓸모 있고, 못 가리는 본문만 안 보여 주면 된다.
+     */
+    const 이전 = 연동기록.읽기().length;
     연동기록.남기기({
       방법: "GET", 경로: "/api/v1/users/7/profiles", 상태: 200, 걸린시간: 1, 시각: Date.now(),
       응답: "<html>프록시가 끼워 넣은 것</html>",
     });
+    expect(연동기록.읽기()).toHaveLength(이전 + 1);
     expect(연동기록.읽기()[0].응답 ?? "").not.toContain("html");
+    expect(연동기록.읽기()[0].응답).toContain("가리지 못했습니다");
   });
 
   it("JSON 이 아니면 아예 남기지 않는다", () => {
