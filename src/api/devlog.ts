@@ -5,9 +5,8 @@
  * 돌려주기 때문이다. 그래서 실제로 나간 요청을 여기 모아 두고, 개발 중에만
  * 옆에 띄운다.
  *
- * 팀 백엔드 모드(npm run dev:team)에서만 기록한다. 기본 빌드에서는
- * import.meta.env.VITE_BACKEND 가 빈 문자열이라 이 모듈을 부르는 쪽이
- * 통째로 사라진다.
+ * 팀 백엔드 모드(npm run dev:team · build:team)에서만 기록한다.
+ * 기본 빌드에서는 __TEAM_BACKEND__ 가 거짓이라 이 모듈을 부르는 쪽이 통째로 사라진다.
  */
 
 export interface 오간것 {
@@ -36,4 +35,4 @@ export const 연동기록 = {
 };
 
 /** 팀 백엔드 모드인가. 빌드할 때 정해지므로 아닌 쪽 코드는 번들에서 빠진다. */
-export const 팀백엔드모드 = import.meta.env.VITE_BACKEND === "team";
+export const 팀백엔드모드 = __TEAM_BACKEND__;

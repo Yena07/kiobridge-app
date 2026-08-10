@@ -47,7 +47,20 @@ function 저작자표시복사() {
  */
 export default defineConfig(({ mode }) => ({
   define: {
-    'import.meta.env.VITE_BACKEND': JSON.stringify(mode === 'team' ? 'team' : ''),
+    /*
+     * 맨 이름(__TEAM_BACKEND__)으로 둔다. import.meta.env.VITE_BACKEND 로 두면
+     * 개발 서버에서 조용히 목으로 돈다.
+     *
+     * Vite 는 import.meta.env 를 자기가 만들어 넣는다. define 으로 그 안의 키를
+     * 덮는 것은 빌드에서만 통하고, 개발 서버에서는 무시된다. 그래서 .env 파일을
+     * 없애고 이리로 옮긴 뒤부터 npm run dev:team 이 목으로 돌고 있었다 —
+     * 화면은 그럴듯하게 답하니 아무도 눈치채지 못한다. 이 파일이 막으려던
+     * 바로 그 상황이었다.
+     *
+     * 맨 이름은 개발.빌드 양쪽에서 똑같이 치환된다. 확인은 이렇게 한다.
+     *   curl -s localhost:5199/src/api/devlog.ts | grep 팀백엔드모드
+     */
+    __TEAM_BACKEND__: JSON.stringify(mode === 'team'),
   },
   plugins: [react(), tailwindcss(), 저작자표시복사()],
   resolve: {

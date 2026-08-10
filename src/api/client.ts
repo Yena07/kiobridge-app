@@ -336,7 +336,7 @@ export const mockApi: KioBridgeApi = {
 /**
  * 화면이 쓰는 API.
  *
- * 기본은 목이다. VITE_BACKEND=team 일 때만 팀 백엔드로 간다(npm run dev:team).
+ * 기본은 목이다. __TEAM_BACKEND__ 가 참일 때만 팀 백엔드로 간다(npm run dev:team · build:team).
  *
  * 기본값을 아직 목으로 두는 이유는 두 가지다.
  *   1. 추천 응답에 조건별 일치 여부(matchedOptions)가 없어서, 확인 카드가
@@ -348,7 +348,7 @@ export const mockApi: KioBridgeApi = {
  * docs/BACKEND_INTEGRATION.md 참고.
  */
 export const api: KioBridgeApi =
-  import.meta.env.VITE_BACKEND === "team"
+  __TEAM_BACKEND__
     ? createApi(createTeamBackend(), "chicken-store", getSheet)
     : mockApi;
 export const POLL_MS = 600;
