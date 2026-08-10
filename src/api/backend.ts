@@ -127,6 +127,14 @@ export interface EvidenceSummary {
    * 없으면 화면이 그 줄을 아예 그리지 않는다 — 지어내지 않는다.
    */
   note?: string;
+  /**
+   * 서버가 매긴 상태 문장(#48 의 summary.status). 그대로 인용해서 보여 준다.
+   *
+   * 앱 문구로 옮기지 않는다. 이 줄의 쓸모가 "이 값이 서버에서 왔다" 를 보이는
+   * 것이라, 우리 말로 바꾸는 순간 서버가 준 것인지 앱이 지어낸 것인지 다시
+   * 구분할 수 없어진다. 문체가 다른 것은 인용이라고 밝혀서 푼다.
+   */
+  serverStatus?: string;
 }
 
 // ─── 확신도 경계 ─────────────────────────────────────────────────────────────
@@ -448,7 +456,11 @@ export function createApi(
         };
       }
       if (e.state === "cart_ready") {
-        return { state: "cart_ready", steps, cart: e.cart, ...(e.note ? { note: e.note } : {}) };
+        return {
+          state: "cart_ready", steps, cart: e.cart,
+          ...(e.note ? { note: e.note } : {}),
+          ...(e.serverStatus ? { serverStatus: e.serverStatus } : {}),
+        };
       }
       return { state: "running", steps };
     },
@@ -1082,6 +1094,8 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         // 또 쓰면 같은 말이 두 번 나온다. 그래서 성공했을 때는 왜 이 메뉴였는지를
         // 말해 주는 recommendation 만 한 줄로 올린다.
         ...(state === "cart_ready" && 요약?.recommendation ? { note: 요약.recommendation } : {}),
+        // 서버 문장을 그대로 싣는다. 화면이 '서버가 보내온 말' 이라고 밝히고 인용한다.
+        ...(요약?.status ? { serverStatus: 요약.status } : {}),
         ...(state === "cart_ready" ? { cart: 장바구니(e.reviewSnapshot) } : {}),
         ...(state === "aborted"
           ? {

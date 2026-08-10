@@ -2498,10 +2498,12 @@ function ExecInProgress({ statuses }: { statuses: StepStatus[] }) {
   );
 }
 
-function ExecSuccess({ cart, steps, note, onHome }: {
+function ExecSuccess({ cart, steps, note, serverStatus, onHome }: {
   cart: CartResult; steps: StepStatus[];
   /** 서버가 증거를 읽어 만든 한 문장. 없으면 이 줄을 그리지 않는다. */
   note?: string;
+  /** 서버가 매긴 상태 문장. 그대로 인용한다. */
+  serverStatus?: string;
   onHome: () => void;
 }) {
   return (
@@ -2535,6 +2537,20 @@ function ExecSuccess({ cart, steps, note, onHome }: {
         <div style={{ display: "flex", gap: 9, alignItems: "flex-start", paddingLeft: 2 }}>
           <Pictogram name="checkCircle" size={17} color={TEXT_2} />
           <p style={{ ...TYPE.caption, color: TEXT_2, flex: 1 }}>{note}</p>
+        </div>
+      )}
+
+      {/*
+        서버가 매긴 상태를 그대로 인용한다.
+        문체가 다르다('~되었습니다'). 앱 문구로 옮기지 않는 이유는, 이 줄의 쓸모가
+        "이 결과가 키오스크 쪽에서 온 것이다" 를 보이는 데 있어서다. 우리 말로 바꾸면
+        서버가 준 것인지 앱이 지어낸 것인지 다시 구분할 수 없어진다.
+        인용이라고 밝혀서 문체 차이를 푼다 — 앱이 하는 말이 아니라 옮겨 적은 말이다.
+      */}
+      {serverStatus && (
+        <div style={{ borderRadius: RADIUS.card, padding: "14px 16px", backgroundColor: CANVAS }}>
+          <p style={{ ...TYPE.label, color: TEXT_2, marginBottom: 4 }}>키오스크가 보내온 결과</p>
+          <p style={{ ...TYPE.caption, color: TEXT_1 }}>“{serverStatus}”</p>
         </div>
       )}
 
@@ -2663,7 +2679,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
         )}
         {status.state === "running" && !pollError && <ExecInProgress statuses={status.steps} />}
         {status.state === "cart_ready" && status.cart && (
-          <ExecSuccess cart={status.cart} steps={status.steps} note={status.note} onHome={onHome} />
+          <ExecSuccess cart={status.cart} steps={status.steps} note={status.note} serverStatus={status.serverStatus} onHome={onHome} />
         )}
         {/*
          * 담기는 끝났는데 내역이 안 온 경우. cart 는 옵셔널이라 서버가 빠뜨릴 수 있다.

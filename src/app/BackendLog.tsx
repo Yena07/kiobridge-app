@@ -148,13 +148,34 @@ function 짚어내기(경로: string, 응답: unknown): 짚기[] {
 
   if (경로.startsWith("/internal/orchestrator/approve")) {
     const raw = r.raw ?? r;
+    const e = raw?.evidence;
     넣기("결과 화면 · 한 줄 요약(#48)", r.summary?.recommendation);
     넣기("서버가 매긴 상태(#48)", r.summary?.status);
-    넣기("중단 사유", r.summary?.stopReason ?? raw?.evidence?.stopReason);
-    넣기("실행 결과", raw?.evidence?.result);
-    넣기("실행한 단계 수", raw?.evidence?.executedActions?.length);
-    const cart = raw?.evidence?.reviewSnapshot;
-    if (cart) 넣기("장바구니 (개수·금액)", `${cart.itemCount ?? "?"}개 · ${cart.total ?? "?"}원`);
+    넣기("실행 결과", e?.result);
+    넣기("실행한 단계 수", e?.executedActions?.length);
+    /*
+     * stopReason 은 성공했을 때도 온다 — PASS 인데 "VERIFY_CART_VERIFIED" 다.
+     * 마지막으로 닿은 상태 이름이지 중단 사유가 아니다. 성공한 줄에 '중단 사유' 라고
+     * 적으면 보는 사람이 무언가 잘못된 줄 안다. 끝난 상태로 이름을 바꾸고,
+     * 진짜 중단 사유는 실패했을 때만 그렇게 부른다.
+     */
+    if (e?.result === "PASS") 넣기("마지막으로 닿은 상태", e?.stopReason);
+    else 넣기("중단 사유", r.summary?.stopReason ?? e?.stopReason);
+    넣기("멈춘 방식", e?.stopType);
+
+    /*
+     * 개수는 서버가 따로 주지 않는다. reviewSnapshot 에는 한글 키(메뉴명·총액)와
+     * cartItems·total 이 들어 있고 itemCount 는 없다. 예전에는 없는 칸을 읽어
+     * "?개" 라고 적었다 — 서버가 준 것만 보여 주겠다는 이 화면의 전제를 스스로
+     * 어긴 셈이다. 담긴 것에서 세고, 셀 수 없으면 그 줄을 아예 안 쓴다.
+     */
+    const cart = e?.reviewSnapshot;
+    if (cart) {
+      const 개수 = (cart.cartItems ?? []).reduce((n: number, c: any) => n + (Number(c?.quantity) || 0), 0);
+      if (개수 > 0) 넣기("장바구니 · 개수", `${개수}개`);
+      넣기("장바구니 · 금액", cart["총액"] ?? (typeof cart.total === "number" ? `${cart.total.toLocaleString("ko-KR")}원` : undefined));
+      넣기("장바구니 · 담긴 메뉴", cart["메뉴명"] ?? (cart.cartItems ?? [])[0]?.name);
+    }
   }
 
   if (경로.startsWith("/internal/simulation/session")) {
