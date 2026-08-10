@@ -1954,15 +1954,15 @@ function ConfirmCard({ children, badge, badgeTone = "success", photo }: {
  * "쓴 정보"와 "뺀 이유"를 같이 보여 준다 — 무엇이 빠졌는지 모르면 확인이 아니다.
  * 색만으로 구분하지 않도록 두 종류에 서로 다른 픽토그램을 붙인다.
  */
-function ReasonList({ reasons }: { reasons?: RecommendationReason[] }) {
+function ReasonList({ reasons, 제목 = "이 메뉴를 고른 이유" }: { reasons?: RecommendationReason[]; 제목?: string }) {
   if (!reasons || reasons.length === 0) return null;
   return (
     <section
-      aria-label="이 메뉴를 고른 이유"
+      aria-label={제목}
       style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: "16px 18px" }}
     >
       <h3 style={{ fontSize: 13, fontWeight: 700, color: TEXT_1, marginBottom: 10 }}>
-        이 메뉴를 고른 이유
+        {제목}
       </h3>
       <ul style={{ display: "flex", flexDirection: "column", gap: 9, margin: 0, padding: 0, listStyle: "none" }}>
         {reasons.map((r) => (
@@ -1983,6 +1983,85 @@ function ReasonList({ reasons }: { reasons?: RecommendationReason[] }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * 이유만 보여 주는 단계. 확인 카드 앞에 온다.
+ *
+ * 예전에는 확인 카드 아래에 이유가 붙어 있었다. 그러면 조건표·후보 목록·이유가
+ * 한 화면에 다 쌓여서, 이유를 읽으려면 스크롤을 내려야 했다. 승인하기 전에
+ * 꼭 읽어야 할 것이 가장 읽기 어려운 자리에 있던 셈이다.
+ *
+ * 순서를 바꾼다 — 왜 이걸 골랐는지 먼저 읽고, 그 다음에 무엇을 담을지 고른다.
+ * 킷 가이드가 [필수] 로 정한 "결과만 보여주지 말고 왜 그런지 함께" 도 이 순서가
+ * 더 잘 지킨다. 아래로 밀려 안 읽히는 것보다 앞에 세우는 편이 낫다.
+ */
+function ReasonStep({ reasons, onNext, 확인중 }: {
+  reasons: RecommendationReason[];
+  onNext: () => void;
+  /** 되묻는 상황이면 다음 화면에서 할 일을 미리 알려 준다. */
+  확인중?: boolean;
+}) {
+  const 쓴것 = reasons.filter((r) => r.kind === "used");
+  const 뺀것 = reasons.filter((r) => r.kind !== "used");
+  return (
+    <div className="flex flex-col gap-5">
+      <CenterHeadline
+        title={<>이렇게 찾았어요</>}
+        desc="저장해 두신 조건으로 오늘 메뉴에서 찾은 결과예요."
+      />
+
+      {쓴것.length > 0 && <ReasonList reasons={쓴것} 제목="반영한 조건" />}
+      {뺀것.length > 0 && <ReasonList reasons={뺀것} 제목="빼 둔 메뉴와 그 이유" />}
+
+      <PrimaryBtn onClick={onNext}>
+        {확인중 ? "메뉴 고르러 가기" : "담을 메뉴 확인하기"}
+      </PrimaryBtn>
+    </div>
+  );
+}
+
+/**
+ * 확인 카드에 남기는 한 줄.
+ *
+ * 이유 전체는 앞 단계로 옮겼지만, 승인 버튼이 있는 화면에도 근거가 한 줄은
+ * 있어야 한다. 킷 가이드의 '추천 화면 최소 구성' 이 "왜 추천했는가" 를 요구한다.
+ * 눌러서 앞 단계로 되돌아가면 전체를 다시 읽을 수 있다.
+ */
+function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; onOpen: () => void }) {
+  const 첫줄 = reasons?.find((r) => r.kind === "used") ?? reasons?.[0];
+  if (!첫줄) return null;
+  const 남은 = (reasons?.length ?? 0) - 1;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        display: "flex", gap: 9, alignItems: "flex-start", textAlign: "left", width: "100%",
+        borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: "13px 16px",
+        border: "none", cursor: "pointer", font: "inherit",
+      }}
+    >
+      <span style={{ flexShrink: 0, marginTop: 2, display: "flex" }}>
+        <Pictogram name={첫줄.kind === "used" ? "checkCircle" : "warning"} size={16} color={첫줄.kind === "used" ? SUCCESS : WARN} />
+      </span>
+      <span style={{ flex: 1, fontSize: 13, lineHeight: 1.6, color: TEXT_1 }}>
+        {/*
+          말머리를 글자로 붙인다. Pictogram 은 aria-hidden 이라 스크린리더가 못 읽고,
+          reasons[].text 도 '반영' 인지 '제외' 인지를 문장 안에 담는다고 보장하지 않는다.
+          쓴 것이 하나도 없으면 여기 뜨는 줄이 제외 사유인데, 표시가 없으면 그게
+          이 메뉴를 고른 근거처럼 읽힌다. ReasonList 는 이미 이렇게 하고 있었다.
+        */}
+        <b style={{ fontWeight: 700 }}>{첫줄.kind === "used" ? "반영: " : "제외: "}</b>
+        {첫줄.text}
+        {남은 > 0 && (
+          <span style={{ color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3 }}>
+            {" "}이유 {남은}개 더 보기
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
 
@@ -2081,9 +2160,9 @@ function OptionCard({
 }
 
 function OrderExact({
-  item, reasons, onApprove, onCancel,
+  item, reasons, onReasons, onApprove, onCancel,
 }: {
-  item: MappedItem; reasons?: RecommendationReason[]; onApprove: () => void; onCancel: () => void;
+  item: MappedItem; reasons?: RecommendationReason[]; onReasons: () => void; onApprove: () => void; onCancel: () => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -2094,7 +2173,7 @@ function OrderExact({
         ))}
         <ConfirmRow label="가격" value={item.priceText} large />
       </ConfirmCard>
-      <ReasonList reasons={reasons} />
+      <ReasonSummary reasons={reasons} onOpen={onReasons} />
       <PrimaryBtn onClick={onApprove}>승인하고 담기</PrimaryBtn>
       <OutlineBtn onClick={onCancel}>취소</OutlineBtn>
     </div>
@@ -2102,11 +2181,12 @@ function OrderExact({
 }
 
 function OrderClarification({
-  candidates, reason, reasons, options, onApprove, onCancel,
+  candidates, reason, reasons, onReasons, options, onApprove, onCancel,
 }: {
   candidates: MappingCandidate[];
   reason?: string;
   reasons?: RecommendationReason[];
+  onReasons: () => void;
   /** 사용자가 고른 조건. 어느 후보를 고르든 같으므로 함께 보여 준다. */
   options?: MappedOption[];
   onApprove: (candidateId: string) => void;
@@ -2160,7 +2240,7 @@ function OrderClarification({
           />
         ))}
       </div>
-      <ReasonList reasons={reasons} />
+      <ReasonSummary reasons={reasons} onOpen={onReasons} />
       {selected === null && (
         <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2 }}>메뉴를 선택하면 승인할 수 있어요</p>
       )}
@@ -2191,11 +2271,12 @@ function OrderNotFound({ message, onCancel }: { message?: string; onCancel: () =
 }
 
 function OrderChanged({
-  item, diffNote, reasons, onApprove, onCancel,
+  item, diffNote, reasons, onReasons, onApprove, onCancel,
 }: {
   item: MappedItem;
   diffNote?: string;
   reasons?: RecommendationReason[];
+  onReasons: () => void;
   onApprove: () => void;
   onCancel: () => void;
 }) {
@@ -2234,7 +2315,7 @@ function OrderChanged({
         </button>
       </div>
 
-      <ReasonList reasons={reasons} />
+      <ReasonSummary reasons={reasons} onOpen={onReasons} />
       <PrimaryBtn onClick={checked ? onApprove : undefined} disabled={!checked}>변경 내용 확인하고 담기</PrimaryBtn>
       <OutlineBtn onClick={onCancel}>취소</OutlineBtn>
     </div>
@@ -2242,9 +2323,9 @@ function OrderChanged({
 }
 
 function OrderLowConfidence({
-  item, reasons, onApprove, onCancel,
+  item, reasons, onReasons, onApprove, onCancel,
 }: {
-  item: MappedItem; reasons?: RecommendationReason[]; onApprove: () => void; onCancel: () => void;
+  item: MappedItem; reasons?: RecommendationReason[]; onReasons: () => void; onApprove: () => void; onCancel: () => void;
 }) {
   const [selected, setSelected] = useState(false);
   return (
@@ -2277,7 +2358,7 @@ function OrderLowConfidence({
         onToggle={() => setSelected((v) => !v)}
         label="위 내용이 제가 시키려던 것이 맞아요"
       />
-      <ReasonList reasons={reasons} />
+      <ReasonSummary reasons={reasons} onOpen={onReasons} />
       {!selected && (
         <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2 }}>메뉴를 선택하면 승인할 수 있어요</p>
       )}
@@ -2337,6 +2418,19 @@ function OrderConfirmScreen({
     void api.reject({ pairingId, sheetId: sheet.id }).catch(() => {});
   };
 
+  /*
+   * 이유를 먼저 읽고, 그 다음에 무엇을 담을지 고른다.
+   *
+   * 예전에는 한 화면에 확인 카드.조건표.후보 목록.이유가 다 쌓여서, 이유를
+   * 읽으려면 스크롤을 한참 내려야 했다. 승인 전에 꼭 읽어야 할 것이 가장 읽기
+   * 어려운 자리에 있었다. 단계를 나눈다.
+   *
+   * 이유가 없으면 이 단계를 건너뛴다 - 빈 화면을 하나 더 지나가게 하지 않는다.
+   */
+  const [이유먼저, set이유먼저] = useState(true);
+  const 이유있나 = (mapping?.reasons?.length ?? 0) > 0;
+  const 이유단계 = 이유먼저 && 이유있나 && mapping?.result !== "not_found";
+
   const approve = (extra: Omit<ApproveInput, "pairingId" | "sheetId" | "mappingResult"> = {}) => {
     if (!mapping || approving.current) return;
     approving.current = true;
@@ -2369,18 +2463,43 @@ function OrderConfirmScreen({
         {!mapping && error && <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>}
 
         {/*
+          이유 단계. 확인 카드 앞에 온다 — 스크롤을 내려야 읽히던 것을 앞으로 옮겼다.
+        */}
+        {mapping && 이유단계 && (
+          <ReasonStep
+            reasons={mapping.reasons ?? []}
+            확인중={mapping.result === "clarification" || mapping.result === "low_confidence"}
+            onNext={() => set이유먼저(false)}
+          />
+        )}
+
+        {/*
+          이유로 되돌아가도 골라 둔 것을 잃지 않는다.
+
+          조건부로 그리면(!이유단계 && ...) 이유를 다시 볼 때 확인 갈래가 언마운트되고,
+          OrderClarification 의 selected 와 OrderChanged.OrderLowConfidence 의 checked 가
+          초기값으로 돌아간다. 후보를 고르고 이유를 한 번 더 읽고 온 사람은 그 사실을
+          모른 채 승인 버튼이 다시 잠긴 화면을 만난다 — 재확인은 승인 조건이라 다시
+          짚어야만 넘어간다.
+
+          그래서 지우지 않고 감춘다. display:none 은 접근성 트리에서도 빠지므로
+          스크린리더가 감춰진 화면을 읽지 않는다.
+        */}
+        <div style={{ display: 이유단계 ? "none" : undefined }}>
+        {/*
          * item 이 없으면 그리지 않는다. 예전에는 mapping.item! 로 있다고 단정했는데,
          * 조건에 다 걸려 후보가 하나도 안 남으면 undefined 가 들어와 화면이 터진다.
          * 목은 이제 그 경우를 not_found 로 답하지만, 화면이 서버를 믿고 단정할 이유는 없다.
          */}
         {mapping?.result === "exact" && mapping.item && (
-          <OrderExact item={mapping.item} reasons={mapping.reasons} onApprove={() => approve()} onCancel={거절하기} />
+          <OrderExact item={mapping.item} reasons={mapping.reasons} onReasons={() => set이유먼저(true)} onApprove={() => approve()} onCancel={거절하기} />
         )}
         {mapping?.result === "clarification" && (
           <OrderClarification
             candidates={mapping.candidates ?? []}
             reason={mapping.reason}
             reasons={mapping.reasons}
+            onReasons={() => set이유먼저(true)}
             options={mapping.sheetOptions}
             onApprove={(candidateId) => approve({ candidateId })}
             onCancel={거절하기}
@@ -2392,6 +2511,7 @@ function OrderConfirmScreen({
             item={mapping.item}
             diffNote={mapping.diffNote}
             reasons={mapping.reasons}
+            onReasons={() => set이유먼저(true)}
             onApprove={() => approve({ acknowledgedDiff: true })}
             onCancel={거절하기}
           />
@@ -2411,11 +2531,13 @@ function OrderConfirmScreen({
           <OrderLowConfidence
             item={mapping.item}
             reasons={mapping.reasons}
+            onReasons={() => set이유먼저(true)}
             /* 사용자가 카드를 눌러 "이 메뉴가 맞다"고 짚어야만 여기까지 온다. 그 사실을 서버에도 알린다. */
             onApprove={() => approve({ confirmedLowConfidence: true })}
             onCancel={거절하기}
           />
         )}
+        </div>
       </div>
     </div>
   );
