@@ -4,7 +4,7 @@
 로컬에서 프론트와 붙여 보려고 그대로 복사해 둔 것입니다.
 
 ```
-원본   watTHEBUG/kioBridge  dev  2ebe647  [TEST] EvidenceSummaryService/EvidenceParsingService/ValidationErrorMessageService 유닛 테스트 추가 (#69)
+원본   watTHEBUG/kioBridge  dev  2eb44d9  feat: 검증에 막힌 이유를 서버가 옮겨 준 문장 그대로, 빠짐없이 보여준다 (#74)
 복사   2026-08-11
 ```
 
