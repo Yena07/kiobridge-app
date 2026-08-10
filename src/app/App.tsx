@@ -2472,8 +2472,19 @@ function OrderConfirmScreen({
           />
         )}
 
-        {!이유단계 && (
-        <>
+        {/*
+          이유로 되돌아가도 골라 둔 것을 잃지 않는다.
+
+          조건부로 그리면(!이유단계 && ...) 이유를 다시 볼 때 확인 갈래가 언마운트되고,
+          OrderClarification 의 selected 와 OrderChanged.OrderLowConfidence 의 checked 가
+          초기값으로 돌아간다. 후보를 고르고 이유를 한 번 더 읽고 온 사람은 그 사실을
+          모른 채 승인 버튼이 다시 잠긴 화면을 만난다 — 재확인은 승인 조건이라 다시
+          짚어야만 넘어간다.
+
+          그래서 지우지 않고 감춘다. display:none 은 접근성 트리에서도 빠지므로
+          스크린리더가 감춰진 화면을 읽지 않는다.
+        */}
+        <div style={{ display: 이유단계 ? "none" : undefined }}>
         {/*
          * item 이 없으면 그리지 않는다. 예전에는 mapping.item! 로 있다고 단정했는데,
          * 조건에 다 걸려 후보가 하나도 안 남으면 undefined 가 들어와 화면이 터진다.
@@ -2525,8 +2536,7 @@ function OrderConfirmScreen({
             onCancel={거절하기}
           />
         )}
-        </>
-        )}
+        </div>
       </div>
     </div>
   );
