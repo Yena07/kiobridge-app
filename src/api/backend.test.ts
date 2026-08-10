@@ -203,6 +203,21 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("사유가 여러 줄이면 전부 화면까지 올라간다", async () => {
+    // Error 는 message 한 칸뿐이라 예전에는 첫 줄만 닿고 나머지가 사라졌다.
+    // 하나를 고쳐도 또 막히는데 왜 막히는지 끝까지 알 수 없었다.
+    const 사유 = ["필수 정보가 빠졌습니다.", "선택하신 값이 지원되지 않는 옵션입니다."];
+    const b = 가짜백엔드({ validate: async () => ({ valid: false, errors: 사유 }) });
+    const api = createApi(b);
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    const e = await api
+      .approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" })
+      .then(() => null, (err: KioBridgeError) => err);
+    expect(e?.message).toBe(사유[0]);
+    expect(e?.details).toEqual(사유);
+  });
+
   it("매핑 전에는 승인할 수 없다 (P0-4)", async () => {
     const execute = vi.fn(async () => ({ planId: "pln_1" }));
     const api = createApi(가짜백엔드({ execute }));
@@ -549,6 +564,63 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     const e = await b.getEvidence("s1");
     expect(e.state).toBe("running");
     expect(e.cart).toBeUndefined();
+  });
+
+  it("서버가 옮겨 준 문장이 있으면 그것만 쓴다 (#66)", async () => {
+    // 예전 경로(validation.errors)는 킷이 개발자에게 하는 말이다. 둘 다 오면
+    // 옮긴 문장 옆에 원문이 그대로 붙어 버린다. 옮긴 쪽만 남긴다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: false,
+      validationMessages: ["필수 정보가 빠졌습니다.", "선택하신 값이 지원되지 않는 옵션입니다."],
+      raw: {
+        valid: false,
+        validation: {
+          valid: false,
+          errors: [{ path: "$.executionPlan[0]", code: "REQUIRED_FIELD_MISSING", message: "must have required property 'actionType'" }],
+        },
+      },
+    });
+    expect(await b.validate("s1")).toEqual({
+      valid: false,
+      errors: ["필수 정보가 빠졌습니다.", "선택하신 값이 지원되지 않는 옵션입니다."],
+    });
+  });
+
+  it("#66 이전 응답이면 예전 경로로 물러난다", async () => {
+    // 배포된 백엔드가 아직 낡았을 수 있다. 필드가 없다고 이유를 못 보여 주면 안 된다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: false,
+      validation: { valid: false, errors: [{ code: "BAD", message: "담을 수 없는 메뉴예요" }] },
+    });
+    expect(await b.validate("s1")).toEqual({ valid: false, errors: ["담을 수 없는 메뉴예요"] });
+  });
+
+  it("성공하면 빈 배열이 와도 아무 일도 없다", async () => {
+    // 서버는 성공할 때 validationMessages 를 List.of() 로 보낸다.
+    // 있고 없고로 실패를 판단하면 안 된다.
+    const b = 붙이기();
+    await 승인(b, { valid: true, validationMessages: [], raw: 실행성공 });
+    expect(await b.validate("s1")).toEqual({ valid: true });
+  });
+
+  it("결제 표현이 섞여 오면 그 줄은 보여 주지 않는다", async () => {
+    // 결제 표현은 화면에 있기만 해도 실격이다. 서버 표에 한 줄이 늘어도
+    // 그게 곧바로 화면에 뜨지 않도록 막는다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: false,
+      validationMessages: ["결제수단을 먼저 선택해 주세요.", "필수 정보가 빠졌습니다."],
+    });
+    expect(await b.validate("s1")).toEqual({ valid: false, errors: ["필수 정보가 빠졌습니다."] });
+  });
+
+  it("보여 줄 문장이 하나도 안 남으면 errors 를 만들지 않는다", async () => {
+    // 화면이 기본 문구로 말한다. 빈 칸을 띄우지 않는다.
+    const b = 붙이기();
+    await 승인(b, { valid: false, validationMessages: ["결제를 완료해 주세요."] });
+    expect(await b.validate("s1")).toEqual({ valid: false });
   });
 
   it("안전 중단만 중단 화면으로 보낸다", async () => {
