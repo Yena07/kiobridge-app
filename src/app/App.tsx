@@ -2445,7 +2445,8 @@ function OrderConfirmScreen({
   onApproved: (planId: string) => void;
 }) {
   const [mapping, setMapping] = useState<MappingResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // 서버가 이유를 여러 줄 줄 수 있어 문장 하나가 아니라 목록으로 들고 있는다.
+  const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   // 승인은 한 번만. 연타로 실행 계획이 두 번 만들어지면 안 된다.
   const approving = useRef(false);
 
@@ -2453,7 +2454,7 @@ function OrderConfirmScreen({
     let alive = true;
     api.requestMapping(pairingId, sheet.id)
       .then((res) => { if (alive) setMapping(res); })
-      .catch((e: KioBridgeError) => { if (alive) setError(e.message); });
+      .catch((e: KioBridgeError) => { if (alive) setError({ message: e.message }); });
     return () => { alive = false; };
   }, [pairingId, sheet.id]);
 
@@ -2503,7 +2504,10 @@ function OrderConfirmScreen({
     setError(null);
     api.approve({ pairingId, sheetId: sheet.id, mappingResult: mapping.result, ...extra })
       .then((res) => onApproved(res.planId))
-      .catch((e: KioBridgeError) => { approving.current = false; setError(e.message); });
+      .catch((e: KioBridgeError) => {
+        approving.current = false;
+        setError({ message: e.message, ...(e.details && e.details.length > 1 ? { details: e.details } : {}) });
+      });
   };
 
   return (
@@ -2520,9 +2524,24 @@ function OrderConfirmScreen({
       <div className="flex-1 overflow-y-auto pb-6" style={{ minHeight: 0, paddingLeft: GAP.screenX, paddingRight: GAP.screenX, paddingTop: 24 }} aria-busy={!mapping && !error}>
         {!mapping && !error && <OrderMappingLoading />}
 
+        {/*
+          이유가 여러 줄이면 줄줄이 잇지 않고 하나씩 세운다. 붙여 놓으면
+          두 가지 문제가 한 문장으로 읽혀서 몇 개인지조차 안 보인다.
+          InfoBox 안은 <p> 라 <ul> 을 넣을 수 없어 블록 <span> 으로 세운다.
+        */}
         {error && (
           <div className="mb-4" role="alert">
-            <InfoBox>{error}</InfoBox>
+            <InfoBox>
+              {error.details
+                ? <>
+                    이런 점 때문에 담지 못했어요.
+                    {/* 서버는 distinct 로 주지만 옛 경로는 같은 문장이 겹칠 수 있다. */}
+                    {error.details.map((줄, i) => (
+                      <span key={`${i}-${줄}`} style={{ display: "block", marginTop: 6 }}>· {줄}</span>
+                    ))}
+                  </>
+                : error.message}
+            </InfoBox>
           </div>
         )}
 

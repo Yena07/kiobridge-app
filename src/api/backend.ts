@@ -380,7 +380,14 @@ export function createApi(
         await backend.submit(input.pairingId, { ...input, candidateId, ...(profile ? { profile } : {}) });
         const v = await backend.validate(input.pairingId);
         if (!v.valid) {
-          throw new KioBridgeError("VALIDATION_FAILED", v.errors?.[0] ?? "계획을 검증하지 못했어요", false);
+          // 이유를 여러 줄 준 경우 전부 넘긴다. 하나만 보여 주면 그것을
+          // 고쳐도 또 막히고, 사용자는 왜 막히는지 끝까지 모른다.
+          throw new KioBridgeError(
+            "VALIDATION_FAILED",
+            v.errors?.[0] ?? "계획을 검증하지 못했어요",
+            false,
+            v.errors,
+          );
         }
         ({ planId } = await backend.execute(input.pairingId));
       } catch (e) {
@@ -536,6 +543,16 @@ interface ApprovalResult {
   valid: boolean;
   /** 서버가 증거를 읽어 만든 한 줄 요약. 화면은 recommendation 만 쓴다. */
   summary?: { status?: string; recommendation?: string; stopReason?: string };
+  /**
+   * 검증에 걸린 이유를 사람이 읽는 문장으로 옮긴 것 (#66).
+   *
+   * 서버가 킷 오류 코드(REQUIRED_FIELD_MISSING 등)를 표에서 찾아 바꿔 준다.
+   * 성공하면 빈 배열로 온다 — 있고 없고로 실패를 판단하면 안 된다. valid 를 본다.
+   *
+   * 선택 필드로 둔다. #66 이전 백엔드에는 이 필드가 아예 없고, 그때는
+   * 예전처럼 raw.validation.errors 의 message 를 쓴다.
+   */
+  validationMessages?: string[];
   raw?: ExecuteResult;
 }
 
@@ -655,6 +672,20 @@ const 앱말투: Record<string, string> = {
   "처리 중 문제가 발생했습니다.": "끝까지 담지 못했어요",
 };
 
+/*
+ * 서버가 준 오류 문장을 화면에 올려도 되는지 본다.
+ *
+ * 결제 표현은 화면에 있기만 해도 실격이다. 성공 문구(status)는 아는 넷만
+ * 인용하는 흰 목록으로 막아 뒀는데, 오류 문장에는 같은 방법을 못 쓴다 —
+ * 서버 표(ValidationErrorMessageService)에 코드가 늘 때마다 흰 목록에서
+ * 빠져 사용자가 이유를 못 보게 된다. 막을 것만 막는다.
+ *
+ * 지금 서버 표 열여섯 문장에는 하나도 걸리지 않는다. 나중에 누가 표에
+ * 한 줄을 더할 때를 위한 것이다.
+ */
+const 금지표현 = /결제|결재|주문\s*완료/;
+const 보여도되나 = (문장: string) => 문장.length > 0 && !금지표현.test(문장);
+
 function 고른것반영(rec: RecommendationResponse, 고른: string | undefined): RecommendationResponse {
   if (!고른 || 고른 === rec.recommendedCandidateId) return rec;
   const 대안 = (rec.alternativeCandidateIds ?? []).filter((id) => id !== 고른);
@@ -741,6 +772,9 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 추천 = new Map<string, RecommendationResponse>();
   // 승인 응답에 실려 온 서버 요약(#48). 결과 화면의 한 줄로 쓴다.
   const 서버요약 = new Map<string, { status?: string; recommendation?: string; stopReason?: string }>();
+  // 승인 응답에 실려 온 검증 실패 문장(#66). 확인 화면이 그대로 보여 준다.
+  // 실행결과(raw)에는 없는 값이라 따로 들고 있어야 한다.
+  const 검증문장 = new Map<string, string[]>();
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
   // 정규화를 거친 주문표·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
@@ -896,6 +930,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     async forgetSession(sessionId) {
       실행결과.delete(sessionId);
       서버요약.delete(sessionId);
+      검증문장.delete(sessionId);
       추천.clear();
       후보.clear();
       정규화됨.clear();
@@ -1044,6 +1079,21 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       // #48 이후에는 { valid, summary, raw } 로 감싸여 온다. 둘 다 받는다.
       실행결과.set(sessionId, r.raw ?? (r as unknown as ExecuteResult));
       if (r.summary) 서버요약.set(sessionId, r.summary);
+      /*
+       * 빈 배열도 그대로 담는다. 담지 않고 넘기면 앞 응답의 문장이 남는다.
+       *
+       * 검증에 막히면 approve() 가 s.executed 를 되돌려서 같은 세션으로 다시
+       * 승인할 수 있다. 그때 두 번째 응답이 빈 배열이면, 사용자는 이번에 막힌
+       * 이유가 아니라 **아까 막혔던 이유**를 읽는다.
+       *
+       * 필드가 아예 없으면(#66 이전 백엔드) 지운다 - 그래야 아래에서 있고 없고로
+       * 예전 경로를 쓸지 정할 수 있다. 길이로 정하면 빈 배열과 구분이 안 된다.
+       */
+      if (Array.isArray(r.validationMessages)) {
+        검증문장.set(sessionId, r.validationMessages);
+      } else {
+        검증문장.delete(sessionId);
+      }
     },
 
     // 서버가 실제로 판단한 결과를 읽는다.
@@ -1056,8 +1106,23 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const r = 실행결과.get(sessionId);
       if (!r) throw new KioBridgeError("PLAN_NOT_FOUND", "실행 정보를 찾을 수 없어요", false);
       if (r.valid) return { valid: true };
-      // 서버가 준 문장을 그대로 올린다. 없으면 화면이 기본 문구를 쓴다.
-      const errors = (r.validation?.errors ?? []).map((e) => e.message).filter(Boolean);
+      /*
+       * 서버가 준 문장을 그대로 올린다. 없으면 화면이 기본 문구를 쓴다.
+       *
+       * #66 부터는 서버가 오류 코드를 사람 문장으로 옮겨 validationMessages 로
+       * 준다. 그게 있으면 그것만 쓴다 — 예전 경로(validation.errors[].message)는
+       * 킷이 개발자에게 하는 말이라("$.executionPlan[0].actionType must be ...")
+       * 사용자 화면에 올릴 문장이 아니었다. 둘을 합치면 옮긴 문장 옆에
+       * 원문이 그대로 붙어 버린다.
+       *
+       * #66 이전 백엔드에는 필드가 없으므로 그때는 예전 경로로 물러난다.
+       *
+       * 물러날지는 **길이가 아니라 있고 없고**로 정한다. 길이로 정하면 서버가
+       * 준 빈 배열("이번엔 옮길 문장이 없다")과 필드 자체가 없는 것("이 서버는
+       * 옮겨 주지 않는다")이 같아진다. 앞의 경우까지 개발자용 원문으로 물러난다.
+       */
+      const 원문 = (r.validation?.errors ?? []).map((e) => e.message);
+      const errors = (검증문장.has(sessionId) ? 검증문장.get(sessionId)! : 원문).filter(보여도되나);
       return { valid: false, ...(errors.length > 0 ? { errors } : {}) };
     },
 

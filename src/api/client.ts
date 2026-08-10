@@ -9,7 +9,19 @@ import { createApi, createTeamBackend } from "@/api/backend";
 import { 연동기록 } from "@/api/devlog";
 
 export class KioBridgeError extends Error {
-  constructor(readonly code: string, message: string, readonly recoverable: boolean) {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly recoverable: boolean,
+    /**
+     * 서버가 이유를 여러 줄로 준 경우 전부. message 는 그중 첫 줄이다.
+     *
+     * Error 는 message 한 칸뿐이라, 검증이 두세 가지 이유로 막혀도
+     * 화면에는 첫 줄만 닿고 나머지는 조용히 사라졌다. 사용자는 하나를
+     * 고쳐도 또 막힌다.
+     */
+    readonly details?: string[],
+  ) {
     super(message);
     this.name = "KioBridgeError";
   }
