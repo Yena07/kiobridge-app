@@ -1,11 +1,14 @@
 package com.kiobridge.kiobridge.orchestrator.controller;
 
 import com.kiobridge.kiobridge.contracts.Evidence;
+import com.kiobridge.kiobridge.contracts.RunResult;
 import com.kiobridge.kiobridge.contracts.client.dto.ExecuteResult;
 import com.kiobridge.kiobridge.modules.stateevidence.service.ApprovalResult;
 import com.kiobridge.kiobridge.modules.stateevidence.service.EvidenceParsingService;
 import com.kiobridge.kiobridge.modules.stateevidence.service.EvidenceSummary;
 import com.kiobridge.kiobridge.modules.stateevidence.service.EvidenceSummaryService;
+import com.kiobridge.kiobridge.modules.stateevidence.service.RunStep;
+import com.kiobridge.kiobridge.modules.stateevidence.service.RunSummaryService;
 import com.kiobridge.kiobridge.modules.stateevidence.service.ValidationErrorMessageService;
 import com.kiobridge.kiobridge.orchestrator.controller.dto.OrchestratorRunRequest;
 import com.kiobridge.kiobridge.orchestrator.service.SubmissionOrchestrator;
@@ -33,17 +36,20 @@ public class OrchestratorController {
     private final EvidenceParsingService evidenceParsingService;
     private final EvidenceSummaryService evidenceSummaryService;
     private final ValidationErrorMessageService validationErrorMessageService;
+    private final RunSummaryService runSummaryService;
 
     public OrchestratorController(
         SubmissionOrchestrator submissionOrchestrator,
         EvidenceParsingService evidenceParsingService,
         EvidenceSummaryService evidenceSummaryService,
-        ValidationErrorMessageService validationErrorMessageService
+        ValidationErrorMessageService validationErrorMessageService,
+        RunSummaryService runSummaryService
     ) {
         this.submissionOrchestrator = submissionOrchestrator;
         this.evidenceParsingService = evidenceParsingService;
         this.evidenceSummaryService = evidenceSummaryService;
         this.validationErrorMessageService = validationErrorMessageService;
+        this.runSummaryService = runSummaryService;
     }
 
     /** POST /internal/orchestrator/approve — STEP9 조립부터 실행까지 전체 승인 플로우. */
@@ -59,6 +65,7 @@ public class OrchestratorController {
 
         EvidenceSummary summary = null;
         List<String> validationMessages = List.of();
+        List<RunStep> runSteps = List.of();
 
         if (result.valid() && result.evidence() != null && !result.evidence().isNull()) {
             try {
@@ -67,6 +74,15 @@ public class OrchestratorController {
             } catch (Exception e) {
                 summary = new EvidenceSummary("결과를 처리하는 중 문제가 발생했습니다.", null, null);
             }
+
+            if (result.run() != null && !result.run().isNull()) {
+                try {
+                    RunResult run = evidenceParsingService.parseRun(result.run());
+                    runSteps = runSummaryService.summarize(run);
+                } catch (Exception e) {
+                    runSteps = List.of();
+                }
+            }
         } else if (!result.valid() && result.validation() != null) {
             validationMessages = result.validation().errors().stream()
                 .map(err -> validationErrorMessageService.toFriendlyMessage(err.code()))
@@ -74,6 +90,6 @@ public class OrchestratorController {
                 .toList();
         }
 
-        return new ApprovalResult(result.valid(), summary, validationMessages, result);
+        return new ApprovalResult(result.valid(), summary, validationMessages, runSteps, result);
     }
 }
