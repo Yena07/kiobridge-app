@@ -6,7 +6,7 @@ import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, ACCENT, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
   SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
-  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES,
+  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES,
 } from "@/design/tokens";
 import type {
   Screen, MainTab, PlaceType, PairingState, StepStatus, OrderSheet, PairingResult,
@@ -20,6 +20,7 @@ import {
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
+import { 접근성설정, type 접근성 } from "@/api/a11y";
 import BackendLog from "@/app/BackendLog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
@@ -1789,27 +1790,82 @@ function ToggleRow({
  * 여기 있는 항목은 전부 실제로 동작하는 것만 둔다. 준비 중인 기능을 목록에 올려 두면
  * 화면을 믿을 수 없게 된다. 큰 글씨는 앱 전체(휴대폰 틀 안)에 바로 적용된다.
  */
-function AccessibilityScreen({
-  largeText, onLargeText, onBack,
-}: {
-  largeText: boolean; onLargeText: (v: boolean) => void; onBack: () => void;
+/**
+ * 접근성 설정.
+ *
+ * 킷 계약이 요구하는 일곱 가지를 다 묻는다. 예전에는 '큰 글씨' 하나만 묻고
+ * 나머지 여섯을 false 로 박아 서버에 보냈다 — 백엔드는 받을 준비가 돼 있었는데
+ * 화면이 안 물어서 늘 "아무 도움도 필요 없음" 으로 나가고 있었다.
+ *
+ * 두 무리로 나눠 적는다.
+ *
+ *   이 앱이 바로 바꾸는 것   큰 글씨 · 고대비
+ *   키오스크에 전해 드릴 것   나머지 다섯
+ *
+ * 뒤의 다섯은 이 앱 화면을 바꾸지 않는다. 켰는데 아무 일도 안 일어나면 사용자는
+ * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
+ * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
+ */
+function AccessibilityScreen({ 설정, onChange, onBack }: {
+  설정: 접근성;
+  onChange: (한칸: Partial<접근성>) => void;
+  onBack: () => void;
 }) {
+  // 켜면 이 앱이 실제로 무언가를 한다. 무엇을 하는지 sub 에 그대로 적는다.
+  const 바로바꾸는것: { key: keyof 접근성; label: string; sub: string }[] = [
+    { key: "largeText", label: "큰 글씨", sub: "앱 전체의 글씨와 버튼을 크게 봐요" },
+    { key: "highContrast", label: "고대비", sub: "글씨와 배경의 차이를 더 뚜렷하게 해요" },
+    { key: "simpleSteps", label: "쉬운 단계", sub: "이유 화면을 건너뛰고 바로 확인 화면으로 가요" },
+    { key: "mobilitySupport", label: "시간 여유", sub: "연결 시간이 지나도 보던 화면을 멋대로 닫지 않아요" },
+    { key: "staffAssistancePreferred", label: "직원 도움", sub: "승인 화면에도 직원에게 보여 달라는 안내를 띄워요" },
+  ];
+  // 켜도 이 앱 화면은 그대로다. 키오스크로 전해지기만 한다.
+  const 전해드릴것: { key: keyof 접근성; label: string; sub: string }[] = [
+    { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
+    { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 이 앱은 원래 소리를 쓰지 않아요" },
+  ];
+
   return (
     <div className="flex flex-col h-full bg-white">
       <SubScreenHeader title="접근성 설정" onBack={onBack} />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 8 }}>이 앱이 바로 바꿔요</h2>
         <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
-          <ToggleRow
-            label="큰 글씨"
-            sub="앱 전체의 글씨와 버튼을 크게 봐요"
-            on={largeText}
-            onToggle={() => onLargeText(!largeText)}
-          />
+          {바로바꾸는것.map((r) => (
+            <ToggleRow
+              key={r.key}
+              label={r.label}
+              sub={r.sub}
+              on={설정[r.key]}
+              onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+            />
+          ))}
+        </div>
+
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24, marginBottom: 8 }}>키오스크에 전해 드려요</h2>
+        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 8, lineHeight: 1.7 }}>
+          아래 둘은 이 앱 화면을 바꾸지 않아요. 주문할 때 키오스크에 함께 전해 드립니다.
+          다만 지금은 전달까지만 하고, 키오스크가 이 값을 쓰기 시작하면 그때부터 반영돼요.
+        </p>
+        <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
+          {전해드릴것.map((r) => (
+            <ToggleRow
+              key={r.key}
+              label={r.label}
+              sub={r.sub}
+              on={설정[r.key]}
+              onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+            />
+          ))}
         </div>
 
         <p style={{ fontSize: 13, color: TEXT_2, marginTop: 20, lineHeight: 1.7 }}>
           이 앱은 처음부터 큰 버튼과 또렷한 대비로 만들었어요.
           단계마다 한 가지만 물어보고, 상태는 색뿐 아니라 그림과 글씨로도 함께 알려드려요.
+          소리로만 알리는 것은 원래 하나도 없어요.
+        </p>
+        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
+          여기서 켠 것은 이 기기에만 있어요. 새로고침하면 처음 상태로 돌아가요.
         </p>
         <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
           화면이 어려우면 이 화면을 매장 직원에게 보여주세요. 직원이 이어서 도와드릴 수 있어요.
@@ -2427,7 +2483,17 @@ function OrderConfirmScreen({
    *
    * 이유가 없으면 이 단계를 건너뛴다 - 빈 화면을 하나 더 지나가게 하지 않는다.
    */
-  const [이유먼저, set이유먼저] = useState(true);
+  /*
+   * '쉬운 단계' 를 켜면 이유 단계를 건너뛴다.
+   *
+   * 이 단계는 원래 스크롤을 줄이려고 만든 것인데, 단계를 하나 늘린 것도 사실이다.
+   * 단계를 줄여 달라고 한 사람에게는 그 맞바꿈이 반대로 작용한다.
+   *
+   * 건너뛰어도 확인 화면의 한 줄 요약과 '이유 N개 더 보기' 는 그대로 남는다 -
+   * 킷 가이드가 [필수] 로 정한 "왜 그런지 함께 보여준다" 는 지켜진다.
+   * 읽고 싶으면 한 번 눌러서 전체를 볼 수 있다.
+   */
+  const [이유먼저, set이유먼저] = useState(!접근성설정.읽기().simpleSteps);
   const 이유있나 = (mapping?.reasons?.length ?? 0) > 0;
   const 이유단계 = 이유먼저 && 이유있나 && mapping?.result !== "not_found";
 
@@ -2461,6 +2527,23 @@ function OrderConfirmScreen({
         )}
 
         {!mapping && error && <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>}
+
+        {/*
+          '직원 도움' 을 켠 사람에게는 승인 화면에서도 이 줄을 띄운다.
+
+          지금까지 이 안내는 실패.중단 화면에만 있었다. 그런데 막히는 곳은
+          대개 실패 화면이 아니라 "이게 맞나" 싶은 확인 화면이고, 거기서
+          도움을 청할 길이 없으면 사람은 그냥 앱을 닫는다.
+          켠 사람에게만 띄운다 - 안 켠 사람에게는 화면에 줄 하나가 더 늘 뿐이다.
+        */}
+        {mapping && 접근성설정.읽기().staffAssistancePreferred && (
+          <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginBottom: 16 }}>
+            <Pictogram name="warning" size={17} color={TEXT_2} />
+            <p style={{ ...TYPE.caption, color: TEXT_2, flex: 1 }}>
+              막히시면 이 화면을 매장 직원에게 보여 주세요. 직원이 이어서 도와드릴 수 있어요.
+            </p>
+          </div>
+        )}
 
         {/*
           이유 단계. 확인 카드 앞에 온다 — 스크롤을 내려야 읽히던 것을 앞으로 옮겼다.
@@ -3120,7 +3203,15 @@ export default function App() {
    */
   const 계정세대 = useRef(0);
   /** 큰 글씨 모드. 휴대폰 틀 안 전체에 적용된다. */
-  const [largeText, setLargeText] = useState(false);
+  /*
+   * 접근성 설정. 저장소는 api/a11y.ts 에 있고 화면은 그걸 비춘다.
+   *
+   * 상태를 여기 두지 않는 이유는 연동 계층(backend.ts)도 이 값을 읽어야 해서다 —
+   * 서버로 보내는 표준형에 그대로 실린다. React 상태로만 두면 그쪽에서 못 읽는다.
+   */
+  const [접근성값, set접근성값] = useState<접근성>(() => 접근성설정.읽기());
+  useEffect(() => 접근성설정.구독(() => set접근성값({ ...접근성설정.읽기() })), []);
+  const largeText = 접근성값.largeText;
   const [sheets, setSheets] = useState<OrderSheet[]>(MOCK_SHEETS);
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
@@ -3302,6 +3393,15 @@ export default function App() {
   // 폴링으로 따로 관리한다.
   useEffect(() => {
     if (!pairingExpiresAt || screen === "execution") return;
+    /*
+     * '시간 여유' 를 켜면 만료돼도 화면을 멋대로 되돌리지 않는다.
+     *
+     * 서버 세션은 어차피 끊긴다 — 그건 앱이 늘릴 수 없다. 앱이 할 수 있는 것은
+     * 보고 있던 화면을 갑자기 걷어내지 않는 것이다. 천천히 읽는 사람에게는
+     * 읽던 화면이 통째로 바뀌는 일이 가장 곤란하다. 다음에 승인을 누를 때
+     * 서버가 만료를 알려 주고, 그때 사용자가 스스로 다시 찍으면 된다.
+     */
+    if (접근성값.mobilitySupport) return;
     const 남은 = pairingExpiresAt - Date.now();
     const 되돌리기 = () => {
       setPairingId(null);
@@ -3317,7 +3417,7 @@ export default function App() {
     if (남은 <= 0) { 되돌리기(); return; }
     const t = setTimeout(되돌리기, 남은);
     return () => clearTimeout(t);
-  }, [pairingExpiresAt, screen]);
+  }, [pairingExpiresAt, screen, 접근성값.mobilitySupport]);
 
   // 화면이 바뀌면 포커스가 <body> 로 떨어진다. 누르던 버튼이 사라지기 때문이다.
   // 스크린리더 사용자는 자기가 어디로 갔는지 듣지 못하고, 키보드 사용자는
@@ -3367,7 +3467,7 @@ export default function App() {
       className="min-h-screen flex items-center justify-center gap-8 p-6"
       style={{ backgroundColor: BACKDROP, fontFamily: FONT }}
     >
-      <style>{FOCUS_STYLES}</style>
+      <style>{PALETTE_STYLES}{FOCUS_STYLES}</style>
       {시연패널보임 && <ScenarioPanel />}
       {/* 나란히 보는 중에는 구석 패널을 감춘다. 같은 것을 두 번 띄울 이유가 없다. */}
       {팀백엔드모드 && 로그모드 !== "나란히" && (
@@ -3392,11 +3492,20 @@ export default function App() {
       <div style={{ width: "100%", maxWidth: FRAME_W, height: FRAME_H }}>
         <div
           ref={화면영역}
+          /*
+           * 고대비는 색 토큰을 갈아 끼워서 만든다. tokens.ts 의 PALETTE_STYLES 가
+           * 이 표시를 보고 CSS 변수를 다른 값으로 채운다.
+           *
+           * 예전에는 filter: contrast(1.3) 이었는데 그게 화면을 더 나쁘게 만들었다 -
+           * 흰색에 가까운 값이 전부 순백으로 뭉개져서 카드 경계가 사라졌다.
+           */
+          data-contrast={접근성값.highContrast ? "high" : undefined}
           className="bg-white overflow-hidden flex flex-col"
           style={{
             zoom: largeText ? LARGE_TEXT_SCALE : 1,
             width: largeText ? FRAME_W / LARGE_TEXT_SCALE : "100%",
             height: largeText ? FRAME_H / LARGE_TEXT_SCALE : FRAME_H,
+
             // absolute 로 띄우는 것들(확인 시트·QR 스캐너)이 이 안에 갇히려면
             // 여기가 컨테이닝 블록이어야 한다. overflow-hidden 만으로는
             // 자기가 기준이 아니면 클리핑도 못 해서 화면 전체를 덮어 버린다.
@@ -3513,6 +3622,10 @@ export default function App() {
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
+                  // 접근성 설정도 함께 비운다. 안 그러면 다음 사람이 앞사람의 도움
+                  // 설정을 그대로 보게 되고, 그 값이 서버로도 계속 나간다.
+                  // 화면이 '모두 지워요' 라고 말한 것에 이것도 들어간다.
+                  접근성설정.비우기();
                   서버까지지우기();
                   setSheets([]); setName("");
                   // 계정도 함께 푼다. 안 풀면 주문표를 다 지운 화면에 회원으로 남아
@@ -3537,8 +3650,8 @@ export default function App() {
           )}
           {screen === "a11y" && (
             <AccessibilityScreen
-              largeText={largeText}
-              onLargeText={setLargeText}
+              설정={접근성값}
+              onChange={(한칸) => 접근성설정.바꾸기(한칸)}
               onBack={() => { setScreen("saved"); setTab("account"); }}
             />
           )}

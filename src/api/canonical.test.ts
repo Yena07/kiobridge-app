@@ -88,10 +88,34 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
     expect(toCanonicalProfile(주문표({})).consent.retentionPolicy).toBe("SESSION_ONLY");
   });
 
-  it("묻지 않은 접근성 항목을 true 로 보내지 않는다", () => {
+  it("안 켠 접근성 항목을 true 로 보내지 않는다", () => {
     const a = toCanonicalProfile(주문표({})).accessibility;
     expect(Object.values(a).every((v) => v === false)).toBe(true);
-    expect(toCanonicalProfile(주문표({}), { largeText: true }).accessibility.largeText).toBe(true);
+  });
+
+  it("설정 화면에서 켠 것을 그대로 보낸다", () => {
+    /*
+     * 예전에는 largeText 하나만 받도록 열어 두고 나머지 여섯을 false 로 박아
+     * 두었다. 백엔드는 일곱을 다 받을 준비가 돼 있었는데 화면이 안 물어서
+     * 늘 "아무 도움도 필요 없음" 으로 나갔다.
+     */
+    const a = toCanonicalProfile(주문표({}), {
+      접근성: { largeText: true, highContrast: true, hearingSupport: true },
+    }).accessibility;
+    expect(a.largeText).toBe(true);
+    expect(a.highContrast).toBe(true);
+    expect(a.hearingSupport).toBe(true);
+    // 안 켠 것은 그대로 false 다.
+    expect(a.simpleSteps).toBe(false);
+    expect(a.staffAssistancePreferred).toBe(false);
+  });
+
+  it("일곱 가지를 다 실어 보낸다 — 킷 계약 그대로", () => {
+    const a = toCanonicalProfile(주문표({})).accessibility;
+    expect(Object.keys(a).sort()).toEqual([
+      "hearingSupport", "highContrast", "largeText", "mobilitySupport",
+      "simpleSteps", "staffAssistancePreferred", "visualGuidance",
+    ]);
   });
 
   it("수집 시각을 넘기면 그걸 쓴다 — 시계에 기대지 않는다", () => {

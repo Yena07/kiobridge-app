@@ -53,6 +53,27 @@ describe("연동기록 — 자유 입력은 본문에서도 가린다", () => {
     expect(남은).toContain("p1");
   });
 
+  it("응답 본문에서도 memo 를 가리고, JSON 이 아니면 안 남긴다", () => {
+    /*
+     * 남기기() 는 요청.응답 양쪽에 같은 가리기를 건다. 그런데 테스트가 요청만
+     * 보고 있으면, 응답 쪽 가리기가 빠져도 초록으로 통과한다.
+     * 주문표 조회 응답에는 저장해 둔 memo 가 그대로 실려 온다.
+     */
+    연동기록.남기기({
+      방법: "GET", 경로: "/api/v1/users/7/profiles", 상태: 200, 걸린시간: 1, 시각: Date.now(),
+      응답: JSON.stringify([{ profileId: "p1", memo: "김할머니 앞으로 해주세요" }]),
+    });
+    const 응답 = 연동기록.읽기()[0].응답 ?? "";
+    expect(응답).not.toContain("김할머니");
+    expect(응답).toContain('"memo":"***"');
+
+    연동기록.남기기({
+      방법: "GET", 경로: "/api/v1/users/7/profiles", 상태: 200, 걸린시간: 1, 시각: Date.now(),
+      응답: "<html>프록시가 끼워 넣은 것</html>",
+    });
+    expect(연동기록.읽기()[0].응답 ?? "").not.toContain("html");
+  });
+
   it("JSON 이 아니면 아예 남기지 않는다", () => {
     const 남은 = 남기고읽기("<html>프록시가 끼워 넣은 것</html>");
     expect(남은).not.toContain("html");
