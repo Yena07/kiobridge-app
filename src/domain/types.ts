@@ -1,5 +1,7 @@
+// 로그인은 끝까지 선택이다. login·signup 은 welcome 과 계정 화면에서만 들어갈 수 있고,
+// 주 흐름(saved → order-confirm → execution)은 이 둘을 거치지 않는다.
 export type Screen =
-  | "welcome" | "phone" | "otp" | "name" | "greeting" | "profile" | "saved"
+  | "welcome" | "login" | "signup" | "name" | "greeting" | "profile" | "saved"
   | "order-confirm" | "execution"
   | "a11y"      // 접근성 설정
   | "privacy";  // 무엇을 저장하고 무엇을 저장하지 않는지

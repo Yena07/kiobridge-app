@@ -53,6 +53,21 @@ const 허용경로 = [
   /^api\/v1\/canonical-inputs\/validate$/,
   /^api\/v1\/profile-normalizations$/,
   /^api\/v1\/session-context-normalizations$/,
+  /*
+   * 계정 계열 (AuthController · UserProfileController)
+   *
+   * 이 함수는 인증 없이 열려 있고 허용 경로 하나만 알면 누구든 부를 수 있다.
+   * 로그인 경로를 여는 순간 이 함수가 무차별 대입의 대리 창구가 된다는 뜻이다.
+   * 여기서 막을 방법이 마땅치 않다 — Vercel 서버 함수는 인스턴스가 여러 개라
+   * 메모리 카운터로 세면 인스턴스 수만큼 상한이 늘어나 세지 않느니만 못하다.
+   * 시도 횟수 제한은 서버가 해야 하고, docs/BACKEND_INTEGRATION.md 에 적어 두었다.
+   *
+   * 대신 여기서 할 수 있는 것은 해 둔다 — 정확히 이 두 경로만 열고,
+   * 본문은 아래 상한까지만 받고, 응답은 그대로 돌려주되 아무것도 기록하지 않는다.
+   */
+  /^api\/v1\/auth\/(signup|login)$/,
+  // userId 는 숫자다. [^/]+ 로 두면 경로 한 칸을 아무 문자열이나 통과시키게 된다.
+  /^api\/v1\/users\/\d+\/profiles$/,
   // 명세에는 있고 아직 컨트롤러가 없는 것들. 생기면 바로 통하도록 열어 둔다.
   // 여기 있다고 백엔드에 있는 건 아니다 — 없으면 404 가 그대로 올라온다.
   /^api\/v1\/environments(\/[^/]+(\/(fixture|input-options|compatibility-rules))?)?$/,

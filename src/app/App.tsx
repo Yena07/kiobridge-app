@@ -1,5 +1,5 @@
-﻿import { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Check, Phone } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { ChevronLeft, Check } from "lucide-react";
 
 import { Pictogram } from "@/design/Pictogram";
 import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
@@ -15,6 +15,10 @@ import type {
 } from "@/domain/types";
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
 import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, unregisterProfile, type Scenario } from "@/api/client";
+import {
+  account, 아이디검사, 비밀번호검사, 올릴수있나,
+  LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
+} from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
@@ -43,7 +47,11 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
 }
 
 // 레퍼런스에는 진행 막대가 없다. 점 형태로 최소화해 상단 여백을 비워 둔다.
-function ProgressBar({ step, total = 4 }: { step: number; total?: number }) {
+//
+// 전체 3단계다 — 회원가입 → 호칭 → 첫 프로필. 예전에는 전화번호·인증번호가 앞에 있어
+// 4단계였는데, 그 둘을 걷어내면서 하나 줄었다. 기본값만 고치고 넘어가면 화면마다
+// "3단계 중 4단계" 처럼 실제와 어긋난 값이 남으므로 부르는 쪽에서 전부 명시한다.
+function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
   return (
     <div className="flex justify-center gap-1.5" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={`전체 ${total}단계 중 ${step}단계`}>
       {Array.from({ length: total }).map((_, i) => (
@@ -239,197 +247,329 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
           }}
           className="flex items-center justify-center gap-2 w-full"
         >
-          <Phone size={17} strokeWidth={2.2} />
-          전화번호로 로그인 (선택)
+          <Pictogram name="userCircle" size={18} color={TEXT_2} />
+          로그인 (선택)
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Phone ────────────────────────────────────────────────────────────────────
+// ─── Account — 회원가입 · 로그인 ───────────────────────────────────────────────
+//
+// 로그인은 끝까지 선택이다. 이 두 화면을 한 번도 열지 않아도 QR 을 찍고 추천을 받고
+// 장바구니에 담는 전 과정이 그대로 동작한다. 로그인해서 얻는 것은 하나뿐이다 —
+// 저장해 둔 프로필을 다음에 열었을 때도 불러오는 것.
+//
+// 예전에는 이 자리에 전화번호·인증번호 화면이 있었다. 붙일 백엔드가 없어서 번호는 고칠 수
+// 없는 시연값이었고 인증번호는 아무 여섯 자리나 통과했다 — 로그인한 척하는 화면이었다.
+// 실제 계정 API(modules/member)가 생겨서 아이디·비밀번호로 바꿨다.
+// 실명·전화번호·주민등록번호는 여전히 받지 않는다. 아이디는 사용자가 지어내는 값이다.
 
-// 실제 번호가 아닌 것이 눈에 보이는 시연용 값. 010-0000-0000 은 실제로
-// 쓰이지 않는 번호라 누구의 것도 아니다.
-const DEMO_PHONE = "01000000000";
+/**
+ * 계정 화면의 입력 한 줄.
+ *
+ * 라벨을 진짜 <label for> 로 둔다. 자리표시자로만 두면 값을 적는 순간 무엇을 적는 칸이었는지
+ * 사라지고, 스크린리더는 칸 이름을 읽을 방법이 없다.
+ *
+ * 비밀번호 칸에는 보기/숨기기를 붙인다. 점으로만 가려 두면 오타를 확인할 길이 없어서
+ * 손이 떨리거나 화면이 잘 안 보이는 분은 "맞지 않아요" 만 반복해서 만나게 된다.
+ * 기본은 가려 둔 상태다 — 어깨 너머로 보이는 것도 막아야 한다.
+ */
+function AccountField({
+  id, label, hint, value, onChange, secret = false, autoComplete, autoFocus = false, onEnter, invalid = false,
+}: {
+  id: string;
+  label: string;
+  /** 칸 아래 한 줄. 문제가 있으면 그 이유가, 없으면 안내가 들어온다. */
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  /** 비밀번호 칸인가. 보기/숨기기 버튼이 붙는다. */
+  secret?: boolean;
+  autoComplete: string;
+  autoFocus?: boolean;
+  onEnter?: () => void;
+  invalid?: boolean;
+}) {
+  const [보임, 보이기] = useState(false);
 
-function PhoneScreen({ onNext, onBack, onPrivacy }: { onNext: (phone: string) => void; onBack: () => void; onPrivacy: () => void }) {
-  const [phone] = useState(DEMO_PHONE);
-  const formatted = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
-        <BackButton onClick={onBack} />
-        <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={1} />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `48px ${GAP.screenX}px 0` }}>
-        <CenterHeadline title="전화번호를 알려주세요" />
-
-        <label htmlFor="phone-input" className="sr-only">전화번호</label>
-        <div
-          className="flex items-center gap-3"
-          style={{ marginTop: 40, justifyContent: "center" }}
-        >
-          <span style={{ ...TYPE.bodyBold, color: TEXT_1, backgroundColor: CANVAS, padding: "10px 16px", borderRadius: RADIUS.pill, flexShrink: 0 }}>
-            +82
-          </span>
-          {/*
-           * 실제 번호를 받지 않는다. 심사 규칙이 실제 개인정보 수집을 금지하고,
-           * 가상·합성 데이터만 허용한다.
-           *
-           * 자동완성을 끄는 것만으로는 부족하다 — 사용자가 자기 번호를 직접
-           * 칠 수 있고, 그러면 실제 번호가 앱에 들어온다. 시연용 번호를 미리
-           * 채우고 읽기 전용으로 둔다. 칠 게 없으니 자동완성도 필요 없고,
-           * 손 떨리는 분이 11자리를 치는 부담도 사라진다.
-           */}
-          <input
-            id="phone-input"
-            type="tel"
-            inputMode="numeric"
-            readOnly
-            aria-readonly="true"
-            // 고칠 수 없는 칸에서 탭이 한 번 멈출 이유가 없다.
-            // 값은 아래 안내 문구가 대신 알려 준다.
-            tabIndex={-1}
-            value={formatted}
-            style={{
-              flex: 1, minWidth: 0, fontSize: 19, fontWeight: 600, color: TEXT_1, fontFamily: FONT,
-              letterSpacing: "-0.02em", border: "none", outline: "none",
-              backgroundColor: "transparent", padding: "10px 0", ...NUM,
-            }}
-          />
-        </div>
-      </div>
-
-      <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-4">
-        <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center", lineHeight: 1.7 }}>
-          시연용 번호가 미리 채워져 있어요. 실제 번호는 받지 않습니다.{" "}
-          {/* 밑줄만 그어 두고 눌리지 않으면 링크처럼 보이는 장식일 뿐이다.
-              무엇을 받고 무엇을 안 받는지 적어 둔 화면이 이미 있으므로 거기로 보낸다. */}
+    <div style={{ marginBottom: 20 }}>
+      <label htmlFor={id} style={{ ...TYPE.label, color: TEXT_1, display: "block", marginBottom: 8 }}>
+        {label}
+      </label>
+      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+        <input
+          id={id}
+          type={secret && !보임 ? "password" : "text"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          // 칸이 둘·셋인 화면에서 Enter 로 넘어가지 못하면 키보드만 쓰는 사람은
+          // 버튼까지 Tab 으로 내려가야 한다. 폼이 아니라 버튼이라 직접 잇는다.
+          onKeyDown={(e) => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
+          autoComplete={autoComplete}
+          /*
+           * 아이디만 글자 수로 자른다. 비밀번호는 서버가 UTF-8 '바이트' 로 재기 때문에
+           * maxLength 로는 같은 규칙을 만들 수 없다 — 한글이면 24자에서 이미 72바이트다.
+           * 비밀번호 길이는 비밀번호검사() 가 본다.
+           */
+          maxLength={secret ? undefined : LOGIN_ID_MAX}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          aria-invalid={invalid || undefined}
+          {...(autoFocus ? { "data-autofocus": true } : {})}
+          style={{
+            width: "100%", ...TYPE.body, color: TEXT_1, fontFamily: FONT,
+            // 보기/숨기기 버튼이 글자를 덮지 않도록 오른쪽을 비워 둔다.
+            padding: secret ? "15px 84px 15px 16px" : "15px 16px",
+            borderRadius: RADIUS.input, boxSizing: "border-box",
+            backgroundColor: CANVAS, outline: "none",
+            // 빨간 테두리만으로 알리지 않는다. 아래 hint 가 같은 사실을 글로 말한다.
+            border: invalid ? `2px solid ${FAIL}` : "none",
+          }}
+        />
+        {secret && (
           <button
             type="button"
-            onClick={onPrivacy}
-            style={{ color: TEXT_2, textDecoration: "underline", background: "none", border: "none", padding: "6px 2px", minHeight: 44, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}
+            onClick={() => 보이기((v) => !v)}
+            aria-pressed={보임}
+            aria-controls={id}
+            aria-label={보임 ? "비밀번호 가리기" : "비밀번호 보기"}
+            style={{
+              position: "absolute", right: 6, minHeight: 44, minWidth: 44, padding: "0 12px",
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 600, color: TEXT_2, fontFamily: FONT,
+            }}
           >
-            개인정보처리방침
+            {보임 ? "숨기기" : "보기"}
           </button>
-        </p>
-        <PrimaryBtn onClick={() => phone.length === 11 && onNext(phone)} disabled={phone.length < 11}>
-          인증번호 받기
-        </PrimaryBtn>
+        )}
       </div>
+      {hint && (
+        <p
+          id={`${id}-hint`}
+          style={{ fontSize: 13, lineHeight: 1.5, marginTop: 7, color: invalid ? FAIL : TEXT_2 }}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
 
-// ─── OTP ─────────────────────────────────────────────────────────────────────
+/**
+ * 로그인.
+ *
+ * 아이디가 없는 것과 비밀번호가 틀린 것을 구분해서 알리지 않는다. 구분해 주면 어떤 아이디가
+ * 이미 있는지 하나씩 확인할 수 있다. 서버도 같은 예외(InvalidCredentialsException)를 쓴다.
+ */
+function LoginScreen({ onDone, onBack, onGoSignup }: {
+  onDone: (a: Account) => void;
+  onBack: () => void;
+  onGoSignup: () => void;
+}) {
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [오류, set오류] = useState<string | null>(null);
+  // 보내는 중에 또 누르면 요청이 두 번 나간다. 로그인에서는 실패 횟수를 두 배로 쌓는 셈이다.
+  const [보내는중, set보내는중] = useState(false);
 
-function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => void; onBack: () => void }) {
-  const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
-  const inputs = useRef<(HTMLInputElement | null)[]>([]);
-  const [timer, setTimer] = useState(180);
-  useEffect(() => {
-    const id = setInterval(() => setTimer((t) => (t > 0 ? t - 1 : 0)), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const mm = String(Math.floor(timer / 60)).padStart(2, "0");
-  const ss = String(timer % 60).padStart(2, "0");
-  const handleKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && !otp[i] && i > 0) inputs.current[i - 1]?.focus();
+  const 채워짐 = loginId.trim() !== "" && password !== "";
+
+  const 보내기 = () => {
+    if (!채워짐 || 보내는중) return;
+    set보내는중(true);
+    set오류(null);
+    account.login(loginId, password)
+      .then(onDone)
+      // 성공하면 이 화면은 사라지므로 보내는중 을 되돌리지 않는다.
+      // 언마운트된 컴포넌트에 상태를 쓰면 React 가 경고한다.
+      .catch((e: KioBridgeError) => {
+        set보내는중(false);
+        set오류(e?.message ?? "로그인하지 못했어요");
+      });
   };
-  const handleChange = (i: number, val: string) => {
-    const 숫자 = val.replace(/[^0-9]/g, "");
-    // 문자 앱의 자동완성이나 붙여넣기는 6자리를 한 번에 넣는다.
-    // 한 글자만 받으면 그 편의가 통째로 죽고, 손으로 여섯 번 옮겨 적어야 한다.
-    if (숫자.length > 1) {
-      const next = [...otp];
-      숫자.slice(0, 6).split("").forEach((d, n) => { if (i + n < 6) next[i + n] = d; });
-      setOtp(next);
-      inputs.current[Math.min(i + 숫자.length, 5)]?.focus();
-      return;
-    }
-    const next = [...otp];
-    next[i] = 숫자.slice(-1);
-    setOtp(next);
-    if (숫자 && i < 5) inputs.current[i + 1]?.focus();
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
+        <BackButton onClick={onBack} />
+      </div>
+
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `24px ${GAP.screenX}px 0` }}>
+        <h1 style={{ ...TYPE.display, color: TEXT_1 }}>로그인</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 28 }}>
+          저장해 두신 프로필을 다시 불러와요
+        </p>
+
+        <AccountField
+          id="login-id" label="아이디" value={loginId} onChange={setLoginId}
+          autoComplete="username" autoFocus onEnter={보내기}
+        />
+        <AccountField
+          id="login-pw" label="비밀번호" value={password} onChange={setPassword}
+          secret autoComplete="current-password" onEnter={보내기}
+        />
+
+        {오류 && (
+          <div role="alert" style={{ marginBottom: 12 }}>
+            <InfoBox>{오류}</InfoBox>
+          </div>
+        )}
+      </div>
+
+      <StickyFooter>
+        {!채워짐 && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            아이디와 비밀번호를 적으면 로그인할 수 있어요
+          </p>
+        )}
+        <PrimaryBtn onClick={보내기} disabled={!채워짐 || 보내는중}>
+          {보내는중 ? "확인하는 중" : "로그인"}
+        </PrimaryBtn>
+        <button
+          type="button"
+          onClick={onGoSignup}
+          style={{
+            minHeight: 48, background: "none", border: "none", cursor: "pointer",
+            fontSize: 14, color: TEXT_2, fontFamily: FONT,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}
+        >
+          아이디가 없으신가요? 회원가입
+        </button>
+      </StickyFooter>
+    </div>
+  );
+}
+
+/**
+ * 회원가입.
+ *
+ * 받는 것은 아이디와 비밀번호 둘뿐이다. 심사 규칙이 실제 개인정보 수집을 금지하고,
+ * 개인정보 안내 화면도 "실제 이름·주소·주민등록번호는 받지도 저장하지도 않아요" 라고
+ * 약속하고 있다. 아이디는 사용자가 지어내는 값이라 그 약속을 어기지 않는다.
+ *
+ * 비밀번호를 두 번 받는다. 서버는 한 번만 받지만, 가려진 칸에 오타가 나면 사용자는
+ * 다음 로그인에서야 그 사실을 알게 되고 그때는 고칠 방법이 없다.
+ */
+function SignupScreen({ onDone, onBack, onGoLogin, onPrivacy }: {
+  onDone: (a: Account) => void;
+  onBack: () => void;
+  onGoLogin: () => void;
+  onPrivacy: () => void;
+}) {
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [다시, set다시] = useState("");
+  const [오류, set오류] = useState<string | null>(null);
+  const [보내는중, set보내는중] = useState(false);
+
+  /*
+   * 적기 시작한 칸만 검사한다.
+   *
+   * 빈 칸까지 검사하면 화면을 열자마자 "아이디를 적어 주세요" · "비밀번호를 적어 주세요" 가
+   * 빨간 글씨로 둘 뜬다. 아직 아무것도 안 했는데 혼나는 화면이 된다.
+   * 무엇을 채워야 하는지는 버튼 위 한 줄이 대신 말한다.
+   */
+  const 아이디문제 = loginId ? 아이디검사(loginId) : null;
+  const 비번문제 = password ? 비밀번호검사(password) : null;
+  const 다시문제 = 다시 && 다시 !== password ? "두 번 적은 비밀번호가 서로 달라요" : null;
+
+  const 보낼수있나 =
+    loginId.trim() !== "" && password !== "" && 다시 !== "" &&
+    !아이디문제 && !비번문제 && !다시문제;
+
+  const 보내기 = () => {
+    if (!보낼수있나 || 보내는중) return;
+    set보내는중(true);
+    set오류(null);
+    account.signup(loginId, password)
+      .then(onDone)
+      .catch((e: KioBridgeError) => {
+        set보내는중(false);
+        set오류(e?.message ?? "가입하지 못했어요");
+      });
   };
-  // 시간이 지나면 확인 버튼도 잠긴다. 남은 시간을 보여 주면서 눌리게 두면
-  // 눌러 놓고 왜 안 되는지 모르게 된다.
-  const expired = timer === 0;
-  const filled = otp.every((d) => d !== "") && !expired;
-  const maskedPhone = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-****-$3");
+
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={2} />
+          <ProgressBar step={1} total={3} />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `48px ${GAP.screenX}px 0` }}>
-        <CenterHeadline
-          title={<>문자로 받은<br />인증번호를 입력해주세요</>}
-          desc={<><span style={{ color: TEXT_1, fontWeight: 600 }}>{maskedPhone}</span>으로 보냈어요</>}
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `24px ${GAP.screenX}px 0` }}>
+        <h1 style={{ ...TYPE.display, color: TEXT_1 }}>회원가입</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 28 }}>
+          아이디와 비밀번호만 받아요
+        </p>
+
+        <AccountField
+          id="signup-id" label="아이디" value={loginId} onChange={setLoginId}
+          autoComplete="username" autoFocus onEnter={보내기}
+          invalid={Boolean(아이디문제)}
+          hint={아이디문제 ?? `${LOGIN_ID_MAX}자까지 쓸 수 있어요. 실제 이름이나 전화번호는 적지 마세요`}
+        />
+        <AccountField
+          id="signup-pw" label="비밀번호" value={password} onChange={setPassword}
+          secret autoComplete="new-password" onEnter={보내기}
+          invalid={Boolean(비번문제)}
+          hint={비번문제 ?? `${PASSWORD_MIN}자 이상 적어 주세요`}
+        />
+        <AccountField
+          id="signup-pw2" label="비밀번호 다시 적기" value={다시} onChange={set다시}
+          secret autoComplete="new-password" onEnter={보내기}
+          invalid={Boolean(다시문제)}
+          hint={다시문제 ?? "같은 비밀번호를 한 번 더 적어 주세요"}
         />
 
-        <div className="flex justify-center" style={{ gap: 7, marginTop: 40 }} role="group" aria-label="인증번호 6자리">
-          {otp.map((digit, i) => (
-            <input
-              key={i}
-              ref={(el) => { inputs.current[i] = el; }}
-              type="tel"
-              inputMode="numeric"
-              // 문자로 온 인증번호를 기기가 대신 채워 준다. 첫 칸에만 붙인다.
-              autoComplete={i === 0 ? "one-time-code" : "off"}
-              // 값이 있는 칸을 다시 누르면 기존 값을 선택해 둔다.
-              // 그러면 재입력이 '교체' 로 동작한다. 이게 없으면 e.target.value 가
-              // "12" 가 되어 붙여넣기 경로를 타고 옆 칸까지 덮어쓴다.
-              onFocus={(e) => e.target.select()}
-              aria-label={`인증번호 ${i + 1}번째 자리`}
-              maxLength={6}
-              value={digit}
-              onChange={(e) => handleChange(i, e.target.value)}
-              onKeyDown={(e) => handleKey(i, e)}
-              {...(i === 0 ? { "data-autofocus": true } : {})}
-              style={{
-                width: 44, height: 52, textAlign: "center",
-                fontSize: 22, fontWeight: 600, fontFamily: FONT, ...NUM,
-                borderRadius: RADIUS.input, border: "none", outline: "none",
-                backgroundColor: digit ? P : CANVAS,
-                color: digit ? "white" : TEXT_1,
-                transition: "background-color 0.12s",
-              }}
-            />
-          ))}
-        </div>
+        {오류 && (
+          <div role="alert" style={{ marginBottom: 12 }}>
+            <InfoBox>{오류}</InfoBox>
+          </div>
+        )}
 
-        <div className="flex flex-col items-center" style={{ marginTop: 20 }}>
+        <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7, marginBottom: 8 }}>
+          실제 이름·주소·주민등록번호는 받지 않아요. 무엇을 저장하고 무엇을 저장하지 않는지는{" "}
           <button
             type="button"
-            aria-label="인증번호 재전송"
-            onClick={() => setTimer(180)}
-            style={{ fontSize: 14, color: TEXT_2, textDecoration: "underline", minHeight: 44, padding: "0 8px", background: "none", border: "none", cursor: "pointer", fontFamily: FONT }}
+            onClick={onPrivacy}
+            style={{
+              color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3,
+              background: "none", border: "none", padding: "6px 2px", minHeight: 44,
+              cursor: "pointer", fontFamily: FONT, fontSize: 13,
+            }}
           >
-            메시지 재전송
+            개인정보 안내
           </button>
-          <p style={{ fontSize: 13, color: TEXT_2, ...NUM }}>
-            남은 시간 <span style={{ fontWeight: 600, color: timer < 30 ? FAIL : TEXT_2 }}>{mm}:{ss}</span>
-          </p>
-        </div>
+          에 적어 두었어요.
+        </p>
       </div>
 
-      <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
-        {expired && (
-          <p role="alert" style={{ ...TYPE.caption, color: FAIL, textAlign: "center", marginBottom: 12 }}>
-            입력 시간이 지났어요. 메시지를 다시 받아 주세요
+      <StickyFooter>
+        {!보낼수있나 && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            {아이디문제 ?? 비번문제 ?? 다시문제 ?? "아이디와 비밀번호를 적으면 가입할 수 있어요"}
           </p>
         )}
-        <PrimaryBtn onClick={onNext} disabled={!filled}>확인</PrimaryBtn>
-      </div>
+        <PrimaryBtn onClick={보내기} disabled={!보낼수있나 || 보내는중}>
+          {보내는중 ? "가입하는 중" : "가입하고 시작하기"}
+        </PrimaryBtn>
+        <button
+          type="button"
+          onClick={onGoLogin}
+          style={{
+            minHeight: 48, background: "none", border: "none", cursor: "pointer",
+            fontSize: 14, color: TEXT_2, fontFamily: FONT,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}
+        >
+          이미 아이디가 있으신가요? 로그인
+        </button>
+      </StickyFooter>
     </div>
   );
 }
@@ -443,7 +583,7 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={3} />
+          <ProgressBar step={2} total={3} />
         </div>
       </div>
 
@@ -621,7 +761,16 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 let 프로필일련번호 = 0;
 const newProfileId = () => `p${Date.now()}_${++프로필일련번호}`;
 
-function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: ProfileData) => void; onBack: () => void; showProgress?: boolean }) {
+function ProfileScreen({ onNext, onBack, showProgress = true, 로그인함 = false }: {
+  onNext: (p: ProfileData) => void;
+  onBack: () => void;
+  showProgress?: boolean;
+  /**
+   * 로그인한 사람인가. 저장한 프로필이 서버에도 올라가는지가 달라지므로 화면이 말해 준다.
+   * 로그인하지 않았으면 서버 이야기를 꺼내지 않는다 — 하지 않는 일을 설명할 이유가 없다.
+   */
+  로그인함?: boolean;
+}) {
   const [menuName, setMenuName] = useState("");
   const [place, setPlace] = useState<PlaceType>(null);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
@@ -670,11 +819,11 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
           <BackButton onClick={onBack} />
           <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
             {/*
-             * 진행 표시는 로그인 흐름(전화 1 → 인증 2 → 호칭 3 → 프로필 4)을 전제한다.
-             * 주 경로인 게스트는 앞의 셋을 건너뛰므로, 처음 프로필을 만드는 사람에게
-             * "4단계 중 4단계" 라고 읽히는 건 사실이 아니다. 게스트에게는 숨긴다.
+             * 진행 표시는 가입 흐름(가입 1 → 호칭 2 → 프로필 3)을 전제한다.
+             * 주 경로인 게스트는 앞의 둘을 건너뛰므로, 처음 프로필을 만드는 사람에게
+             * "3단계 중 3단계" 라고 읽히는 건 사실이 아니다. 게스트에게는 숨긴다.
              */}
-            {showProgress && <ProgressBar step={4} />}
+            {showProgress && <ProgressBar step={3} total={3} />}
           </div>
         </div>
         <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 프로필</h1>
@@ -689,6 +838,9 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
             aria-label="메뉴 이름 (필수)"
             value={menuName}
             onChange={(e) => setMenuName(e.target.value)}
+            // 서버의 menuName 이 @Size(max = 100) 이다. 넘으면 저장은 되는데 서버에만
+            // 못 올라가고, 사용자는 그 사실을 나중에 안다. 애초에 못 넘게 막는다.
+            maxLength={MENU_NAME_MAX}
             placeholder="예) 아이스 아메리카노 둘"
             style={{
               width: "100%", ...TYPE.body, color: TEXT_1, fontFamily: FONT,
@@ -765,6 +917,8 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
             aria-describedby="memo-notice"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
+            // 서버의 memo 가 @Size(max = 500) 이다. menuName 과 같은 이유로 여기서 막는다.
+            maxLength={MEMO_MAX}
             placeholder="예: 얼음 적게 주세요"
             rows={3}
             style={{
@@ -788,6 +942,16 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
         {!menuName.trim() && (
           <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
             맨 위 <span style={{ fontWeight: 600, color: TEXT_1 }}>메뉴 이름</span>을 적으면 저장할 수 있어요
+          </p>
+        )}
+        {/*
+          서버는 장소가 빈 프로필을 받지 않는다(place 가 @NotBlank). 올리고 나서 400 을
+          받아 "못 올렸어요" 를 띄우는 대신, 저장하기 전에 무엇을 하면 되는지 말한다.
+          막지는 않는다 — 장소는 선택 항목이고, 이 기기에는 그대로 저장된다.
+        */}
+        {로그인함 && menuName.trim() && !place && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            <span style={{ fontWeight: 600, color: TEXT_1 }}>장소</span>를 정해 두시면 다음에 로그인해도 불러올 수 있어요
           </p>
         )}
         <PrimaryBtn
@@ -1496,7 +1660,7 @@ function AccountScreen({
             }}
             className="flex items-center justify-center gap-2"
           >
-            <Phone size={17} strokeWidth={2.2} />
+            <Pictogram name="userCircle" size={18} color={TEXT_2} />
             다음에도 불러오려면 로그인 (선택)
           </button>
         )}
@@ -1630,15 +1794,17 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
   const rows: { title: string; body: string }[] = [
     {
       title: "저장하는 것",
-      body: "메뉴 프로필에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요.",
+      body: guest
+        ? "메뉴 프로필에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요."
+        : "메뉴 프로필에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서 이 내용은 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요.",
     },
     {
       title: "저장하지 않는 것",
-      body: "실제 이름·주소·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
+      body: "실제 이름·주소·전화번호·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
     },
     {
-      title: "전화번호는 어떻게 하나요",
-      body: "실제 전화번호는 받지 않아요. 로그인 화면에는 시연용 번호가 미리 채워져 있고 고칠 수 없어요. 그 값도 인증이 끝나면 바로 지웁니다.",
+      title: "로그인은 어떻게 하나요",
+      body: "직접 지으신 아이디와 비밀번호만 받아요. 실제 이름이나 전화번호는 묻지 않아요. 비밀번호는 서버에서 알아볼 수 없는 형태로 바꿔 저장하고, 이 앱은 적으신 비밀번호를 어디에도 남기지 않아요. 로그인 상태는 이 기기 메모리에만 있어서 새로고침하면 풀립니다.",
     },
     {
       title: "키오스크에 넘기는 것",
@@ -1648,7 +1814,8 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
       title: "지우는 방법",
       body: guest
         ? "지금은 로그인 없이 쓰고 계셔서 이번 이용이 끝나면 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요."
-        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 저장해 둔 내용이 모두 사라져요.",
+        // 서버에 프로필 삭제 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
+        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고 로그아웃돼요. 다만 서버에 올라간 프로필은 아직 지우는 길이 없어서, 다시 로그인하면 그대로 보입니다.",
     },
   ];
   return (
@@ -2639,10 +2806,31 @@ function ScenarioPanel() {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [tab, setTab] = useState<MainTab>("menu");
-  const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  /** 로그인 없이 시작했는가. true 면 기기에 아무것도 남기지 않는다. */
-  const [guest, setGuest] = useState(true);
+  /**
+   * 로그인한 계정. null 이면 게스트다.
+   *
+   * 메모리에만 둔다. localStorage 를 쓰지 않아 새로고침하면 로그아웃되는데, 개인정보
+   * 안내 화면이 "이번 이용이 끝나면 남지 않아요" 라고 약속하고 있어서 그대로 둔다.
+   *
+   * 서버가 토큰을 주지 않는다 — 응답이 { userId, loginId } 뿐이다. 그래서 여기 있는 것은
+   * 인증 증명이 아니라 식별자다. 이 값으로 할 수 있는 일은 프로필을 불러오고 올리는 것뿐이고,
+   * 화면 어디에도 "안전하게 보관됩니다" 같은 말을 쓰지 않는다.
+   */
+  const [계정, set계정] = useState<Account | null>(null);
+  /*
+   * 게스트인지는 계정에서 나오는 값이다. 따로 useState 로 두면 둘이 어긋난다 —
+   * 예전에는 로그인 화면으로 '들어갈 때' guest 를 false 로 만들어서, 로그인하지 않고
+   * 뒤로 가면 로그인한 적 없는 사람이 회원으로 남았다.
+   */
+  const guest = 계정 === null;
+  /**
+   * 서버에서 불러온 프로필의 id.
+   *
+   * 로그아웃할 때 이것만 목록에서 뺀다. 전부 지우면 로그인 전에 게스트로 만들어 둔 프로필까지
+   * 사라지고, 남겨 두면 다음 사람이 이 기기를 열었을 때 앞사람 프로필이 그대로 보인다.
+   */
+  const 서버에서온것 = useRef<Set<string>>(new Set());
   /** 큰 글씨 모드. 휴대폰 틀 안 전체에 적용된다. */
   const [largeText, setLargeText] = useState(false);
   const [profiles, setProfiles] = useState<ProfileData[]>(MOCK_PROFILES);
@@ -2692,6 +2880,94 @@ export default function App() {
         run: 서버까지지우기,
       });
     });
+  };
+
+  /**
+   * 프로필 하나를 서버에 올린다. 로그인한 사람에게만 일어난다.
+   *
+   * 실패해도 이 기기에는 이미 저장돼 있으므로 흐름을 막지 않는다. 다만 조용히 삼키지는
+   * 않는다 — 삼키면 "저장했어요" 가 절반만 사실이 되고, 사용자는 다음에 열었을 때
+   * 없어진 것을 보고서야 알게 된다. 재시도도 자기 자신을 부른다.
+   */
+  const 프로필올리기 = (userId: number, p: ProfileData): void => {
+    account.saveProfile(userId, p).catch((e: KioBridgeError) => {
+      set확인대기({
+        title: "이 기기에는 저장했어요",
+        body: `${e?.message ?? "서버에 올리지 못했어요"} 지금은 이 기기에만 있어서, 다음에 로그인하면 안 보일 수 있어요.`,
+        confirmLabel: "다시 시도",
+        run: () => 프로필올리기(userId, p),
+      });
+    });
+  };
+
+  /**
+   * 새 프로필을 저장한다. 로그인했으면 서버에도 올린다.
+   *
+   * 장소를 안 고른 프로필은 올리지 않는다 — 서버의 place 가 @NotBlank 라 400 이 나는데,
+   * 그 400 은 code 도 message 도 없는 스프링 기본 응답이라 사용자에게 이유를 말해 줄 수 없다.
+   * 대신 프로필 화면이 저장하기 전에 미리 알려 준다(아래 ProfileScreen 의 안내 한 줄).
+   */
+  const 프로필저장 = (p: ProfileData): void => {
+    addProfile(p);
+    setScreen("saved");
+    setTab("menu");
+    if (계정 && !올릴수있나(p)) 프로필올리기(계정.userId, p);
+  };
+
+  /**
+   * 로그인·회원가입이 끝났다.
+   *
+   * 서버에 저장해 둔 프로필을 가져와 목록 앞에 붙인다. 같은 id 는 서버 것으로 덮는다 —
+   * 서버가 최신이다. 게스트로 만들어 둔 프로필은 지우지 않는다. 방금 만든 것이
+   * 로그인했다는 이유로 사라지면 그게 가장 나쁘다.
+   *
+   * 불러오기에 실패해도 로그인 자체는 된 것이다. 다만 말은 해 준다 — 아무 말 없이
+   * 빈 목록을 보여 주면 사용자는 저장해 둔 게 사라진 줄 안다.
+   */
+  const 계정으로들어가기 = (a: Account, 다음화면: Screen): void => {
+    set계정(a);
+    setScreen(다음화면);
+    if (다음화면 === "saved") setTab("menu");
+
+    const 불러오기 = (): void => {
+      account.listProfiles(a.userId)
+        .then((서버것) => {
+          if (서버것.length === 0) return;
+          for (const p of 서버것) 서버에서온것.current.add(p.id);
+          setProfiles((prev) => {
+            const 서버id = new Set(서버것.map((p) => p.id));
+            return [...서버것, ...prev.filter((p) => !서버id.has(p.id))];
+          });
+        })
+        .catch((e: KioBridgeError) => {
+          set확인대기({
+            title: "저장해 두신 프로필을 못 불러왔어요",
+            body: `${e?.message ?? "서버에 연결하지 못했어요"} 로그인은 됐어요. 이 기기에 있는 프로필은 그대로 쓸 수 있어요.`,
+            confirmLabel: "다시 시도",
+            run: 불러오기,
+          });
+        });
+    };
+    불러오기();
+  };
+
+  /**
+   * 로그아웃.
+   *
+   * 서버에서 불러온 프로필은 목록에서 뺀다. 남겨 두면 로그아웃했는데도 그 사람 프로필이
+   * 화면에 그대로 있고, 다음 사람이 이 기기를 열었을 때 앞사람 것을 보게 된다.
+   * 게스트로 만든 프로필은 이 기기 것이므로 건드리지 않는다.
+   */
+  const 로그아웃 = (): void => {
+    const 뺄것 = 서버에서온것.current;
+    setProfiles((prev) => prev.filter((p) => !뺄것.has(p.id)));
+    for (const id of 뺄것) unregisterProfile(id);
+    서버에서온것.current = new Set();
+    set계정(null);
+    setName("");
+    setFromQr(false);
+    setTab("menu");
+    setScreen("welcome");
   };
 
   // 연결이 끝나면 어느 화면에 있든 되돌린다.
@@ -2791,30 +3067,40 @@ export default function App() {
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
           {screen === "welcome" && (
             <WelcomeScreen
-              // 익명 시작: 로그인 화면을 거치지 않고 바로 본 화면으로 간다.
-              onStart={() => { setGuest(true); setName(""); setPhone(""); setScreen("saved"); setTab("menu"); }}
-              // 선택적 로그인: 고른 사람만 전화번호 경로로 간다.
-              onLogin={() => { setGuest(false); setScreen("phone"); }}
+              // 익명 시작: 계정 화면을 거치지 않고 바로 본 화면으로 간다.
+              onStart={() => { setName(""); setScreen("saved"); setTab("menu"); }}
+              // 선택적 로그인: 고른 사람만 계정 경로로 간다. 여기서 뒤로 가면
+              // 아무 일도 없었던 것이 되어야 하므로 계정 상태는 아직 건드리지 않는다.
+              onLogin={() => setScreen("login")}
             />
           )}
-          {screen === "phone" && (
-            <PhoneScreen
-              onNext={(p) => { setPhone(p); setScreen("otp"); }}
+          {screen === "login" && (
+            <LoginScreen
+              // 이미 계정이 있는 사람이다. 호칭은 서버가 갖고 있지 않지만 다시 묻지 않는다 —
+              // 로그인할 때마다 호칭을 적게 하면 로그인이 가입보다 번거로워진다.
+              // 계정 화면은 호칭이 없으면 아이디를 부른다.
+              onDone={(a) => 계정으로들어가기(a, "saved")}
               onBack={() => setScreen("welcome")}
+              onGoSignup={() => setScreen("signup")}
+            />
+          )}
+          {screen === "signup" && (
+            <SignupScreen
+              // 가입 직후에는 서버에 프로필이 없다. 그래도 같은 경로를 탄다 —
+              // 갈래를 둘로 두면 한쪽만 고치는 날이 온다. 빈 목록이면 아무 일도 안 한다.
+              onDone={(a) => 계정으로들어가기(a, "name")}
+              onBack={() => setScreen("login")}
+              onGoLogin={() => setScreen("login")}
               onPrivacy={() => setScreen("privacy")}
             />
           )}
-          {screen === "otp" && (
-            <OtpScreen
-              phone={phone}
-              // 인증이 끝나면 번호를 즉시 버린다. 더 들고 있을 이유가 없다.
-              // 남겨 두면 실제 개인정보를 저장하는 셈이 된다.
-              onNext={() => { setPhone(""); setScreen("name"); }}
-              onBack={() => setScreen("phone")}
-            />
-          )}
           {screen === "name" && (
-            <NameScreen onNext={(n) => { setName(n); setScreen("greeting"); }} onBack={() => setScreen("otp")} />
+            <NameScreen
+              onNext={(n) => { setName(n); setScreen("greeting"); }}
+              // 가입은 이미 끝났다. 뒤로 가도 가입 화면으로 돌아가지 않는다 —
+              // 돌아가면 같은 아이디로 또 가입하려다 "이미 쓰고 있는 아이디예요" 를 만난다.
+              onBack={() => { setScreen("saved"); setTab("menu"); }}
+            />
           )}
           {screen === "greeting" && (
             <GreetingScreen name={name} onNext={() => { setScreen("saved"); setTab("menu"); }} />
@@ -2822,7 +3108,8 @@ export default function App() {
           {screen === "profile" && (
             <ProfileScreen
               showProgress={!guest}
-              onNext={(p) => { addProfile(p); setScreen("saved"); setTab("menu"); }}
+              로그인함={!guest}
+              onNext={프로필저장}
               onBack={() => setScreen("saved")}
             />
           )}
@@ -2871,23 +3158,28 @@ export default function App() {
           )}
           {inMain && tab === "account" && (
             <AccountScreen
-              name={name}
+              // 호칭을 안 적은 사람도 있다(로그인만 한 경우). 그때는 아이디로 부른다.
+              // "사용자님" 은 마지막 수단이다 — 게스트에게는 이 값을 쓰지 않는다.
+              name={name || 계정?.loginId || ""}
               guest={guest}
-              onLogout={() => {
-                setName(""); setPhone(""); setFromQr(false); setGuest(true);
-                setTab("menu"); setScreen("welcome");
-              }}
-              onLogin={() => { setGuest(false); setScreen("phone"); }}
+              onLogout={로그아웃}
+              onLogin={() => setScreen("login")}
               // 저장된 정보를 지우는 길. 프로필까지 함께 비운다.
               onClearLocal={() => set확인대기({
                 title: "이 기기에서 정보를 지울까요?",
-                body: "저장한 프로필과 호칭, 전화번호가 모두 사라져요. 되돌릴 수 없어요.",
+                body: 계정
+                  // 서버에 프로필 삭제 경로가 없다. 지운 척하지 않는다.
+                  ? "이 기기에 있는 프로필과 호칭이 사라지고 로그아웃돼요. 서버에 저장해 둔 프로필은 남아 있어서, 다시 로그인하면 그대로 보입니다."
+                  : "저장한 프로필과 호칭이 모두 사라져요. 되돌릴 수 없어요.",
                 confirmLabel: "모두 지우기",
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
                   서버까지지우기();
-                  setProfiles([]); setName(""); setPhone("");
+                  setProfiles([]); setName("");
+                  // 계정도 함께 푼다. 안 풀면 프로필을 다 지운 화면에 회원으로 남아
+                  // '저장된 프로필 관리' 가 빈 목록을 회원 것처럼 보여 준다.
+                  set계정(null); 서버에서온것.current = new Set();
                   setOrderProfile(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가
                   // 터지면서 QR 만료 화면으로 튕겨 나간다. 방금 다 지웠는데 왜 그러는지
