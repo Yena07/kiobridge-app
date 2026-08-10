@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApi, createTeamBackend, type Backend, type EvidenceSummary, type RecommendationResult } from "./backend";
-import type { ProfileData } from "@/domain/types";
+import type { OrderSheet } from "@/domain/types";
 
 // 백엔드가 아직 없으므로, 명세서대로 응답하는 가짜를 만들어 조립이 맞는지 본다.
 // 이 테스트가 통과한다는 건 "백엔드가 명세대로 주면 화면이 돈다" 는 뜻이다.
@@ -112,8 +112,8 @@ describe("후보별 불일치는 서버가 알려 준 것만 쓴다", () => {
     // 저장한 조건은 그대로 보여 준다. 서버가 준 matched 도 그대로 쓴다.
     // 예전에는 전부 true 로 덮었는데, 그러면 안 맞는 축이 있다는 사실이
     // 어느 후보를 고르든 사라진다.
-    expect(r.profileOptions?.map((o) => o.label)).toEqual(["형태"]);
-    expect(r.profileOptions?.[0].matched).toBe(false);
+    expect(r.sheetOptions?.map((o) => o.label)).toEqual(["형태"]);
+    expect(r.sheetOptions?.[0].matched).toBe(false);
   });
 });
 
@@ -137,14 +137,14 @@ describe("상품 ID 를 화면으로 내보내지 않는다", () => {
     await api.requestMapping("s1", "p1");
     for (const 가짜 of ["c99", "cabc", "c0"]) {
       await expect(
-        api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "clarification", candidateId: 가짜 }),
+        api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "clarification", candidateId: 가짜 }),
       ).rejects.toThrow();
     }
     expect(submit).not.toHaveBeenCalled();
   });
 
   it("어떤 결과 종류에서도 상품 ID 가 응답 전체에 섞이지 않는다", async () => {
-    // 후보 목록만 보면 부족하다. reasons·item·profileOptions·message 어디로든
+    // 후보 목록만 보면 부족하다. reasons·item·sheetOptions·message 어디로든
     // 새어 나갈 수 있다. 응답 전체를 문자열로 만들어 잠근다.
     //
     // 상품 ID 는 서버가 정하는 값이라 CHICKEN- 만 막으면 다음 환경에서 뚫린다.
@@ -170,7 +170,7 @@ describe("상품 ID 를 화면으로 내보내지 않는다", () => {
     const api = createApi(b);
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
-    await api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "clarification", candidateId: "c2" });
+    await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "clarification", candidateId: "c2" });
     expect(submit).toHaveBeenCalledWith("s1", expect.objectContaining({ candidateId: "CHICKEN-003" }));
   });
 });
@@ -186,7 +186,7 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
     const api = createApi(b);
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
-    await api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" });
+    await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" });
     expect(순서).toEqual(["submit", "validate", "execute"]);
   });
 
@@ -197,7 +197,7 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
     await expect(
-      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" }),
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" }),
     ).rejects.toThrow("결제 action");
     expect(execute).not.toHaveBeenCalled();
   });
@@ -206,7 +206,7 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
     const execute = vi.fn(async () => ({ planId: "pln_1" }));
     const api = createApi(가짜백엔드({ execute }));
     await expect(
-      api.approve({ pairingId: "안한세션", profileId: "p1", mappingResult: "exact" }),
+      api.approve({ pairingId: "안한세션", sheetId: "p1", mappingResult: "exact" }),
     ).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
   });
@@ -218,7 +218,7 @@ describe("승인은 제출 → 검증 → 실행 순서를 지킨다", () => {
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
     await expect(
-      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "low_confidence" }),
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "low_confidence" }),
     ).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
   });
@@ -250,7 +250,7 @@ describe("forgetAll", () => {
     await api.forgetAll();
 
     await expect(
-      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" }),
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" }),
     ).rejects.toThrow();
   });
 });
@@ -265,7 +265,7 @@ describe("changed 는 확인 표시를 받아야 넘어간다", () => {
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
     await expect(
-      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "changed" }),
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "changed" }),
     ).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
   });
@@ -275,9 +275,9 @@ describe("changed 는 확인 표시를 받아야 넘어간다", () => {
     const api = createApi(가짜백엔드({ execute }));
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
-    await api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" });
+    await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" });
     await expect(
-      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" }),
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" }),
     ).rejects.toThrow();
     expect(execute).toHaveBeenCalledTimes(1);
   });
@@ -293,7 +293,7 @@ describe("changed 는 확인 표시를 받아야 넘어간다", () => {
     }));
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
-    const 요청 = { pairingId: "s1", profileId: "p1", mappingResult: "exact" as const };
+    const 요청 = { pairingId: "s1", sheetId: "p1", mappingResult: "exact" as const };
     const 결과 = await Promise.allSettled([api.approve(요청), api.approve(요청)]);
     expect(결과.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(execute).toHaveBeenCalledTimes(1);
@@ -307,7 +307,7 @@ describe("changed 는 확인 표시를 받아야 넘어간다", () => {
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");   // exact 로 답한다
     await expect(
-      api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact", candidateId: "c2" }),
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact", candidateId: "c2" }),
     ).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
   });
@@ -318,7 +318,7 @@ describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
     const api = createApi(가짜백엔드());
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
-    const { planId } = await api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" });
+    const { planId } = await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" });
     const s = await api.getPlanStatus(planId);
     expect(s.state).toBe("cart_ready");
     expect(s.steps.every((x) => x === "done")).toBe(true);
@@ -332,7 +332,7 @@ describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
     const api = createApi(b);
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
-    const { planId } = await api.approve({ pairingId: "s1", profileId: "p1", mappingResult: "exact" });
+    const { planId } = await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" });
     const s = await api.getPlanStatus(planId);
     expect(s.state).toBe("aborted");
     expect(s.steps[2]).toBe("failed");
@@ -369,8 +369,8 @@ const 실행성공 = {
   },
 };
 
-/** 화면이 들고 있는 프로필. 승인 때 내용을 그대로 함께 보낸다. */
-const 목프로필: ProfileData = {
+/** 화면이 들고 있는 주문표. 승인 때 내용을 그대로 함께 보낸다. */
+const 목주문표: OrderSheet = {
   id: "p1", menuName: "닭강정", place: "음식점", memo: "",
   selections: { "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"], "수량": ["2개"] },
 };
@@ -387,7 +387,7 @@ const 목추천 = {
 
 /** 서버가 정규화해서 돌려주는 값. 이걸 그대로 다음 호출에 쓴다. */
 const 정규화응답 = {
-  프로필: {
+  주문표: {
     status: "VALID",
     profile: {
       profileId: "p1", dataClassification: "SYNTHETIC_PROFILE",
@@ -407,14 +407,14 @@ const 정규화응답 = {
     reconfirmationFields: [],
     contractValidation: { valid: true, errors: [] },
   },
-  // 담당1의 마지막 관문. 프로필과 맥락을 합쳐 놓고 다시 본다.
+  // 담당1의 마지막 관문. 주문표와 맥락을 합쳐 놓고 다시 본다.
   통합: { status: "VALID", recommendationReady: true, contractValidation: { valid: true, errors: [] } },
 };
 
 /** 경로를 보고 답한다. 순서에 기대면 정규화가 끼는 순간 전부 어긋난다. */
 const 경로별응답 = (over: Record<string, unknown> = {}) => (url: string, body: Record<string, unknown>) => {
   for (const [조각, 값] of Object.entries(over)) if (url.includes(조각)) return 값;
-  if (url.includes("profile-normalizations")) return 정규화응답.프로필;
+  if (url.includes("profile-normalizations")) return 정규화응답.주문표;
   if (url.includes("session-context-normalizations")) return 정규화응답.맥락;
   if (url.includes("canonical-inputs/validate")) return 정규화응답.통합;
   if (url.includes("candidate-filters")) return { eligibleCandidates: [], excludedCandidates: [] };
@@ -436,8 +436,8 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     const 답 = 경로별응답({ "orchestrator/approve": 실행응답 });
     globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) =>
       응답(답(String(u), JSON.parse(String(init?.body ?? "{}"))))) as unknown as typeof fetch;
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
-    await b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+    await b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 목주문표 });
   };
 
   it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
@@ -589,7 +589,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
       return 응답(답(String(u), body));
     }) as unknown as typeof fetch;
     const b = createTeamBackend("/api/bff");
-    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
 
     expect(정규화요청[0].contextInput).toEqual({
       serviceType: "TAKE_OUT", spicyLevel: "HOT", boneType: "BONELESS",
@@ -603,7 +603,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     // 프론트가 만든 것을 보내면 providerId 를 짐작해야 하고, 킷 스키마에 맞는지
     // 아무도 확인하지 않는다. 서버가 만들어 준 것을 그대로 쓴다.
     const { b, calls } = 캡처();
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     const 추천요청 = calls.find((c) => c.url.includes("recommendations"))!;
     expect((추천요청.body.profile as Record<string, unknown>).source)
       .toMatchObject({ providerId: "WHATTHEBUG" });
@@ -624,7 +624,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
       },
     });
     await expect(
-      b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 }),
+      b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 }),
     ).rejects.toThrow("알레르기");
     // 후보 필터도 추천도 부르지 않는다.
     expect(calls).toEqual([]);
@@ -632,7 +632,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
 
   it("추천 준비가 됐을 때만 다음으로 간다", async () => {
     const { b, calls } = 캡처();
-    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
     expect(calls.some((c) => c.url.includes("candidate-filters"))).toBe(true);
   });
 
@@ -642,10 +642,10 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b, calls } = 캡처({
       recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-003"] },
     });
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     await b.submit("s1", {
-      pairingId: "s1", profileId: "p1", mappingResult: "clarification",
-      candidateId: "CHICKEN-003", profile: 목프로필,
+      pairingId: "s1", sheetId: "p1", mappingResult: "clarification",
+      candidateId: "CHICKEN-003", profile: 목주문표,
     });
     const rec = calls.find((c) => c.url.includes("orchestrator/approve"))!.body.recommendation as Record<string, unknown>;
     expect(rec.recommendedCandidateId).toBe("CHICKEN-003");
@@ -655,7 +655,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   it("모르는 값(UNKNOWN)을 '안 맞음' 으로 단정하지 않는다", async () => {
     // 사용자가 고른 선택지를 우리가 enum 으로 못 옮긴 것이지, 오늘 그 조합이
     // 없다는 뜻이 아니다. 근거 없는 판단을 사용자에게 말하지 않는다.
-    const 모르는맵기 = { ...목프로필, selections: { ...목프로필.selections, "맵기": ["아주매운맛"] } };
+    const 모르는맵기 = { ...목주문표, selections: { ...목주문표.selections, "맵기": ["아주매운맛"] } };
     const { b } = 캡처({
       "candidate-filters": {
         eligibleCandidates: [{
@@ -672,26 +672,26 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   });
 
   it("정보 지우기가 이 계층의 캐시까지 비운다", async () => {
-    // 화면이 '모두 지워요' 라고 약속한다. 정규화된 프로필과 세션 맥락이
+    // 화면이 '모두 지워요' 라고 약속한다. 정규화된 주문표와 세션 맥락이
     // 메모리에 남으면 그 문장이 사실이 아니게 된다.
     const { b } = 캡처();
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     await b.forgetSession!("s1");
     // 추천 기록이 비었으므로 승인이 재료를 못 찾는다.
     await expect(
-      b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 }),
+      b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 목주문표 }),
     ).rejects.toThrow();
   });
 
-  it("프로필을 고치면 정규화를 다시 받는다", async () => {
-    // 캐시 키가 프로필 id 뿐이면 고친 조건이 반영되지 않는다.
+  it("주문표를 고치면 정규화를 다시 받는다", async () => {
+    // 캐시 키가 주문표 id 뿐이면 고친 조건이 반영되지 않는다.
     const { b, calls } = 캡처();
-    const 부르기 = (p: typeof 목프로필) => b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: p });
-    await 부르기(목프로필);
-    await 부르기(목프로필);
+    const 부르기 = (p: typeof 목주문표) => b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: p });
+    await 부르기(목주문표);
+    await 부르기(목주문표);
     const 두번째 = calls.length;
-    await 부르기({ ...목프로필, selections: { ...목프로필.selections, "맵기": ["순한맛"] } });
-    // 같은 프로필은 캐시를 쓰고(호출이 안 늘고), 고친 프로필은 다시 받는다.
+    await 부르기({ ...목주문표, selections: { ...목주문표.selections, "맵기": ["순한맛"] } });
+    // 같은 주문표는 캐시를 쓰고(호출이 안 늘고), 고친 주문표는 다시 받는다.
     expect(두번째).toBe(2);
     expect(calls.length).toBe(3);
   });
@@ -700,8 +700,8 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     // 킷 계약의 UserDecision 은 APPROVE·REJECT·MODIFY 셋이다.
     // 거절은 빈 실행계획으로 제출돼 검증까지만 가고 실행은 건너뛴다.
     const { b, calls } = 캡처();
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
-    await b.reject!("s1", { pairingId: "s1", profileId: "p1", profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+    await b.reject!("s1", { pairingId: "s1", sheetId: "p1", profile: 목주문표 });
     const 거절 = calls.find((c) => c.url.includes("orchestrator/approve"))!;
     expect(거절.body.userDecision).toMatchObject({ approved: false, decision: "REJECT" });
     // 승인과 같은 재료를 보낸다. 서버가 무엇을 보고 거절했는지 알아야 한다.
@@ -713,7 +713,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
   it("매핑을 안 거쳤으면 거절도 조용히 넘어간다", async () => {
     // 보여 준 적 없는 것을 거절할 수는 없다. 서버에 보낼 재료도 없다.
     const { b, calls } = 캡처();
-    await b.reject!("s1", { pairingId: "s1", profileId: "p1", profile: 목프로필 });
+    await b.reject!("s1", { pairingId: "s1", sheetId: "p1", profile: 목주문표 });
     expect(calls).toEqual([]);
   });
 
@@ -726,7 +726,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
       },
     });
     await expect(
-      b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 }),
+      b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 }),
     ).rejects.toThrow("profileId 가 비었습니다");
   });
 
@@ -745,7 +745,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
         reasonText: "[PEANUT] 알레르기와 겹쳐서 제외됐어요.",
       }],
     } });
-    const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
     expect(r.survivingCandidateIds).toEqual(["CHICKEN-001", "CHICKEN-003"]);
     expect(r.display?.["CHICKEN-001"]).toEqual({ displayName: "매운 순살 닭강정", priceText: "6,000원" });
     // 규칙 추적 문자열이 화면으로 새지 않는다.
@@ -763,7 +763,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
       ],
       excludedCandidates: [],
     } });
-    const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
+    const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
     expect(r.survivingCandidateIds).toEqual(["CHICKEN-001"]);
     expect(r.display?.["CHICKEN-008"]).toBeUndefined();
     // 조용히 사라지면 "왜 없지?" 가 된다. 뺀 이유를 말해 준다.
@@ -781,8 +781,8 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
       },
       recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-008"] },
     });
-    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
-    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     expect(rec.alternativeCandidateIds).toEqual([]);
   });
 
@@ -800,10 +800,10 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
       },
       recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-003" },
     });
-    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목프로필 });
-    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     const 표 = Object.fromEntries(rec.matchedOptions.map((o) => [o.label, o]));
-    // 프로필은 포장하기·매운맛·순살이다. 이 후보는 뼈라 형태만 어긋난다.
+    // 주문표는 포장하기·매운맛·순살이다. 이 후보는 뼈라 형태만 어긋난다.
     expect(표["맵기"].matched).toBe(true);
     expect(표["형태"].matched).toBe(false);
     expect(표["이용 방식"].matched).toBe(true);
@@ -817,7 +817,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b, calls } = 캡처();
     await b.recommend({
       environmentId: "chicken-store", profileId: "p1",
-      survivingCandidateIds: ["CHICKEN-001"], profile: 목프로필,
+      survivingCandidateIds: ["CHICKEN-001"], profile: 목주문표,
     });
     expect(calls[0].url).toBe("/api/bff/api/v1/recommendations");
     expect(calls[0].body).not.toHaveProperty("survivingCandidateIds");
@@ -827,8 +827,8 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
 
   it("승인은 orchestrator/approve 로 조각을 갖춰 보낸다", async () => {
     const { b, calls } = 캡처();
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
-    await b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+    await b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 목주문표 });
 
     const 승인 = calls[1];
     expect(승인.url).toBe("/api/bff/internal/orchestrator/approve");
@@ -844,15 +844,15 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
 
   it("사용자가 고른 후보가 1순위로 바뀌어 나간다", async () => {
     const { b, calls } = 캡처();
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목프로필 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     await b.submit("s1", {
-      pairingId: "s1", profileId: "p1", mappingResult: "clarification",
-      candidateId: "CHICKEN-003", profile: 목프로필,
+      pairingId: "s1", sheetId: "p1", mappingResult: "clarification",
+      candidateId: "CHICKEN-003", profile: 목주문표,
     });
     expect((calls[1].body.recommendation as Record<string, unknown>).recommendedCandidateId).toBe("CHICKEN-003");
   });
 
-  it("프로필 없이 부르면 조용히 넘어가지 않는다", async () => {
+  it("주문표 없이 부르면 조용히 넘어가지 않는다", async () => {
     const { b } = 캡처();
     await expect(b.filterCandidates({ environmentId: "chicken-store", profileId: "p1" })).rejects.toThrow();
     await expect(b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [] })).rejects.toThrow();
@@ -862,7 +862,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     // 매핑을 건너뛰고 승인만 부르는 경로가 생기면 서버가 조립할 재료가 없다.
     const { b } = 캡처();
     await expect(
-      b.submit("s1", { pairingId: "s1", profileId: "p1", mappingResult: "exact", profile: 목프로필 }),
+      b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 목주문표 }),
     ).rejects.toThrow();
   });
 

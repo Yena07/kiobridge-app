@@ -1,4 +1,4 @@
-import type { CartResult, MappedOption, MappingResponse, MappingState, PlaceType, ProfileData, RecommendationReason } from "@/domain/types";
+import type { CartResult, MappedOption, MappingResponse, MappingState, PlaceType, OrderSheet, RecommendationReason } from "@/domain/types";
 
 import dakgangjeongImg from "@/assets/images/dakgangjeong.jpg";
 import icedAmericanoImg from "@/assets/images/iced-americano.jpg";
@@ -7,7 +7,7 @@ import icedAmericanoImg from "@/assets/images/iced-americano.jpg";
 // 스키마는 키오브릿지_API_계약_초안_v0.1.md 의 POST /mapping · GET /plan/{id}/status 와 동일하다.
 // 백엔드가 붙으면 이 파일 대신 client.ts 를 주입하고 화면 코드는 건드리지 않는다.
 //
-// 이 파일의 응답은 반드시 사용자가 실제로 저장한 프로필에서 나와야 한다.
+// 이 파일의 응답은 반드시 사용자가 실제로 저장한 주문표에서 나와야 한다.
 // 고정 응답을 돌려주면 확인 화면이 "당신이 고른 조건을 이렇게 썼습니다" 라고 말하면서
 // 고른 적 없는 조건을 나열하게 된다. 대신 눌러 주는 앱에서 그건 가장 나쁜 거짓말이다.
 
@@ -89,39 +89,39 @@ const 로으로 = (w: string) =>
   w + (/[a-zA-Z]$/.test(w) ? (/[aeiouAEIOU]$/.test(w) ? "로" : "으로") : 조사(w, "으로", "로"));
 const 은는 = (w: string) => w + 조사(w, "은", "는");
 const 이가 = (w: string) => w + 조사(w, "이", "가");
-const 메뉴이름 = (p: ProfileData | undefined) => p?.menuName || MOCK_MENU_NAME;
-const 고른값 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축]?.[0];
-const 고른값들 = (p: ProfileData | undefined, 축: string) => p?.selections?.[축] ?? [];
+const 메뉴이름 = (p: OrderSheet | undefined) => p?.menuName || MOCK_MENU_NAME;
+const 고른값 = (p: OrderSheet | undefined, 축: string) => p?.selections?.[축]?.[0];
+const 고른값들 = (p: OrderSheet | undefined, 축: string) => p?.selections?.[축] ?? [];
 
 const 알레르기축 = "알레르기 (꼭 빼주세요)";
 
 /**
- * 이 프로필이 보는 키오스크의 오늘 메뉴.
+ * 이 주문표가 보는 키오스크의 오늘 메뉴.
  *
  * 목록이 없는 장소는 빈 배열을 준다. 지어내지 않는다.
  * 병원에서 '매운 순살 닭강정' 을 승인하라는 화면이 뜨는 것보다
  * "이 키오스크는 아직 지원하지 않아요" 가 낫다.
  * 병원·관공서는 백엔드가 fixture 를 내려 주면 그때 채운다.
  *
- * 장소를 안 고른 프로필도 빈 배열이다. 예전에는 닭강정집으로 떨어뜨렸는데,
+ * 장소를 안 고른 주문표도 빈 배열이다. 예전에는 닭강정집으로 떨어뜨렸는데,
  * 그러면 장소를 안 고른 사람에게 닭강정을 승인하라고 하게 된다.
  * 방금 병원·관공서에서 막은 그 경로가 여기로 남아 있었다.
  *
- * 연동 메모: 실제로는 프로필이 아니라 QR 로 연결한 키오스크(environmentId)가
- * 카탈로그를 정한다. 목은 붙일 서버가 없어서 프로필의 place 로 대신 고른다.
+ * 연동 메모: 실제로는 주문표가 아니라 QR 로 연결한 키오스크(environmentId)가
+ * 카탈로그를 정한다. 목은 붙일 서버가 없어서 주문표의 place 로 대신 고른다.
  * 이 역전은 docs/BACKEND_INTEGRATION.md 에 적어 두었다.
  */
 const 장소별카탈로그: Partial<Record<NonNullable<PlaceType>, 후보[]>> = {
   음식점: 오늘의후보,
   카페: 카페후보,
 };
-const 카탈로그 = (p: ProfileData | undefined) => (p?.place ? (장소별카탈로그[p.place] ?? []) : []);
+const 카탈로그 = (p: OrderSheet | undefined) => (p?.place ? (장소별카탈로그[p.place] ?? []) : []);
 
 /**
  * 절대 조건으로 후보를 거른다. 점수를 깎는 게 아니라 목록에서 아예 뺀다.
  * 알레르기·품절·이용 불가가 여기 해당한다.
  */
-function 절대조건으로거르기(p: ProfileData | undefined) {
+function 절대조건으로거르기(p: OrderSheet | undefined) {
   const 알레르기 = 고른값들(p, 알레르기축);
   const 이용방식 = 고른값(p, "이용 방식");
   const 남은: 후보[] = [];
@@ -158,7 +158,7 @@ function 절대조건으로거르기(p: ProfileData | undefined) {
 }
 
 /**
- * 프로필의 질문과 후보가 들고 있는 값을 잇는 표.
+ * 주문표의 질문과 후보가 들고 있는 값을 잇는 표.
  * 순위·불일치 판정·확인 카드가 전부 이것 하나를 본다.
  * 축을 늘릴 때 세 군데를 따로 고치면 언젠가 한 곳이 빠지고, 그때 화면이 거짓말한다.
  *
@@ -180,7 +180,7 @@ const 비교축: { label: string; 값: (c: 후보) => string | undefined; 무게
  *
  * 고르지 않은 축은 넣지 않는다. 안 고른 것은 어긋날 수도 없다.
  */
-function 안맞는축(c: 후보, p: ProfileData | undefined): string[] {
+function 안맞는축(c: 후보, p: OrderSheet | undefined): string[] {
   return 비교축
     .filter(({ label, 값 }) => {
       const 고른 = 고른값(p, label);
@@ -190,7 +190,7 @@ function 안맞는축(c: 후보, p: ProfileData | undefined): string[] {
 }
 
 /** 남은 후보를 사용자가 고른 축과 얼마나 맞는지로 정렬한다. */
-function 점수순(남은: 후보[], p: ProfileData | undefined) {
+function 점수순(남은: 후보[], p: OrderSheet | undefined) {
   // 사용자가 고르지 않은 축은 점수에 넣지 않는다. 안 고른 것을 맞혔다고
   // 계산하면 아무 조건도 안 맞는 후보가 1순위가 될 수 있다.
   const 점수 = (c: 후보) =>
@@ -202,7 +202,7 @@ function 점수순(남은: 후보[], p: ProfileData | undefined) {
 }
 
 /** 무엇을 써서 골랐는지 사용자의 말로 적는다. 고른 적 없는 축은 말하지 않는다. */
-function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined): RecommendationReason[] {
+function 반영한이유(p: OrderSheet | undefined, 고름: 후보 | undefined): RecommendationReason[] {
   const out: RecommendationReason[] = [];
   const 이용방식 = 고른값(p, "이용 방식");
   const 맵기 = 고른값(p, "맵기");
@@ -241,7 +241,7 @@ function 반영한이유(p: ProfileData | undefined, 고름: 후보 | undefined)
  * 고름 이 undefined 면 '아직 어느 후보인지 정해지지 않았다' 는 뜻이라
  * 어긋남을 판단하지 않고 저장한 값만 보여 준다. clarification 이 그 경우다.
  */
-function 확인표(p: ProfileData | undefined, 고름: 후보 | undefined): MappedOption[] {
+function 확인표(p: OrderSheet | undefined, 고름: 후보 | undefined): MappedOption[] {
   const 행: MappedOption[] = [];
   const 어긋남 = new Set(고름 ? 안맞는축(고름, p) : []);
   const 문구 = new Map(비교축.map(({ label, 어긋날때 }) => [label, 어긋날때]));
@@ -271,21 +271,21 @@ function 확인표(p: ProfileData | undefined, 고름: 후보 | undefined): Mapp
 }
 
 /**
- * 프로필 하나로 매핑 응답을 만든다.
+ * 주문표 하나로 매핑 응답을 만든다.
  * state 는 시연용 시나리오 스위치가 고르는 '결과 종류'이고,
- * 내용은 전부 실제 프로필에서 나온다.
+ * 내용은 전부 실제 주문표에서 나온다.
  */
-export function buildMapping(state: MappingState, profile?: ProfileData): MappingResponse {
-  const { 남은, 뺀이유 } = 절대조건으로거르기(profile);
-  const 순위 = 점수순(남은, profile);
+export function buildMapping(state: MappingState, sheet?: OrderSheet): MappingResponse {
+  const { 남은, 뺀이유 } = 절대조건으로거르기(sheet);
+  const 순위 = 점수순(남은, sheet);
   const 고름 = 순위[0];
-  const 이유 = [...반영한이유(profile, 고름), ...뺀이유];
+  const 이유 = [...반영한이유(sheet, 고름), ...뺀이유];
 
   const item = 고름 && {
     displayName: 고름.name,
     priceText: 원(고름.price),
     imageUrl: KIOSK_MENU_PHOTOS[고름.name],
-    options: 확인표(profile, 고름),
+    options: 확인표(sheet, 고름),
   };
 
   // 절대 조건에 다 걸려서 담을 수 있는 게 하나도 안 남을 수 있다.
@@ -293,20 +293,20 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
   // 그리다가 터진다. 담을 게 없다는 건 그 자체로 not_found 이므로 그렇게 답한다.
   if (!고름) {
     // 세 경우를 구분한다. 사용자가 다음에 할 일이 서로 다르기 때문이다.
-    //   장소를 안 골랐다     → 프로필에 장소를 정하면 된다 (사용자가 고칠 수 있다)
+    //   장소를 안 골랐다     → 주문표에 장소를 정하면 된다 (사용자가 고칠 수 있다)
     //   그 장소를 모른다     → 직원에게 도움을 청한다 (사용자가 고칠 수 없다)
     //   조건에 걸려 다 빠졌다 → 조건을 손보면 된다
     //
     // state 를 보지 않는다. 예전에는 state !== "not_found" 일 때만 여기 들어와서,
-    // 시연 스위치로 not_found 를 고르면 아래 case 로 빠져 병원 프로필에도
+    // 시연 스위치로 not_found 를 고르면 아래 case 로 빠져 병원 주문표에도
     // "메뉴가 바뀌었을 수 있어요" 라고 답했다. 담을 게 없다는 사실은 스위치와
     // 무관하고, 왜 없는지도 마찬가지다.
-    const 장소미정 = !profile?.place;
-    const 목록없음 = 카탈로그(profile).length === 0;
+    const 장소미정 = !sheet?.place;
+    const 목록없음 = 카탈로그(sheet).length === 0;
     return {
       result: "not_found",
       message: 장소미정
-        ? "어디에서 쓰실 건지 프로필에 정해 두시면 오늘의 메뉴에서 찾아드릴 수 있어요."
+        ? "어디에서 쓰실 건지 주문표에 정해 두시면 오늘의 메뉴에서 찾아드릴 수 있어요."
         : 목록없음
         ? "이 종류의 키오스크는 아직 도와드리지 못해요. 직원에게 이 화면을 보여 주세요."
         : "조건에 맞는 메뉴가 오늘은 없어요. 알레르기나 이용 방식 때문에 모두 빠졌어요.",
@@ -334,10 +334,10 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
         // 답이 달라지기 때문이다. 1순위 기준으로 계산해 두면 c2(뼈)를 고른
         // 사용자에게 "형태: 순살, 그대로예요" 라고 말하게 된다.
         // 고름 을 넘기지 않으면 확인표가 판단을 미룬다.
-        profileOptions: 확인표(profile, undefined),
+        sheetOptions: 확인표(sheet, undefined),
         // menuName 은 사용자가 직접 적은 값이라 받침을 장담할 수 없다.
         // 따옴표가 뒤에 붙으면 헬퍼가 마지막 글자를 못 읽으므로 이름만 넘긴다.
-        reason: `저장하신 '${메뉴이름(profile)}'${조사(메뉴이름(profile), "과", "와")} 비슷한 메뉴가 여러 개예요`,
+        reason: `저장하신 '${메뉴이름(sheet)}'${조사(메뉴이름(sheet), "과", "와")} 비슷한 메뉴가 여러 개예요`,
         reasons: 이유,
         // candidateId 는 이번 매핑 응답에서만 쓰는 임시 표식이다.
         // 키오스크 상품 ID 를 앱이 들고 있지 않도록 의도적으로 불투명한 값을 쓴다.
@@ -348,7 +348,7 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
           imageUrl: KIOSK_MENU_PHOTOS[c.name],
           // 이 후보를 고르면 어떤 조건이 어긋나는지 응답이 알려 준다.
           // 화면이 이름을 뜯어보고 짐작하지 않아도 되게.
-          unmatchedLabels: 안맞는축(c, profile),
+          unmatchedLabels: 안맞는축(c, sheet),
         })),
       };
 
@@ -357,11 +357,11 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
     case "not_found":
       return {
         result: "not_found",
-        message: `저장하신 '${메뉴이름(profile)}'${조사(메뉴이름(profile), "이", "가")} 오늘의 메뉴에 없어요. 메뉴가 바뀌었을 수 있어요.`,
+        message: `저장하신 '${메뉴이름(sheet)}'${조사(메뉴이름(sheet), "이", "가")} 오늘의 메뉴에 없어요. 메뉴가 바뀌었을 수 있어요.`,
       };
 
     case "changed": {
-      const 표 = 확인표(profile, 고름);
+      const 표 = 확인표(sheet, 고름);
 
       // 이미 어긋난 게 있으면 아무것도 지어내지 않는다.
       // 예전에는 진짜 불일치가 있어도 아래 시연용 경로를 그대로 타서,
@@ -391,7 +391,7 @@ export function buildMapping(state: MappingState, profile?: ProfileData): Mappin
       //
       // 스위치는 결과 종류를 고를 뿐, 없는 불일치를 만들어 내지는 못한다.
       // 위쪽 exact 경로가 '어긋난 게 있으면 changed 로' 내리는 것과 짝이다.
-      // 시연에서 changed 를 보려면 실제로 어긋나는 프로필을 쓰면 된다.
+      // 시연에서 changed 를 보려면 실제로 어긋나는 주문표를 쓰면 된다.
       return { result: "exact", reasons: 이유, item };
     }
 

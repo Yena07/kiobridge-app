@@ -1,7 +1,7 @@
-import type { ProfileData } from "@/domain/types";
+import type { OrderSheet } from "@/domain/types";
 
 /**
- * 화면이 쓰는 프로필을 백엔드가 받는 표준 모양으로 옮긴다.
+ * 화면이 쓰는 주문표를 백엔드가 받는 표준 모양으로 옮긴다.
  *
  * 화면은 사용자가 읽는 한글 선택지를 그대로 들고 있고("매운맛"),
  * 백엔드 계약은 enum 이다(SpicyLevel.HOT). 둘을 잇는 곳이 여기 하나다.
@@ -54,8 +54,8 @@ const 알레르기: Record<string, AllergenId> = {
   "땅콩": "PEANUT", "대두": "SOY", "우유": "MILK", "계란": "EGG", "밀": "WHEAT", "새우": "SHRIMP",
 };
 
-const 고른값 = (p: ProfileData, 축: string) => p.selections?.[축]?.[0];
-const 고른값들 = (p: ProfileData, 축: string) => p.selections?.[축] ?? [];
+const 고른값 = (p: OrderSheet, 축: string) => p.selections?.[축]?.[0];
+const 고른값들 = (p: OrderSheet, 축: string) => p.selections?.[축] ?? [];
 
 /**
  * 고른 값을 enum 으로 바꾼다.
@@ -73,14 +73,14 @@ export const 수량숫자 = (v: string | undefined): number | null => {
 };
 
 /**
- * 백엔드가 받는 프로필.
+ * 백엔드가 받는 주문표.
  *
  * 이름·전화번호 같은 실제 개인정보는 담지 않는다. displayName 은 선택 필드라
  * 아예 보내지 않는다 — 화면이 수집하지 않는 값을 계약에 채워 넣을 이유가 없다.
  * dataClassification 은 SYNTHETIC_PROFILE 고정이다(심사 요건).
  */
 export function toCanonicalProfile(
-  p: ProfileData,
+  p: OrderSheet,
   opts: { providerId?: string; collectedAt?: string; largeText?: boolean; personalization?: boolean } = {},
 ): CanonicalProfile {
   return {
@@ -103,7 +103,7 @@ export function toCanonicalProfile(
     consent: {
       /*
        * 화면에 '개인화에 동의하십니까' 라는 항목은 없다. 대신 사용자가 조건을
-       * 저장하고 '이 프로필로 주문하기' 를 눌러 그 조건으로 골라 달라고 한다.
+       * 저장하고 '이 주문표로 주문하기' 를 눌러 그 조건으로 골라 달라고 한다.
        * 그 행동 자체가 이 주문에 한한 동의라고 보고 true 로 둔다.
        *
        * 동의 항목을 따로 묻게 되면 그 값을 여기로 넘긴다. 기본값을 false 로
@@ -111,14 +111,14 @@ export function toCanonicalProfile(
        * 사실과 다르기 때문이다.
        */
       personalization: opts.personalization ?? true,
-      // 프로필은 메모리에만 두고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
+      // 주문표는 메모리에만 두고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
       retentionPolicy: "SESSION_ONLY",
     },
   };
 }
 
 /** 닭강정집 세션 맥락. 다른 장소는 백엔드에 대응 타입이 아직 없다. */
-export function toChickenStoreContext(p: ProfileData): ChickenStoreSessionContext {
+export function toChickenStoreContext(p: OrderSheet): ChickenStoreSessionContext {
   return {
     intent: { task: "ORDER_FOOD" },
     facts: {},
@@ -140,8 +140,8 @@ export function toChickenStoreContext(p: ProfileData): ChickenStoreSessionContex
   };
 }
 
-/** 백엔드가 이 프로필을 다룰 수 있는가. 지금 대응 타입이 있는 건 닭강정집뿐이다. */
-export const 백엔드가아는장소 = (p: ProfileData): boolean => p.place === "음식점";
+/** 백엔드가 이 주문표를 다룰 수 있는가. 지금 대응 타입이 있는 건 닭강정집뿐이다. */
+export const 백엔드가아는장소 = (p: OrderSheet): boolean => p.place === "음식점";
 
 
 // ─── 정규화 경로에 넣을 원자료 ────────────────────────────────────────────────
@@ -181,7 +181,7 @@ export interface ContextNormalizationInput {
 }
 
 export function toProfileNormalizationInput(
-  p: ProfileData,
+  p: OrderSheet,
   opts: { collectedAt?: string; largeText?: boolean } = {},
 ): ProfileNormalizationInput {
   const c = toCanonicalProfile(p, opts);
@@ -197,7 +197,7 @@ export function toProfileNormalizationInput(
 }
 
 export function toContextNormalizationInput(
-  p: ProfileData,
+  p: OrderSheet,
   opts: { capturedAt?: string } = {},
 ): ContextNormalizationInput {
   const ctx = toChickenStoreContext(p);

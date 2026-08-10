@@ -26,7 +26,7 @@ const 저장소루트 = (() => {
 })();
 
 import { describe, expect, it } from "vitest";
-import type { MappingState, ProfileData } from "@/domain/types";
+import type { MappingState, OrderSheet } from "@/domain/types";
 import { MOCK_CART, MOCK_MENU_NAME, buildMapping } from "./mock";
 
 // 저장소에 들어가지 않는 것은 훑지 않는다. 목록을 손으로 적으면 .gitignore 와
@@ -62,7 +62,7 @@ const 소스훑기 = (확장자: RegExp, 검사: (경로: string, 내용: string
 // 고정 응답을 돌려주면 "당신이 고른 조건을 이렇게 썼습니다" 라고 하면서
 // 고른 적 없는 조건을 나열하게 되고, 대신 눌러 주는 앱에서 그건 가장 나쁜 거짓말이다.
 
-const 프로필 = (selections: Record<string, string[]>): ProfileData => ({
+const 주문표 = (selections: Record<string, string[]>): OrderSheet => ({
   id: "t1",
   menuName: "닭강정",
   place: "음식점",
@@ -70,7 +70,7 @@ const 프로필 = (selections: Record<string, string[]>): ProfileData => ({
   memo: "",
 });
 
-const 땅콩알레르기 = 프로필({
+const 땅콩알레르기 = 주문표({
   "이용 방식": ["포장하기"],
   "맵기": ["매운맛"],
   "형태": ["순살"],
@@ -79,7 +79,7 @@ const 땅콩알레르기 = 프로필({
   "알레르기 (꼭 빼주세요)": ["땅콩"],
 });
 
-const 알레르기없음 = 프로필({
+const 알레르기없음 = 주문표({
   "이용 방식": ["먹고 가기"],
   "맵기": ["순한맛"],
   "형태": ["뼈"],
@@ -93,9 +93,9 @@ const 이유문구 = (r: ReturnType<typeof buildMapping>) => (r.reasons ?? []).m
 
 describe("buildMapping — 결과 종류", () => {
   // changed 는 뺀다. 결과 종류는 스위치가 고르지만 '맞았는지' 는 데이터가 정한다.
-  // 다 맞는 프로필로 changed 를 고르면 아래 테스트대로 exact 가 돌아온다.
+  // 다 맞는 주문표로 changed 를 고르면 아래 테스트대로 exact 가 돌아온다.
   it.each(모든상태.filter((s) => s !== "changed"))("%s 상태는 같은 result 를 돌려준다 (어긋난 게 없을 때)", (state) => {
-    // 어긋난 게 있으면 exact 는 changed 로 승격된다. 이 프로필은 다 맞는다.
+    // 어긋난 게 있으면 exact 는 changed 로 승격된다. 이 주문표는 다 맞는다.
     expect(buildMapping(state, 땅콩알레르기).result).toBe(state);
   });
 
@@ -125,7 +125,7 @@ describe("buildMapping — 결과 종류", () => {
     expect(r.diffNote).not.toContain("일반컵");
   });
 
-  it("프로필이 없어도 터지지 않는다", () => {
+  it("주문표가 없어도 터지지 않는다", () => {
     for (const state of 모든상태) {
       expect(() => buildMapping(state, undefined)).not.toThrow();
     }
@@ -167,11 +167,11 @@ describe("확인 카드는 사용자가 고른 값만 담는다", () => {
   });
 
   it("고르지 않은 축은 표에 넣지 않는다", () => {
-    const opts = buildMapping("exact", 프로필({ "맵기": ["매운맛"] })).item?.options ?? [];
+    const opts = buildMapping("exact", 주문표({ "맵기": ["매운맛"] })).item?.options ?? [];
     expect(opts.map((o) => o.label)).toEqual(["맵기"]);
   });
 
-  it("두 프로필은 서로 다른 메뉴를 답으로 낸다", () => {
+  it("두 주문표는 서로 다른 메뉴를 답으로 낸다", () => {
     const a = buildMapping("exact", 땅콩알레르기).item?.displayName;
     const b = buildMapping("exact", 알레르기없음).item?.displayName;
     expect(a).toBe("매운 순살 닭강정");
@@ -198,9 +198,9 @@ describe("못 맞춘 조건을 감추지 않는다", () => {
 describe("상태별 화면 요건", () => {
   it("clarification 은 저장한 조건을 함께 준다", () => {
     const r = buildMapping("clarification", 땅콩알레르기);
-    expect(r.profileOptions?.length).toBeGreaterThan(0);
+    expect(r.sheetOptions?.length).toBeGreaterThan(0);
     // '맞았는지' 는 여기서 판단하지 않는다 — 어느 후보를 고르느냐에 따라 달라진다.
-    expect(r.profileOptions?.every((o) => o.matched)).toBe(true);
+    expect(r.sheetOptions?.every((o) => o.matched)).toBe(true);
   });
 
   it("clarification 은 후보를 여러 개 주고 상품 ID 를 노출하지 않는다", () => {
@@ -227,8 +227,8 @@ describe("상태별 화면 요건", () => {
     // 회귀. 예전에는 displayName 문자열 포함 여부로 판정해서,
     // 온도가 'ICE' 인 '아이스 아메리카노' 를 고르면 이름에 'ICE' 가 없다는 이유로
     // "고르신 메뉴와 달라요" 라고 말했다. 정확히 맞는 후보한테 그랬다.
-    const 카페: ProfileData = {
-      ...프로필({ "이용 방식": ["테이크아웃"], "음료": ["아메리카노"], "온도": ["ICE"] }),
+    const 카페: OrderSheet = {
+      ...주문표({ "이용 방식": ["테이크아웃"], "음료": ["아메리카노"], "온도": ["ICE"] }),
       place: "카페",
       menuName: "아이스 아메리카노",
     };
@@ -241,7 +241,7 @@ describe("상태별 화면 요건", () => {
   });
 
   it("고르지 않은 축은 어긋날 수도 없다", () => {
-    const 맵기만 = 프로필({ "맵기": ["매운맛"] });
+    const 맵기만 = 주문표({ "맵기": ["매운맛"] });
     const r = buildMapping("clarification", 맵기만);
     for (const c of r.candidates ?? []) {
       expect(c.unmatchedLabels).not.toContain("형태");
@@ -266,19 +266,19 @@ describe("상태별 화면 요건", () => {
 });
 
 describe("메뉴를 못 찾은 이유마다 다음에 할 일이 다르다", () => {
-  const 메시지 = (p: ProfileData) => buildMapping("exact", p).message ?? "";
+  const 메시지 = (p: OrderSheet) => buildMapping("exact", p).message ?? "";
 
   it("장소를 안 골랐으면 장소를 정하라고 한다", () => {
-    // 예전에는 장소 없는 프로필을 닭강정집으로 떨어뜨려서,
+    // 예전에는 장소 없는 주문표를 닭강정집으로 떨어뜨려서,
     // 커피를 저장한 사람에게 '매운 순살 닭강정' 을 승인하라고 했다.
-    const 장소없음: ProfileData = { ...프로필({}), place: null, menuName: "커피" };
+    const 장소없음: OrderSheet = { ...주문표({}), place: null, menuName: "커피" };
     // 문구는 '장소 유형' 같은 앱 용어를 쓰지 않는다. 사용자가 할 일만 짚는다.
-    expect(메시지(장소없음)).toContain("프로필에 정해");
+    expect(메시지(장소없음)).toContain("주문표에 정해");
     expect(메시지(장소없음)).not.toContain("닭강정");
   });
 
   it("아직 모르는 장소면 직원에게 보여 주라고 한다", () => {
-    const 병원: ProfileData = { ...프로필({ "진료과": ["내과"] }), place: "병원", menuName: "접수" };
+    const 병원: OrderSheet = { ...주문표({ "진료과": ["내과"] }), place: "병원", menuName: "접수" };
     expect(메시지(병원)).toContain("직원");
   });
 
@@ -288,24 +288,24 @@ describe("메뉴를 못 찾은 이유마다 다음에 할 일이 다르다", () 
   // 백엔드가 실제 목록을 내려 주기 시작하면 그때 이 분기의 테스트를 붙인다.
 
   it("시연 스위치로 not_found 를 골라도 사유는 그대로 구분한다", () => {
-    // 예전에는 스위치가 not_found 면 사유 분기를 건너뛰어서, 병원 프로필에도
-    // 장소 없는 프로필에도 똑같이 "메뉴가 바뀌었을 수 있어요" 라고 답했다.
+    // 예전에는 스위치가 not_found 면 사유 분기를 건너뛰어서, 병원 주문표에도
+    // 장소 없는 주문표에도 똑같이 "메뉴가 바뀌었을 수 있어요" 라고 답했다.
     // 사용자가 다음에 할 일이 서로 다른데 화면이 같은 말을 했다.
-    const 병원: ProfileData = { ...프로필({ "진료과": ["내과"] }), place: "병원", menuName: "접수" };
-    const 장소없음: ProfileData = { ...프로필({}), place: null, menuName: "커피" };
+    const 병원: OrderSheet = { ...주문표({ "진료과": ["내과"] }), place: "병원", menuName: "접수" };
+    const 장소없음: OrderSheet = { ...주문표({}), place: null, menuName: "커피" };
     expect(buildMapping("not_found", 병원).message).toContain("직원");
-    expect(buildMapping("not_found", 장소없음).message).toContain("프로필에 정해");
+    expect(buildMapping("not_found", 장소없음).message).toContain("주문표에 정해");
   });
 
   it("후보가 있는데 이름만 다르면 이름을 짚어 말한다", () => {
     // 후보가 남아 있는 경우다. 위의 '담을 게 아예 없다' 와는 다른 이야기다.
-    const 있음 = 프로필({ "이용 방식": ["포장하기"], "알레르기 (꼭 빼주세요)": ["땅콩"] });
+    const 있음 = 주문표({ "이용 방식": ["포장하기"], "알레르기 (꼭 빼주세요)": ["땅콩"] });
     expect(buildMapping("not_found", 있음).message).toContain("닭강정");
   });
 
   it("메뉴 이름에 받침이 없어도 조사가 맞는다", () => {
     // menuName 은 사용자가 직접 적는 값이다. '커피이 없어요' 가 되면 안 된다.
-    const 커피 = { ...프로필({ "음료": ["아메리카노"] }), place: "카페" as const, menuName: "커피" };
+    const 커피 = { ...주문표({ "음료": ["아메리카노"] }), place: "카페" as const, menuName: "커피" };
     expect(buildMapping("not_found", 커피).message).toContain("'커피'가");
     expect(buildMapping("clarification", 커피).reason).toContain("'커피'와");
   });
@@ -377,7 +377,7 @@ describe("MOCK_MENU_NAME", () => {
 describe("사용자에게 읽히는 문장", () => {
   // 이 화면의 전제는 "사용자의 말로 설명한다" 이다. 조사가 틀리거나
   // 라벨을 그대로 이어 붙이면 기계가 찍어 낸 티가 나고 그 전제가 무너진다.
-  const 카페 = (sel: Record<string, string[]>): ProfileData => ({
+  const 카페 = (sel: Record<string, string[]>): OrderSheet => ({
     id: "c", menuName: "커피", place: "카페", memo: "", selections: sel,
   });
 
@@ -403,22 +403,22 @@ describe("사용자에게 읽히는 문장", () => {
 });
 
 describe("장소가 다르면 다른 카탈로그를 본다", () => {
-  const 카페프로필 = (): ProfileData => ({
+  const 카페주문표 = (): OrderSheet => ({
     id: "cafe1", menuName: "아이스 아메리카노", place: "카페", memo: "",
     selections: { "이용 방식": ["테이크아웃"], "음료": ["아메리카노"], "온도": ["ICE"], "사이즈": ["Tall"] },
   });
 
-  it("카페 프로필에 닭강정을 답으로 주지 않는다", () => {
-    const r = buildMapping("exact", 카페프로필());
+  it("카페 주문표에 닭강정을 답으로 주지 않는다", () => {
+    const r = buildMapping("exact", 카페주문표());
     expect(r.item?.displayName ?? "").not.toContain("닭강정");
   });
 
-  it("카페 프로필에는 카페 메뉴를 준다", () => {
-    const r = buildMapping("exact", 카페프로필());
+  it("카페 주문표에는 카페 메뉴를 준다", () => {
+    const r = buildMapping("exact", 카페주문표());
     expect(r.item?.displayName).toContain("아메리카노");
   });
 
-  it("음식점 프로필은 그대로 닭강정을 준다", () => {
+  it("음식점 주문표는 그대로 닭강정을 준다", () => {
     const r = buildMapping("exact", 땅콩알레르기);
     expect(r.item?.displayName).toContain("닭강정");
   });

@@ -1,5 +1,5 @@
-﻿import { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Check, Phone } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { ChevronLeft, Check } from "lucide-react";
 
 import { Pictogram } from "@/design/Pictogram";
 import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
@@ -9,12 +9,16 @@ import {
   FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES,
 } from "@/design/tokens";
 import type {
-  Screen, MainTab, PlaceType, PairingState, StepStatus, ProfileData, PairingResult,
+  Screen, MainTab, PlaceType, PairingState, StepStatus, OrderSheet, PairingResult,
   MappingResponse, MappedItem, MappedOption, MappingCandidate, ApproveInput, RecommendationReason,
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
-import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
-import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, unregisterProfile, type Scenario } from "@/api/client";
+import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_SHEETS, STEPS } from "@/domain/catalog";
+import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerSheet, unregisterSheet, type Scenario } from "@/api/client";
+import {
+  account, 아이디검사, 비밀번호검사, 못올리는이유,
+  LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
+} from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
@@ -43,7 +47,11 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
 }
 
 // 레퍼런스에는 진행 막대가 없다. 점 형태로 최소화해 상단 여백을 비워 둔다.
-function ProgressBar({ step, total = 4 }: { step: number; total?: number }) {
+//
+// 전체 3단계다 — 회원가입 → 호칭 → 첫 주문표. 예전에는 전화번호·인증번호가 앞에 있어
+// 4단계였는데, 그 둘을 걷어내면서 하나 줄었다. 기본값만 고치고 넘어가면 화면마다
+// "3단계 중 4단계" 처럼 실제와 어긋난 값이 남으므로 부르는 쪽에서 전부 명시한다.
+function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
   return (
     <div className="flex justify-center gap-1.5" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={`전체 ${total}단계 중 ${step}단계`}>
       {Array.from({ length: total }).map((_, i) => (
@@ -239,197 +247,329 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
           }}
           className="flex items-center justify-center gap-2 w-full"
         >
-          <Phone size={17} strokeWidth={2.2} />
-          전화번호로 로그인 (선택)
+          <Pictogram name="userCircle" size={18} color={TEXT_2} />
+          로그인 (선택)
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Phone ────────────────────────────────────────────────────────────────────
+// ─── Account — 회원가입 · 로그인 ───────────────────────────────────────────────
+//
+// 로그인은 끝까지 선택이다. 이 두 화면을 한 번도 열지 않아도 QR 을 찍고 추천을 받고
+// 장바구니에 담는 전 과정이 그대로 동작한다. 로그인해서 얻는 것은 하나뿐이다 —
+// 저장해 둔 주문표를 다음에 열었을 때도 불러오는 것.
+//
+// 예전에는 이 자리에 전화번호·인증번호 화면이 있었다. 붙일 백엔드가 없어서 번호는 고칠 수
+// 없는 시연값이었고 인증번호는 아무 여섯 자리나 통과했다 — 로그인한 척하는 화면이었다.
+// 실제 계정 API(modules/member)가 생겨서 아이디·비밀번호로 바꿨다.
+// 실명·전화번호·주민등록번호는 여전히 받지 않는다. 아이디는 사용자가 지어내는 값이다.
 
-// 실제 번호가 아닌 것이 눈에 보이는 시연용 값. 010-0000-0000 은 실제로
-// 쓰이지 않는 번호라 누구의 것도 아니다.
-const DEMO_PHONE = "01000000000";
+/**
+ * 계정 화면의 입력 한 줄.
+ *
+ * 라벨을 진짜 <label for> 로 둔다. 자리표시자로만 두면 값을 적는 순간 무엇을 적는 칸이었는지
+ * 사라지고, 스크린리더는 칸 이름을 읽을 방법이 없다.
+ *
+ * 비밀번호 칸에는 보기/숨기기를 붙인다. 점으로만 가려 두면 오타를 확인할 길이 없어서
+ * 손이 떨리거나 화면이 잘 안 보이는 분은 "맞지 않아요" 만 반복해서 만나게 된다.
+ * 기본은 가려 둔 상태다 — 어깨 너머로 보이는 것도 막아야 한다.
+ */
+function AccountField({
+  id, label, hint, value, onChange, secret = false, autoComplete, autoFocus = false, onEnter, invalid = false,
+}: {
+  id: string;
+  label: string;
+  /** 칸 아래 한 줄. 문제가 있으면 그 이유가, 없으면 안내가 들어온다. */
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  /** 비밀번호 칸인가. 보기/숨기기 버튼이 붙는다. */
+  secret?: boolean;
+  autoComplete: string;
+  autoFocus?: boolean;
+  onEnter?: () => void;
+  invalid?: boolean;
+}) {
+  const [보임, 보이기] = useState(false);
 
-function PhoneScreen({ onNext, onBack, onPrivacy }: { onNext: (phone: string) => void; onBack: () => void; onPrivacy: () => void }) {
-  const [phone] = useState(DEMO_PHONE);
-  const formatted = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
-        <BackButton onClick={onBack} />
-        <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={1} />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `48px ${GAP.screenX}px 0` }}>
-        <CenterHeadline title="전화번호를 알려주세요" />
-
-        <label htmlFor="phone-input" className="sr-only">전화번호</label>
-        <div
-          className="flex items-center gap-3"
-          style={{ marginTop: 40, justifyContent: "center" }}
-        >
-          <span style={{ ...TYPE.bodyBold, color: TEXT_1, backgroundColor: CANVAS, padding: "10px 16px", borderRadius: RADIUS.pill, flexShrink: 0 }}>
-            +82
-          </span>
-          {/*
-           * 실제 번호를 받지 않는다. 심사 규칙이 실제 개인정보 수집을 금지하고,
-           * 가상·합성 데이터만 허용한다.
-           *
-           * 자동완성을 끄는 것만으로는 부족하다 — 사용자가 자기 번호를 직접
-           * 칠 수 있고, 그러면 실제 번호가 앱에 들어온다. 시연용 번호를 미리
-           * 채우고 읽기 전용으로 둔다. 칠 게 없으니 자동완성도 필요 없고,
-           * 손 떨리는 분이 11자리를 치는 부담도 사라진다.
-           */}
-          <input
-            id="phone-input"
-            type="tel"
-            inputMode="numeric"
-            readOnly
-            aria-readonly="true"
-            // 고칠 수 없는 칸에서 탭이 한 번 멈출 이유가 없다.
-            // 값은 아래 안내 문구가 대신 알려 준다.
-            tabIndex={-1}
-            value={formatted}
-            style={{
-              flex: 1, minWidth: 0, fontSize: 19, fontWeight: 600, color: TEXT_1, fontFamily: FONT,
-              letterSpacing: "-0.02em", border: "none", outline: "none",
-              backgroundColor: "transparent", padding: "10px 0", ...NUM,
-            }}
-          />
-        </div>
-      </div>
-
-      <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-4">
-        <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center", lineHeight: 1.7 }}>
-          시연용 번호가 미리 채워져 있어요. 실제 번호는 받지 않습니다.{" "}
-          {/* 밑줄만 그어 두고 눌리지 않으면 링크처럼 보이는 장식일 뿐이다.
-              무엇을 받고 무엇을 안 받는지 적어 둔 화면이 이미 있으므로 거기로 보낸다. */}
+    <div style={{ marginBottom: 20 }}>
+      <label htmlFor={id} style={{ ...TYPE.label, color: TEXT_1, display: "block", marginBottom: 8 }}>
+        {label}
+      </label>
+      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+        <input
+          id={id}
+          type={secret && !보임 ? "password" : "text"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          // 칸이 둘·셋인 화면에서 Enter 로 넘어가지 못하면 키보드만 쓰는 사람은
+          // 버튼까지 Tab 으로 내려가야 한다. 폼이 아니라 버튼이라 직접 잇는다.
+          onKeyDown={(e) => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
+          autoComplete={autoComplete}
+          /*
+           * 아이디만 글자 수로 자른다. 비밀번호는 서버가 UTF-8 '바이트' 로 재기 때문에
+           * maxLength 로는 같은 규칙을 만들 수 없다 — 한글이면 24자에서 이미 72바이트다.
+           * 비밀번호 길이는 비밀번호검사() 가 본다.
+           */
+          maxLength={secret ? undefined : LOGIN_ID_MAX}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          aria-invalid={invalid || undefined}
+          {...(autoFocus ? { "data-autofocus": true } : {})}
+          style={{
+            width: "100%", ...TYPE.body, color: TEXT_1, fontFamily: FONT,
+            // 보기/숨기기 버튼이 글자를 덮지 않도록 오른쪽을 비워 둔다.
+            padding: secret ? "15px 84px 15px 16px" : "15px 16px",
+            borderRadius: RADIUS.input, boxSizing: "border-box",
+            backgroundColor: CANVAS, outline: "none",
+            // 빨간 테두리만으로 알리지 않는다. 아래 hint 가 같은 사실을 글로 말한다.
+            border: invalid ? `2px solid ${FAIL}` : "none",
+          }}
+        />
+        {secret && (
           <button
             type="button"
-            onClick={onPrivacy}
-            style={{ color: TEXT_2, textDecoration: "underline", background: "none", border: "none", padding: "6px 2px", minHeight: 44, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}
+            onClick={() => 보이기((v) => !v)}
+            aria-pressed={보임}
+            aria-controls={id}
+            aria-label={보임 ? "비밀번호 가리기" : "비밀번호 보기"}
+            style={{
+              position: "absolute", right: 6, minHeight: 44, minWidth: 44, padding: "0 12px",
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 600, color: TEXT_2, fontFamily: FONT,
+            }}
           >
-            개인정보처리방침
+            {보임 ? "숨기기" : "보기"}
           </button>
-        </p>
-        <PrimaryBtn onClick={() => phone.length === 11 && onNext(phone)} disabled={phone.length < 11}>
-          인증번호 받기
-        </PrimaryBtn>
+        )}
       </div>
+      {hint && (
+        <p
+          id={`${id}-hint`}
+          style={{ fontSize: 13, lineHeight: 1.5, marginTop: 7, color: invalid ? FAIL : TEXT_2 }}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
 
-// ─── OTP ─────────────────────────────────────────────────────────────────────
+/**
+ * 로그인.
+ *
+ * 아이디가 없는 것과 비밀번호가 틀린 것을 구분해서 알리지 않는다. 구분해 주면 어떤 아이디가
+ * 이미 있는지 하나씩 확인할 수 있다. 서버도 같은 예외(InvalidCredentialsException)를 쓴다.
+ */
+function LoginScreen({ onDone, onBack, onGoSignup }: {
+  onDone: (a: Account) => void;
+  onBack: () => void;
+  onGoSignup: () => void;
+}) {
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [오류, set오류] = useState<string | null>(null);
+  // 보내는 중에 또 누르면 요청이 두 번 나간다. 로그인에서는 실패 횟수를 두 배로 쌓는 셈이다.
+  const [보내는중, set보내는중] = useState(false);
 
-function OtpScreen({ phone, onNext, onBack }: { phone: string; onNext: () => void; onBack: () => void }) {
-  const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
-  const inputs = useRef<(HTMLInputElement | null)[]>([]);
-  const [timer, setTimer] = useState(180);
-  useEffect(() => {
-    const id = setInterval(() => setTimer((t) => (t > 0 ? t - 1 : 0)), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const mm = String(Math.floor(timer / 60)).padStart(2, "0");
-  const ss = String(timer % 60).padStart(2, "0");
-  const handleKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && !otp[i] && i > 0) inputs.current[i - 1]?.focus();
+  const 채워짐 = loginId.trim() !== "" && password !== "";
+
+  const 보내기 = () => {
+    if (!채워짐 || 보내는중) return;
+    set보내는중(true);
+    set오류(null);
+    account.login(loginId, password)
+      .then(onDone)
+      // 성공하면 이 화면은 사라지므로 보내는중 을 되돌리지 않는다.
+      // 언마운트된 컴포넌트에 상태를 쓰면 React 가 경고한다.
+      .catch((e: KioBridgeError) => {
+        set보내는중(false);
+        set오류(e?.message ?? "로그인하지 못했어요");
+      });
   };
-  const handleChange = (i: number, val: string) => {
-    const 숫자 = val.replace(/[^0-9]/g, "");
-    // 문자 앱의 자동완성이나 붙여넣기는 6자리를 한 번에 넣는다.
-    // 한 글자만 받으면 그 편의가 통째로 죽고, 손으로 여섯 번 옮겨 적어야 한다.
-    if (숫자.length > 1) {
-      const next = [...otp];
-      숫자.slice(0, 6).split("").forEach((d, n) => { if (i + n < 6) next[i + n] = d; });
-      setOtp(next);
-      inputs.current[Math.min(i + 숫자.length, 5)]?.focus();
-      return;
-    }
-    const next = [...otp];
-    next[i] = 숫자.slice(-1);
-    setOtp(next);
-    if (숫자 && i < 5) inputs.current[i + 1]?.focus();
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
+        <BackButton onClick={onBack} />
+      </div>
+
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `24px ${GAP.screenX}px 0` }}>
+        <h1 style={{ ...TYPE.display, color: TEXT_1 }}>로그인</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 28 }}>
+          저장해 두신 주문표를 다시 불러와요
+        </p>
+
+        <AccountField
+          id="login-id" label="아이디" value={loginId} onChange={setLoginId}
+          autoComplete="username" autoFocus onEnter={보내기}
+        />
+        <AccountField
+          id="login-pw" label="비밀번호" value={password} onChange={setPassword}
+          secret autoComplete="current-password" onEnter={보내기}
+        />
+
+        {오류 && (
+          <div role="alert" style={{ marginBottom: 12 }}>
+            <InfoBox>{오류}</InfoBox>
+          </div>
+        )}
+      </div>
+
+      <StickyFooter>
+        {!채워짐 && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            아이디와 비밀번호를 적으면 로그인할 수 있어요
+          </p>
+        )}
+        <PrimaryBtn onClick={보내기} disabled={!채워짐 || 보내는중}>
+          {보내는중 ? "확인하는 중" : "로그인"}
+        </PrimaryBtn>
+        <button
+          type="button"
+          onClick={onGoSignup}
+          style={{
+            minHeight: 48, background: "none", border: "none", cursor: "pointer",
+            fontSize: 14, color: TEXT_2, fontFamily: FONT,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}
+        >
+          아이디가 없으신가요? 회원가입
+        </button>
+      </StickyFooter>
+    </div>
+  );
+}
+
+/**
+ * 회원가입.
+ *
+ * 받는 것은 아이디와 비밀번호 둘뿐이다. 심사 규칙이 실제 개인정보 수집을 금지하고,
+ * 개인정보 안내 화면도 "실제 이름·주소·주민등록번호는 받지도 저장하지도 않아요" 라고
+ * 약속하고 있다. 아이디는 사용자가 지어내는 값이라 그 약속을 어기지 않는다.
+ *
+ * 비밀번호를 두 번 받는다. 서버는 한 번만 받지만, 가려진 칸에 오타가 나면 사용자는
+ * 다음 로그인에서야 그 사실을 알게 되고 그때는 고칠 방법이 없다.
+ */
+function SignupScreen({ onDone, onBack, onGoLogin, onPrivacy }: {
+  onDone: (a: Account) => void;
+  onBack: () => void;
+  onGoLogin: () => void;
+  onPrivacy: () => void;
+}) {
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [다시, set다시] = useState("");
+  const [오류, set오류] = useState<string | null>(null);
+  const [보내는중, set보내는중] = useState(false);
+
+  /*
+   * 적기 시작한 칸만 검사한다.
+   *
+   * 빈 칸까지 검사하면 화면을 열자마자 "아이디를 적어 주세요" · "비밀번호를 적어 주세요" 가
+   * 빨간 글씨로 둘 뜬다. 아직 아무것도 안 했는데 혼나는 화면이 된다.
+   * 무엇을 채워야 하는지는 버튼 위 한 줄이 대신 말한다.
+   */
+  const 아이디문제 = loginId ? 아이디검사(loginId) : null;
+  const 비번문제 = password ? 비밀번호검사(password) : null;
+  const 다시문제 = 다시 && 다시 !== password ? "두 번 적은 비밀번호가 서로 달라요" : null;
+
+  const 보낼수있나 =
+    loginId.trim() !== "" && password !== "" && 다시 !== "" &&
+    !아이디문제 && !비번문제 && !다시문제;
+
+  const 보내기 = () => {
+    if (!보낼수있나 || 보내는중) return;
+    set보내는중(true);
+    set오류(null);
+    account.signup(loginId, password)
+      .then(onDone)
+      .catch((e: KioBridgeError) => {
+        set보내는중(false);
+        set오류(e?.message ?? "가입하지 못했어요");
+      });
   };
-  // 시간이 지나면 확인 버튼도 잠긴다. 남은 시간을 보여 주면서 눌리게 두면
-  // 눌러 놓고 왜 안 되는지 모르게 된다.
-  const expired = timer === 0;
-  const filled = otp.every((d) => d !== "") && !expired;
-  const maskedPhone = phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-****-$3");
+
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={2} />
+          <ProgressBar step={1} total={2} />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `48px ${GAP.screenX}px 0` }}>
-        <CenterHeadline
-          title={<>문자로 받은<br />인증번호를 입력해주세요</>}
-          desc={<><span style={{ color: TEXT_1, fontWeight: 600 }}>{maskedPhone}</span>으로 보냈어요</>}
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `24px ${GAP.screenX}px 0` }}>
+        <h1 style={{ ...TYPE.display, color: TEXT_1 }}>회원가입</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 28 }}>
+          아이디와 비밀번호만 받아요
+        </p>
+
+        <AccountField
+          id="signup-id" label="아이디" value={loginId} onChange={setLoginId}
+          autoComplete="username" autoFocus onEnter={보내기}
+          invalid={Boolean(아이디문제)}
+          hint={아이디문제 ?? `${LOGIN_ID_MAX}자까지 쓸 수 있어요. 실제 이름이나 전화번호는 적지 마세요`}
+        />
+        <AccountField
+          id="signup-pw" label="비밀번호" value={password} onChange={setPassword}
+          secret autoComplete="new-password" onEnter={보내기}
+          invalid={Boolean(비번문제)}
+          hint={비번문제 ?? `${PASSWORD_MIN}자 이상 적어 주세요`}
+        />
+        <AccountField
+          id="signup-pw2" label="비밀번호 다시 적기" value={다시} onChange={set다시}
+          secret autoComplete="new-password" onEnter={보내기}
+          invalid={Boolean(다시문제)}
+          hint={다시문제 ?? "같은 비밀번호를 한 번 더 적어 주세요"}
         />
 
-        <div className="flex justify-center" style={{ gap: 7, marginTop: 40 }} role="group" aria-label="인증번호 6자리">
-          {otp.map((digit, i) => (
-            <input
-              key={i}
-              ref={(el) => { inputs.current[i] = el; }}
-              type="tel"
-              inputMode="numeric"
-              // 문자로 온 인증번호를 기기가 대신 채워 준다. 첫 칸에만 붙인다.
-              autoComplete={i === 0 ? "one-time-code" : "off"}
-              // 값이 있는 칸을 다시 누르면 기존 값을 선택해 둔다.
-              // 그러면 재입력이 '교체' 로 동작한다. 이게 없으면 e.target.value 가
-              // "12" 가 되어 붙여넣기 경로를 타고 옆 칸까지 덮어쓴다.
-              onFocus={(e) => e.target.select()}
-              aria-label={`인증번호 ${i + 1}번째 자리`}
-              maxLength={6}
-              value={digit}
-              onChange={(e) => handleChange(i, e.target.value)}
-              onKeyDown={(e) => handleKey(i, e)}
-              {...(i === 0 ? { "data-autofocus": true } : {})}
-              style={{
-                width: 44, height: 52, textAlign: "center",
-                fontSize: 22, fontWeight: 600, fontFamily: FONT, ...NUM,
-                borderRadius: RADIUS.input, border: "none", outline: "none",
-                backgroundColor: digit ? P : CANVAS,
-                color: digit ? "white" : TEXT_1,
-                transition: "background-color 0.12s",
-              }}
-            />
-          ))}
-        </div>
+        {오류 && (
+          <div role="alert" style={{ marginBottom: 12 }}>
+            <InfoBox>{오류}</InfoBox>
+          </div>
+        )}
 
-        <div className="flex flex-col items-center" style={{ marginTop: 20 }}>
+        <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7, marginBottom: 8 }}>
+          실제 이름·주소·주민등록번호는 받지 않아요. 무엇을 저장하고 무엇을 저장하지 않는지는{" "}
           <button
             type="button"
-            aria-label="인증번호 재전송"
-            onClick={() => setTimer(180)}
-            style={{ fontSize: 14, color: TEXT_2, textDecoration: "underline", minHeight: 44, padding: "0 8px", background: "none", border: "none", cursor: "pointer", fontFamily: FONT }}
+            onClick={onPrivacy}
+            style={{
+              color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3,
+              background: "none", border: "none", padding: "6px 2px", minHeight: 44,
+              cursor: "pointer", fontFamily: FONT, fontSize: 13,
+            }}
           >
-            메시지 재전송
+            개인정보 안내
           </button>
-          <p style={{ fontSize: 13, color: TEXT_2, ...NUM }}>
-            남은 시간 <span style={{ fontWeight: 600, color: timer < 30 ? FAIL : TEXT_2 }}>{mm}:{ss}</span>
-          </p>
-        </div>
+          에 적어 두었어요.
+        </p>
       </div>
 
-      <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
-        {expired && (
-          <p role="alert" style={{ ...TYPE.caption, color: FAIL, textAlign: "center", marginBottom: 12 }}>
-            입력 시간이 지났어요. 메시지를 다시 받아 주세요
+      <StickyFooter>
+        {!보낼수있나 && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            {아이디문제 ?? 비번문제 ?? 다시문제 ?? "아이디와 비밀번호를 적으면 가입할 수 있어요"}
           </p>
         )}
-        <PrimaryBtn onClick={onNext} disabled={!filled}>확인</PrimaryBtn>
-      </div>
+        <PrimaryBtn onClick={보내기} disabled={!보낼수있나 || 보내는중}>
+          {보내는중 ? "가입하는 중" : "가입하고 시작하기"}
+        </PrimaryBtn>
+        <button
+          type="button"
+          onClick={onGoLogin}
+          style={{
+            minHeight: 48, background: "none", border: "none", cursor: "pointer",
+            fontSize: 14, color: TEXT_2, fontFamily: FONT,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}
+        >
+          이미 아이디가 있으신가요? 로그인
+        </button>
+      </StickyFooter>
     </div>
   );
 }
@@ -443,7 +583,7 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={3} />
+          <ProgressBar step={2} total={2} />
         </div>
       </div>
 
@@ -520,7 +660,7 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
  * 되돌릴 수 없는 동작 앞에서만 띄운다.
  * 장소를 바꾸는 것처럼 되돌릴 수 있는 일에는 쓰지 않는다 — 매번 물으면
  * 사람은 읽지 않고 누르게 되고, 정작 위험할 때도 그냥 누른다.
- * 지금 이걸 쓰는 곳은 프로필 삭제와 '이 기기에서 정보 지우기' 둘뿐이다.
+ * 지금 이걸 쓰는 곳은 주문표 삭제와 '이 기기에서 정보 지우기' 둘뿐이다.
  */
 function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
   title: string; body: string; confirmLabel: string;
@@ -616,12 +756,20 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 
 // ─── Profile Form ─────────────────────────────────────────────────────────────
 
-// 프로필 id. 사람이 읽을 값이 아니고 서버로도 나가지 않는 화면 내부 표식이다.
+// 주문표 id. 사람이 읽을 값이 아니고 서버로도 나가지 않는 화면 내부 표식이다.
 // 시각은 사람이 만든 순서를 알아보기 쉬워서 남기고, 뒤에 카운터를 붙여 충돌을 막는다.
-let 프로필일련번호 = 0;
-const newProfileId = () => `p${Date.now()}_${++프로필일련번호}`;
+let 주문표일련번호 = 0;
+const newSheetId = () => `p${Date.now()}_${++주문표일련번호}`;
 
-function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: ProfileData) => void; onBack: () => void; showProgress?: boolean }) {
+function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
+  onNext: (p: OrderSheet) => void;
+  onBack: () => void;
+  /**
+   * 로그인한 사람인가. 저장한 주문표가 서버에도 올라가는지가 달라지므로 화면이 말해 준다.
+   * 로그인하지 않았으면 서버 이야기를 꺼내지 않는다 — 하지 않는 일을 설명할 이유가 없다.
+   */
+  로그인함?: boolean;
+}) {
   const [menuName, setMenuName] = useState("");
   const [place, setPlace] = useState<PlaceType>(null);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
@@ -666,18 +814,17 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
-        <div className="flex items-center">
-          <BackButton onClick={onBack} />
-          <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-            {/*
-             * 진행 표시는 로그인 흐름(전화 1 → 인증 2 → 호칭 3 → 프로필 4)을 전제한다.
-             * 주 경로인 게스트는 앞의 셋을 건너뛰므로, 처음 프로필을 만드는 사람에게
-             * "4단계 중 4단계" 라고 읽히는 건 사실이 아니다. 게스트에게는 숨긴다.
-             */}
-            {showProgress && <ProgressBar step={4} />}
-          </div>
-        </div>
-        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 프로필</h1>
+        {/*
+         * 진행 표시를 두지 않는다.
+         *
+         * 예전에는 게스트가 아니면 "3단계 중 3단계" 를 보여 줬다. 그런데 이 화면은 가입
+         * 흐름의 끝이 아니라 홈에서 '+ 새 주문표 추가' 로 들어오는 자리다. 로그인한 사람이
+         * 다섯 번째 주문표를 만들 때도 "3단계 중 3단계" 가 떴고, role="progressbar" 라
+         * 스크린리더는 그 틀린 단계를 그대로 읽었다.
+         * 가입 흐름은 가입(1) → 호칭(2) 둘로 끝난다.
+         */}
+        <BackButton onClick={onBack} />
+        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 주문표</h1>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 24 }}>자주 주문하는 메뉴를 저장해두세요</p>
       </div>
 
@@ -689,6 +836,9 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
             aria-label="메뉴 이름 (필수)"
             value={menuName}
             onChange={(e) => setMenuName(e.target.value)}
+            // 서버의 menuName 이 @Size(max = 100) 이다. 넘으면 저장은 되는데 서버에만
+            // 못 올라가고, 사용자는 그 사실을 나중에 안다. 애초에 못 넘게 막는다.
+            maxLength={MENU_NAME_MAX}
             placeholder="예) 아이스 아메리카노 둘"
             style={{
               width: "100%", ...TYPE.body, color: TEXT_1, fontFamily: FONT,
@@ -765,6 +915,8 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
             aria-describedby="memo-notice"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
+            // 서버의 memo 가 @Size(max = 500) 이다. menuName 과 같은 이유로 여기서 막는다.
+            maxLength={MEMO_MAX}
             placeholder="예: 얼음 적게 주세요"
             rows={3}
             style={{
@@ -790,10 +942,20 @@ function ProfileScreen({ onNext, onBack, showProgress = true }: { onNext: (p: Pr
             맨 위 <span style={{ fontWeight: 600, color: TEXT_1 }}>메뉴 이름</span>을 적으면 저장할 수 있어요
           </p>
         )}
+        {/*
+          서버는 장소가 빈 주문표를 받지 않는다(place 가 @NotBlank). 올리고 나서 400 을
+          받아 "못 올렸어요" 를 띄우는 대신, 저장하기 전에 무엇을 하면 되는지 말한다.
+          막지는 않는다 — 장소는 선택 항목이고, 이 기기에는 그대로 저장된다.
+        */}
+        {로그인함 && menuName.trim() && !place && (
+          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
+            <span style={{ fontWeight: 600, color: TEXT_1 }}>장소</span>를 정해 두시면 다음에 로그인해도 불러올 수 있어요
+          </p>
+        )}
         <PrimaryBtn
           // Date.now() 만 쓰면 같은 밀리초에 두 개를 만들 때 id 가 겹친다.
-          // 겹치면 프로필 하나를 지울 때 다른 하나도 같이 사라진다.
-          onClick={() => onNext({ id: newProfileId(), menuName, place, selections, memo })}
+          // 겹치면 주문표 하나를 지울 때 다른 하나도 같이 사라진다.
+          onClick={() => onNext({ id: newSheetId(), menuName, place, selections, memo })}
           disabled={!menuName.trim()}
         >
           저장하고 시작하기
@@ -818,12 +980,12 @@ const SR_ONLY: React.CSSProperties = {
   whiteSpace: "nowrap", border: 0,
 };
 
-function ProfileCard({
-  profile, selected, onSelect, onDelete,
+function OrderSheetCard({
+  sheet, selected, onSelect, onDelete,
 }: {
-  profile: ProfileData; selected: boolean; onSelect: () => void; onDelete: () => void;
+  sheet: OrderSheet; selected: boolean; onSelect: () => void; onDelete: () => void;
 }) {
-  const allTags = [...(profile.place ? [profile.place] : []), ...Object.values(profile.selections).flat()];
+  const allTags = [...(sheet.place ? [sheet.place] : []), ...Object.values(sheet.selections).flat()];
   const visibleTags = allTags.slice(0, 4);
   const overflow = allTags.length - visibleTags.length;
   const [focused, setFocused] = useState(false);
@@ -834,7 +996,7 @@ function ProfileCard({
    * 예전에는 카드 전체가 role="radio" 이고 그 안에 삭제 버튼이 들어 있었다.
    * 그러면 삭제 버튼에 포커스를 두고 Enter 를 눌러도 카드만 선택되고 지워지지 않는다.
    * 부모가 그 Enter 를 가로채 preventDefault() 해 버리기 때문이다.
-   * 키보드만 쓰는 사람에게는 프로필을 지울 방법이 아예 없었다.
+   * 키보드만 쓰는 사람에게는 주문표를 지울 방법이 아예 없었다.
    *
    * 고르는 일은 진짜 input[type=radio] 에 맡긴다. 화살표 키로 옮겨 다니는 것과
    * 그룹 전체에 탭이 한 번만 걸리는 것을 브라우저가 알아서 해 준다.
@@ -854,17 +1016,17 @@ function ProfileCard({
       <label style={{ display: "block", padding: "20px 20px 0", cursor: "pointer" }}>
         <input
           type="radio"
-          name="saved-profile"
+          name="saved-sheet"
           style={SR_ONLY}
           checked={selected}
           onChange={onSelect}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          aria-label={`${profile.menuName}${profile.place ? `, ${profile.place}` : ""}`}
+          aria-label={`${sheet.menuName}${sheet.place ? `, ${sheet.place}` : ""}`}
         />
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            {/* 저장된 프로필에는 사진을 붙이지 않는다. 아직 어느 키오스크에도 물어보기 전이라
+            {/* 저장된 주문표에는 사진을 붙이지 않는다. 아직 어느 키오스크에도 물어보기 전이라
                 여기서 사진을 보여 주면 오늘 실제로 나올 메뉴를 앱이 장담하는 꼴이 된다. */}
             <div
               aria-hidden="true"
@@ -875,9 +1037,9 @@ function ProfileCard({
                 color: selected ? "white" : P, flexShrink: 0,
               }}
             >
-              {profile.place ? PLACE_ICONS[profile.place] : <Pictogram name="squaresFour" size={19} />}
+              {sheet.place ? PLACE_ICONS[sheet.place] : <Pictogram name="squaresFour" size={19} />}
             </div>
-            <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{profile.menuName}</span>
+            <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{sheet.menuName}</span>
           </div>
           <div
             aria-hidden="true"
@@ -923,8 +1085,8 @@ function ProfileCard({
         </div>
 
         {/* 반투명 흰색(70%)은 초록 위에서 3.31:1 이라 읽히지 않는다. 흰색은 5.08:1 이다. */}
-        {profile.memo && (
-          <p style={{ fontSize: 14, color: selected ? "white" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{profile.memo}</p>
+        {sheet.memo && (
+          <p style={{ fontSize: 14, color: selected ? "white" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{sheet.memo}</p>
         )}
       </label>
 
@@ -932,7 +1094,7 @@ function ProfileCard({
       <div className="flex justify-end" style={{ padding: "0 20px 20px", marginTop: 4 }}>
         <button
           type="button"
-          aria-label={`${profile.menuName} 프로필 삭제`}
+          aria-label={`${sheet.menuName} 주문표 삭제`}
           onClick={onDelete}
           style={{
             // 높이만 44 였고 폭이 30 이었다. 밑줄은 글자에만 걸리므로
@@ -951,46 +1113,46 @@ function ProfileCard({
   );
 }
 
-function SavedProfilesScreen({
-  profiles, onAddProfile, onDeleteProfile, onOrder, showOrder = false,
+function SavedSheetsScreen({
+  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false,
 }: {
-  profiles: ProfileData[];
-  onAddProfile: () => void;
-  onDeleteProfile: (id: string) => void;
-  onOrder: (profile: ProfileData) => void;
+  sheets: OrderSheet[];
+  onAddSheet: () => void;
+  onDeleteSheet: (id: string) => void;
+  onOrder: (sheet: OrderSheet) => void;
   showOrder?: boolean;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(profiles[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(sheets[0]?.id ?? null);
 
   // 목록이 바뀌면 고른 것도 따라가야 한다. 초기값에 갇혀 있으면
   // 전부 지웠다가 새로 만들었을 때 아무것도 안 골라진 채로 남고,
-  // '이 프로필로 주문하기'가 계속 잠겨서 빠져나갈 방법이 없어진다.
+  // '이 주문표로 주문하기'가 계속 잠겨서 빠져나갈 방법이 없어진다.
   useEffect(() => {
-    if (profiles.length === 0) {
+    if (sheets.length === 0) {
       if (selectedId !== null) setSelectedId(null);
       return;
     }
     // 목록이 실제로 바뀌었을 때만 따라간다.
-    // 지워진 프로필이 골라져 있었으면 첫 번째로 옮긴다. 삭제를 취소한 경우에는
-    // profiles 가 그대로라 이 이펙트가 돌지 않으므로 선택도 움직이지 않는다.
-    if (!profiles.some((p) => p.id === selectedId)) setSelectedId(profiles[0].id);
+    // 지워진 주문표가 골라져 있었으면 첫 번째로 옮긴다. 삭제를 취소한 경우에는
+    // sheets 가 그대로라 이 이펙트가 돌지 않으므로 선택도 움직이지 않는다.
+    if (!sheets.some((p) => p.id === selectedId)) setSelectedId(sheets[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profiles]);
+  }, [sheets]);
 
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
         <AppLogo size={26} />
-        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 22 }}>저장된 프로필</h1>
-        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>사용할 프로필을 선택하세요</p>
+        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 22 }}>저장된 주문표</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>사용할 주문표를 선택하세요</p>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-2" style={{ minHeight: 0, paddingLeft: GAP.screenX, paddingRight: GAP.screenX }}>
-        {profiles.length === 0 ? (
+        {sheets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Pictogram name="squaresFour" size={56} color={TEXT_3} />
-            <p style={{ ...TYPE.bodyBold, color: TEXT_1, marginTop: 20 }}>저장된 프로필이 없어요</p>
-            <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>새 프로필을 추가해보세요</p>
+            <p style={{ ...TYPE.bodyBold, color: TEXT_1, marginTop: 20 }}>저장된 주문표가 없어요</p>
+            <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>새 주문표를 추가해보세요</p>
           </div>
         ) : (
           /*
@@ -1000,18 +1162,18 @@ function SavedProfilesScreen({
            * 같은 name 을 가진 라디오끼리 화살표 키로 옮겨 다니는 것도 그대로 동작한다.
            */
           <fieldset style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}>
-            <legend style={SR_ONLY}>저장된 프로필 목록</legend>
-            {profiles.map((profile) => (
-              <ProfileCard
-                key={profile.id}
-                profile={profile}
-                selected={selectedId === profile.id}
-                onSelect={() => setSelectedId(profile.id)}
-                // 선택을 여기서 옮기지 않는다. onDeleteProfile 은 이제 확인창만
+            <legend style={SR_ONLY}>저장된 주문표 목록</legend>
+            {sheets.map((sheet) => (
+              <OrderSheetCard
+                key={sheet.id}
+                sheet={sheet}
+                selected={selectedId === sheet.id}
+                onSelect={() => setSelectedId(sheet.id)}
+                // 선택을 여기서 옮기지 않는다. onDeleteSheet 은 이제 확인창만
                 // 열고 아직 지우지 않는데, 여기서 옮기면 대답도 하기 전에 선택이
                 // 움직이고 '그대로 두기' 를 눌러도 돌아오지 않는다.
                 // 실제로 지워진 뒤의 선택 이동은 아래 useEffect 가 맡는다.
-                onDelete={() => onDeleteProfile(profile.id)}
+                onDelete={() => onDeleteSheet(sheet.id)}
               />
             ))}
           </fieldset>
@@ -1022,16 +1184,16 @@ function SavedProfilesScreen({
         {showOrder && (
           <PrimaryBtn
             onClick={() => {
-              const picked = profiles.find((p) => p.id === selectedId);
+              const picked = sheets.find((p) => p.id === selectedId);
               if (picked) onOrder(picked);
             }}
             disabled={!selectedId}
           >
-            이 프로필로 주문하기
+            이 주문표로 주문하기
           </PrimaryBtn>
         )}
-        <OutlineBtn onClick={onAddProfile}>
-          + 새 프로필 추가
+        <OutlineBtn onClick={onAddSheet}>
+          + 새 주문표 추가
         </OutlineBtn>
       </StickyFooter>
     </div>
@@ -1043,7 +1205,7 @@ function SavedProfilesScreen({
 function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => void }) {
   const items: { id: MainTab; icon: React.ReactNode; label: string }[] = [
     { id: "qr", icon: <Pictogram name="qrCode" size={25} />, label: "QR 찍기" },
-    { id: "menu", icon: <Pictogram name="notePencil" size={25} />, label: "내 프로필" },
+    { id: "menu", icon: <Pictogram name="notePencil" size={25} />, label: "내 주문표" },
     { id: "account", icon: <Pictogram name="userCircle" size={25} />, label: "계정" },
   ];
   return (
@@ -1112,12 +1274,12 @@ function PairingConnecting() {
 }
 
 function PairingConnected({
-  kioskName, expiresAt, onExpire, onSelectProfile,
+  kioskName, expiresAt, onExpire, onSelectSheet,
 }: {
   kioskName: string;
   expiresAt: number;
   onExpire: () => void;
-  onSelectProfile: () => void;
+  onSelectSheet: () => void;
 }) {
   const [secs, setSecs] = useState(() => Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
   const expire = useRef(onExpire);
@@ -1157,7 +1319,7 @@ function PairingConnected({
       </div>
 
       <div className="mt-auto" style={{ paddingTop: 24 }}>
-        <PrimaryBtn onClick={onSelectProfile}>프로필 선택하기</PrimaryBtn>
+        <PrimaryBtn onClick={onSelectSheet}>주문표 선택하기</PrimaryBtn>
       </div>
     </div>
   );
@@ -1223,7 +1385,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
   const [scanning, setScanning] = useState(true);
 
   // 검은 화면을 덮어 놓기만 하고 role 도 포커스 가둠도 없었다.
-  // 스크린리더로는 뒤에 있는 프로필 목록과 하단 탭이 그대로 읽히고,
+  // 스크린리더로는 뒤에 있는 주문표 목록과 하단 탭이 그대로 읽히고,
   // Tab 을 누르면 보이지도 않는 곳으로 포커스가 나간다.
   const 모달 = useRef<HTMLDivElement>(null);
   useEffect(() => { 모달.current?.focus(); }, []);
@@ -1360,7 +1522,7 @@ function PairingIdle({ onScan }: { onScan: () => void }) {
 
       <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
         <p style={{ ...TYPE.caption, color: TEXT_1 }}>
-          찍지 않아도 <strong style={{ fontWeight: 600 }}>내 프로필</strong>에서 저장한 조건을 먼저 확인할 수 있어요
+          찍지 않아도 <strong style={{ fontWeight: 600 }}>내 주문표</strong>에서 저장한 조건을 먼저 확인할 수 있어요
         </p>
       </div>
 
@@ -1426,7 +1588,7 @@ function QrScreen({ onPaired, initialPhase = "scan", connected = null }: {
             kioskName={pairing.kioskName}
             expiresAt={pairing.expiresAt}
             onExpire={() => setPhase("expired")}
-            onSelectProfile={() => onPaired(pairing.pairingId, pairing.expiresAt, pairing.kioskName)}
+            onSelectSheet={() => onPaired(pairing.pairingId, pairing.expiresAt, pairing.kioskName)}
           />
         )}
         {phase === "failed" && <PairingFailed reason={failReason} onScan={handleRescan} />}
@@ -1445,22 +1607,22 @@ function QrScreen({ onPaired, initialPhase = "scan", connected = null }: {
  * 이 화면이 하는 일은 두 가지뿐이다 — 저장된 것을 지우는 길과, 원하면 로그인하는 길.
  */
 function AccountScreen({
-  name, guest, onLogout, onLogin, onClearLocal, onProfiles, onA11y, onPrivacy,
+  name, guest, onLogout, onLogin, onClearLocal, onSheets, onA11y, onPrivacy,
 }: {
   name: string; guest: boolean;
   onLogout: () => void; onLogin: () => void; onClearLocal: () => void;
-  onProfiles: () => void; onA11y: () => void; onPrivacy: () => void;
+  onSheets: () => void; onA11y: () => void; onPrivacy: () => void;
 }) {
   // 목록에 올린 항목은 전부 실제로 열린다. 눌러도 아무 일이 없는 줄은 두지 않는다.
   const items = guest
     ? [
-        { label: "저장된 프로필 관리", sub: "이번 이용에만 쓰는 메뉴 프로필이에요", action: onProfiles, danger: false },
+        { label: "저장된 주문표 관리", sub: "이번 이용에만 쓰는 메뉴 주문표예요", action: onSheets, danger: false },
         { label: "접근성 설정", sub: "큰 글씨", action: onA11y, danger: false },
         { label: "개인정보 안내", sub: "무엇을 저장하고 무엇을 저장하지 않는지", action: onPrivacy, danger: false },
         { label: "이 기기에서 정보 지우기", sub: "지금까지 입력한 내용을 모두 지워요", action: onClearLocal, danger: true },
       ]
     : [
-        { label: "저장된 프로필 관리", sub: "내 메뉴 프로필을 확인하고 수정해요", action: onProfiles, danger: false },
+        { label: "저장된 주문표 관리", sub: "내 메뉴 주문표를 확인하고 수정해요", action: onSheets, danger: false },
         { label: "접근성 설정", sub: "큰 글씨", action: onA11y, danger: false },
         { label: "개인정보 안내", sub: "무엇을 저장하고 무엇을 저장하지 않는지", action: onPrivacy, danger: false },
         { label: "이 기기에서 정보 지우기", sub: "저장해 둔 내용을 모두 지워요", action: onClearLocal, danger: true },
@@ -1496,7 +1658,7 @@ function AccountScreen({
             }}
             className="flex items-center justify-center gap-2"
           >
-            <Phone size={17} strokeWidth={2.2} />
+            <Pictogram name="userCircle" size={18} color={TEXT_2} />
             다음에도 불러오려면 로그인 (선택)
           </button>
         )}
@@ -1630,15 +1792,17 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
   const rows: { title: string; body: string }[] = [
     {
       title: "저장하는 것",
-      body: "메뉴 프로필에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요.",
+      body: guest
+        ? "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요."
+        : "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서 이 내용은 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요.",
     },
     {
       title: "저장하지 않는 것",
-      body: "실제 이름·주소·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
+      body: "실제 이름·주소·전화번호·주민등록번호는 받지도, 저장하지도 않아요. 결제 정보도 다루지 않아요. 부르는 호칭은 화면에 띄우는 데만 쓰고 이 기기 밖으로 나가지 않아요.",
     },
     {
-      title: "전화번호는 어떻게 하나요",
-      body: "실제 전화번호는 받지 않아요. 로그인 화면에는 시연용 번호가 미리 채워져 있고 고칠 수 없어요. 그 값도 인증이 끝나면 바로 지웁니다.",
+      title: "로그인은 어떻게 하나요",
+      body: "직접 지으신 아이디와 비밀번호만 받아요. 실제 이름이나 전화번호는 묻지 않아요. 비밀번호는 서버에서 알아볼 수 없는 형태로 바꿔 저장하고, 이 앱은 적으신 비밀번호를 어디에도 남기지 않아요. 로그인 상태는 이 기기 메모리에만 있어서 새로고침하면 풀립니다.",
     },
     {
       title: "키오스크에 넘기는 것",
@@ -1648,7 +1812,8 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
       title: "지우는 방법",
       body: guest
         ? "지금은 로그인 없이 쓰고 계셔서 이번 이용이 끝나면 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요."
-        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 저장해 둔 내용이 모두 사라져요.",
+        // 서버에 주문표 삭제 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
+        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고 로그아웃돼요. 다만 서버에 올라간 주문표는 아직 지우는 길이 없어서, 다시 로그인하면 그대로 보입니다.",
     },
   ];
   return (
@@ -1793,7 +1958,7 @@ function InfoBox({ children, variant = "warn" }: { children: React.ReactNode; va
  *
  * 흉내 내는 대신 진짜 <input type="radio"> 를 쓴다. 화살표 이동·그룹 안 단일 포커스가
  * 브라우저 기본으로 동작하고, 우리가 유지할 코드도 줄어든다.
- * 프로필 목록(SavedProfilesScreen)이 같은 이유로 이미 이렇게 되어 있다.
+ * 주문표 목록(SavedSheetsScreen)이 같은 이유로 이미 이렇게 되어 있다.
  *
  * 예전에는 role="button" 분기도 있었다. low_confidence 에서 '이게 맞아요' 를
  * 짚는 자리였는데, 확인 카드와 같은 메뉴를 카드 모양으로 두 번 그리게 되어
@@ -1967,7 +2132,7 @@ function OrderNotFound({ message, onCancel }: { message?: string; onCancel: () =
         desc={message}
       />
       <div style={{ width: "100%", marginTop: 36 }}>
-        <OutlineBtn onClick={onCancel}>프로필 다시 보기</OutlineBtn>
+        <OutlineBtn onClick={onCancel}>주문표 다시 보기</OutlineBtn>
       </div>
     </div>
   );
@@ -2083,10 +2248,10 @@ function OrderMappingLoading() {
 }
 
 function OrderConfirmScreen({
-  pairingId, profile, onBack, onApproved,
+  pairingId, sheet, onBack, onApproved,
 }: {
   pairingId: string;
-  profile: ProfileData;
+  sheet: OrderSheet;
   onBack: () => void;
   onApproved: (planId: string) => void;
 }) {
@@ -2097,11 +2262,11 @@ function OrderConfirmScreen({
 
   useEffect(() => {
     let alive = true;
-    api.requestMapping(pairingId, profile.id)
+    api.requestMapping(pairingId, sheet.id)
       .then((res) => { if (alive) setMapping(res); })
       .catch((e: KioBridgeError) => { if (alive) setError(e.message); });
     return () => { alive = false; };
-  }, [pairingId, profile.id]);
+  }, [pairingId, sheet.id]);
 
   // P0-4: 실행 계획 생성은 이 핸들러 안에서만 일어난다.
   // 매핑 조회(useEffect)는 계획을 만들지 않으므로 승인 전 실행 경로가 존재하지 않는다.
@@ -2117,14 +2282,14 @@ function OrderConfirmScreen({
    */
   const 거절하기 = () => {
     onBack();
-    void api.reject({ pairingId, profileId: profile.id }).catch(() => {});
+    void api.reject({ pairingId, sheetId: sheet.id }).catch(() => {});
   };
 
-  const approve = (extra: Omit<ApproveInput, "pairingId" | "profileId" | "mappingResult"> = {}) => {
+  const approve = (extra: Omit<ApproveInput, "pairingId" | "sheetId" | "mappingResult"> = {}) => {
     if (!mapping || approving.current) return;
     approving.current = true;
     setError(null);
-    api.approve({ pairingId, profileId: profile.id, mappingResult: mapping.result, ...extra })
+    api.approve({ pairingId, sheetId: sheet.id, mappingResult: mapping.result, ...extra })
       .then((res) => onApproved(res.planId))
       .catch((e: KioBridgeError) => { approving.current = false; setError(e.message); });
   };
@@ -2134,8 +2299,8 @@ function OrderConfirmScreen({
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-2" style={{ marginTop: 20, paddingBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "white", backgroundColor: P, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 프로필</span>
-          <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{profile.menuName}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "white", backgroundColor: P, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 주문표</span>
+          <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
         </div>
         <div style={{ height: 1, backgroundColor: BORDER, marginLeft: -GAP.screenX, marginRight: -GAP.screenX }} />
       </div>
@@ -2149,7 +2314,7 @@ function OrderConfirmScreen({
           </div>
         )}
 
-        {!mapping && error && <OutlineBtn onClick={onBack}>프로필 다시 보기</OutlineBtn>}
+        {!mapping && error && <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>}
 
         {/*
          * item 이 없으면 그리지 않는다. 예전에는 mapping.item! 로 있다고 단정했는데,
@@ -2164,7 +2329,7 @@ function OrderConfirmScreen({
             candidates={mapping.candidates ?? []}
             reason={mapping.reason}
             reasons={mapping.reasons}
-            options={mapping.profileOptions}
+            options={mapping.sheetOptions}
             onApprove={(candidateId) => approve({ candidateId })}
             onCancel={거절하기}
           />
@@ -2187,7 +2352,7 @@ function OrderConfirmScreen({
         {(mapping?.result === "exact" || mapping?.result === "changed" || mapping?.result === "low_confidence") && !mapping.item && (
           <div className="flex flex-col gap-4">
             <InfoBox>메뉴 정보를 불러오지 못했어요. 키오스크 화면을 직접 확인해 주세요.</InfoBox>
-            <OutlineBtn onClick={onBack}>프로필 다시 보기</OutlineBtn>
+            <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>
           </div>
         )}
         {mapping?.result === "low_confidence" && mapping.item && (
@@ -2672,40 +2837,69 @@ function ScenarioPanel() {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [tab, setTab] = useState<MainTab>("menu");
-  const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  /** 로그인 없이 시작했는가. true 면 기기에 아무것도 남기지 않는다. */
-  const [guest, setGuest] = useState(true);
+  /**
+   * 로그인한 계정. null 이면 게스트다.
+   *
+   * 메모리에만 둔다. localStorage 를 쓰지 않아 새로고침하면 로그아웃되는데, 개인정보
+   * 안내 화면이 "이번 이용이 끝나면 남지 않아요" 라고 약속하고 있어서 그대로 둔다.
+   *
+   * 서버가 토큰을 주지 않는다 — 응답이 { userId, loginId } 뿐이다. 그래서 여기 있는 것은
+   * 인증 증명이 아니라 식별자다. 이 값으로 할 수 있는 일은 주문표를 불러오고 올리는 것뿐이고,
+   * 화면 어디에도 "안전하게 보관됩니다" 같은 말을 쓰지 않는다.
+   */
+  const [계정, set계정] = useState<Account | null>(null);
+  /*
+   * 게스트인지는 계정에서 나오는 값이다. 따로 useState 로 두면 둘이 어긋난다 —
+   * 예전에는 로그인 화면으로 '들어갈 때' guest 를 false 로 만들어서, 로그인하지 않고
+   * 뒤로 가면 로그인한 적 없는 사람이 회원으로 남았다.
+   */
+  const guest = 계정 === null;
+  /**
+   * 서버에서 불러온 주문표의 id.
+   *
+   * 로그아웃할 때 이것만 목록에서 뺀다. 전부 지우면 로그인 전에 게스트로 만들어 둔 주문표까지
+   * 사라지고, 남겨 두면 다음 사람이 이 기기를 열었을 때 앞사람 주문표가 그대로 보인다.
+   */
+  const 서버에서온것 = useRef<Set<string>>(new Set());
+  /**
+   * 계정이 몇 번 바뀌었는지. 로그인·로그아웃·정보 지우기가 이 값을 올린다.
+   *
+   * 서버 요청을 보낼 때 이 값을 적어 두고, 답이 왔을 때 아직 같은지 본다. 다르면 버린다.
+   * 없으면 늦게 도착한 답이 이미 지운 주문표를 되살린다 — 화면이 "모두 지웠어요" 라고
+   * 말한 뒤에 목록이 되돌아오는 것이라, 지킬 수 없는 약속을 한 셈이 된다.
+   */
+  const 계정세대 = useRef(0);
   /** 큰 글씨 모드. 휴대폰 틀 안 전체에 적용된다. */
   const [largeText, setLargeText] = useState(false);
-  const [profiles, setProfiles] = useState<ProfileData[]>(MOCK_PROFILES);
+  const [sheets, setSheets] = useState<OrderSheet[]>(MOCK_SHEETS);
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
   // 되돌릴 수 없는 동작은 물어보고 실행한다. null 이면 물어볼 게 없다는 뜻이다.
   const [확인대기, set확인대기] = useState<{ title: string; body: string; confirmLabel: string; run: () => void } | null>(null);
   const [pairingId, setPairingId] = useState<string | null>(null);
   // 만료 시각을 루트가 들고 있어야 한다. 예전에는 QrScreen 안에만 있어서
-  // 프로필을 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
+  // 주문표를 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
   // 그러면 이미 끝난 연결로 승인까지 진행되고, 화면은 아무 말도 하지 않는다.
   const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
   // 연결된 키오스크 이름. QR 탭으로 돌아왔을 때 무엇에 연결돼 있는지 말하려면 필요하다.
   const [pairingKiosk, setPairingKiosk] = useState<string | null>(null);
   // 만료 때문에 QR 화면으로 되돌아왔는지. 되돌아왔으면 안내부터 띄운다.
   const [qrExpired, setQrExpired] = useState(false);
-  const [orderProfile, setOrderProfile] = useState<ProfileData | null>(null);
+  const [orderSheet, setOrderSheet] = useState<OrderSheet | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
 
-  const addProfile = (p: ProfileData) => setProfiles((prev) => [...prev, p]);
+  const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
-  const deleteProfile = (id: string) => {
-    const 이름 = profiles.find((p) => p.id === id)?.menuName ?? "이 프로필";
+  const deleteSheet = (id: string) => {
+    const 이름 = sheets.find((p) => p.id === id)?.menuName ?? "이 주문표";
     set확인대기({
       title: `'${이름}'을 지울까요?`,
       body: "지우면 되돌릴 수 없어요. 저장해 두신 조건이 함께 사라져요.",
       confirmLabel: "지우기",
       run: () => {
-        unregisterProfile(id);
-        setProfiles((prev) => prev.filter((p) => p.id !== id));
+        unregisterSheet(id);
+        setSheets((prev) => prev.filter((p) => p.id !== id));
       },
     });
   };
@@ -2727,6 +2921,116 @@ export default function App() {
     });
   };
 
+  /**
+   * 주문표 하나를 서버에 올린다. 로그인한 사람에게만 일어난다.
+   *
+   * 실패해도 이 기기에는 이미 저장돼 있으므로 흐름을 막지 않는다. 다만 조용히 삼키지는
+   * 않는다 — 삼키면 "저장했어요" 가 절반만 사실이 되고, 사용자는 다음에 열었을 때
+   * 없어진 것을 보고서야 알게 된다. 재시도도 자기 자신을 부른다.
+   */
+  const 주문표올리기 = (userId: number, p: OrderSheet): void => {
+    const 내세대 = 계정세대.current;
+    account.saveSheet(userId, p).catch((e: KioBridgeError) => {
+      // 기다리는 사이 로그아웃했거나 정보를 지웠으면 묻지 않는다. 나간 사람에게
+      // 남의 계정으로 다시 올리겠냐고 묻는 셈이 된다.
+      if (내세대 !== 계정세대.current) return;
+      set확인대기({
+        title: "이 기기에는 저장했어요",
+        body: `${e?.message ?? "서버에 올리지 못했어요"} 지금은 이 기기에만 있어서, 다음에 로그인하면 안 보일 수 있어요.`,
+        confirmLabel: "다시 시도",
+        run: () => 주문표올리기(userId, p),
+      });
+    });
+  };
+
+  /**
+   * 새 주문표를 저장한다. 로그인했으면 서버에도 올린다.
+   *
+   * 장소를 안 고른 주문표는 올리지 않는다 — 서버의 place 가 @NotBlank 라 400 이 나는데,
+   * 그 400 은 code 도 message 도 없는 스프링 기본 응답이라 사용자에게 이유를 말해 줄 수 없다.
+   * 대신 주문표 화면이 저장하기 전에 미리 알려 준다(아래 OrderSheetScreen 의 안내 한 줄).
+   */
+  const 주문표저장 = (p: OrderSheet): void => {
+    addSheet(p);
+    setScreen("saved");
+    setTab("menu");
+    // 못올리는이유() 는 이유 문자열이거나 null 이다. null 일 때만 올린다.
+    if (계정 && 못올리는이유(p) === null) 주문표올리기(계정.userId, p);
+  };
+
+  /**
+   * 로그인·회원가입이 끝났다.
+   *
+   * 서버에 저장해 둔 주문표를 가져와 목록 앞에 붙인다. 같은 id 는 서버 것으로 덮는다 —
+   * 서버가 최신이다. 게스트로 만들어 둔 주문표는 지우지 않는다. 방금 만든 것이
+   * 로그인했다는 이유로 사라지면 그게 가장 나쁘다.
+   *
+   * 불러오기에 실패해도 로그인 자체는 된 것이다. 다만 말은 해 준다 — 아무 말 없이
+   * 빈 목록을 보여 주면 사용자는 저장해 둔 게 사라진 줄 안다.
+   */
+  const 계정으로들어가기 = (a: Account, 다음화면: Screen): void => {
+    계정세대.current += 1;
+    const 내세대 = 계정세대.current;
+    set계정(a);
+    setScreen(다음화면);
+    if (다음화면 === "saved") setTab("menu");
+
+    const 불러오기 = (): void => {
+      account.listSheets(a.userId)
+        .then((서버것) => {
+          /*
+           * 늦게 온 답을 그대로 넣으면 이미 지운 것이 되살아난다. 두 경우가 있었다.
+           *
+           *   ① 기다리는 동안 로그아웃한다 → 게스트 화면에 앞사람 주문표가 남는다.
+           *   ② 기다리는 동안 '이 기기에서 정보 지우기' 를 누른다 → 비운 목록이 되돌아온다.
+           *
+           * 둘째가 특히 나쁘다. 화면이 지웠다고 말해 놓고 실제로는 안 지운 것이 된다.
+           * 계정이 바뀌는 모든 자리에서 세대를 올리고, 답이 오면 내 세대인지 먼저 본다.
+           */
+          if (내세대 !== 계정세대.current) return;
+          if (서버것.length === 0) return;
+          for (const p of 서버것) 서버에서온것.current.add(p.id);
+          setSheets((prev) => {
+            const 서버id = new Set(서버것.map((p) => p.id));
+            return [...서버것, ...prev.filter((p) => !서버id.has(p.id))];
+          });
+        })
+        .catch((e: KioBridgeError) => {
+          // 이미 나간 사람에게 다시 시도하겠냐고 묻지 않는다.
+          if (내세대 !== 계정세대.current) return;
+          set확인대기({
+            title: "저장해 두신 주문표를 못 불러왔어요",
+            body: `${e?.message ?? "서버에 연결하지 못했어요"} 로그인은 됐어요. 이 기기에 있는 주문표는 그대로 쓸 수 있어요.`,
+            confirmLabel: "다시 시도",
+            run: 불러오기,
+          });
+        });
+    };
+    불러오기();
+  };
+
+  /**
+   * 로그아웃.
+   *
+   * 서버에서 불러온 주문표는 목록에서 뺀다. 남겨 두면 로그아웃했는데도 그 사람 주문표가
+   * 화면에 그대로 있고, 다음 사람이 이 기기를 열었을 때 앞사람 것을 보게 된다.
+   * 게스트로 만든 주문표는 이 기기 것이므로 건드리지 않는다.
+   */
+  const 로그아웃 = (): void => {
+    // 아직 오는 중인 답을 무효로 만든다. 안 그러면 로그아웃한 뒤에 도착한 목록이
+    // 방금 뺀 주문표를 그대로 돌려놓는다.
+    계정세대.current += 1;
+    const 뺄것 = 서버에서온것.current;
+    setSheets((prev) => prev.filter((p) => !뺄것.has(p.id)));
+    for (const id of 뺄것) unregisterSheet(id);
+    서버에서온것.current = new Set();
+    set계정(null);
+    setName("");
+    setFromQr(false);
+    setTab("menu");
+    setScreen("welcome");
+  };
+
   // 연결이 끝나면 어느 화면에 있든 되돌린다.
   // 실행 중일 때는 건드리지 않는다. 이미 키오스크가 움직이고 있는데 화면만
   // 되돌리면 사용자는 무슨 일이 일어난 건지 알 수 없다. 그 화면은 자기 상태를
@@ -2738,7 +3042,7 @@ export default function App() {
       setPairingId(null);
       setPairingExpiresAt(null);
       setPairingKiosk(null);
-      setOrderProfile(null);
+      setOrderSheet(null);
       setFromQr(false);
       setScreen("saved");
       setTab("qr");
@@ -2788,7 +3092,7 @@ export default function App() {
     setTab(t);
     setScreen("saved");
     // 연결이 아직 살아 있으면 주문 경로를 유지한다. 예전에는 무조건 껐더니
-    // 하단 탭으로 '내 프로필'에 가는 순간 주문 버튼이 사라졌고,
+    // 하단 탭으로 '내 주문표'에 가는 순간 주문 버튼이 사라졌고,
     // QR 을 다시 찍는 것 말고는 되돌릴 방법이 없었다.
     if (!pairingId) setFromQr(false);
   };
@@ -2824,38 +3128,48 @@ export default function App() {
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
           {screen === "welcome" && (
             <WelcomeScreen
-              // 익명 시작: 로그인 화면을 거치지 않고 바로 본 화면으로 간다.
-              onStart={() => { setGuest(true); setName(""); setPhone(""); setScreen("saved"); setTab("menu"); }}
-              // 선택적 로그인: 고른 사람만 전화번호 경로로 간다.
-              onLogin={() => { setGuest(false); setScreen("phone"); }}
+              // 익명 시작: 계정 화면을 거치지 않고 바로 본 화면으로 간다.
+              onStart={() => { setName(""); setScreen("saved"); setTab("menu"); }}
+              // 선택적 로그인: 고른 사람만 계정 경로로 간다. 여기서 뒤로 가면
+              // 아무 일도 없었던 것이 되어야 하므로 계정 상태는 아직 건드리지 않는다.
+              onLogin={() => setScreen("login")}
             />
           )}
-          {screen === "phone" && (
-            <PhoneScreen
-              onNext={(p) => { setPhone(p); setScreen("otp"); }}
+          {screen === "login" && (
+            <LoginScreen
+              // 이미 계정이 있는 사람이다. 호칭은 서버가 갖고 있지 않지만 다시 묻지 않는다 —
+              // 로그인할 때마다 호칭을 적게 하면 로그인이 가입보다 번거로워진다.
+              // 계정 화면은 호칭이 없으면 아이디를 부른다.
+              onDone={(a) => 계정으로들어가기(a, "saved")}
               onBack={() => setScreen("welcome")}
+              onGoSignup={() => setScreen("signup")}
+            />
+          )}
+          {screen === "signup" && (
+            <SignupScreen
+              // 가입 직후에는 서버에 주문표가 없다. 그래도 같은 경로를 탄다 —
+              // 갈래를 둘로 두면 한쪽만 고치는 날이 온다. 빈 목록이면 아무 일도 안 한다.
+              onDone={(a) => 계정으로들어가기(a, "name")}
+              onBack={() => setScreen("login")}
+              onGoLogin={() => setScreen("login")}
               onPrivacy={() => setScreen("privacy")}
             />
           )}
-          {screen === "otp" && (
-            <OtpScreen
-              phone={phone}
-              // 인증이 끝나면 번호를 즉시 버린다. 더 들고 있을 이유가 없다.
-              // 남겨 두면 실제 개인정보를 저장하는 셈이 된다.
-              onNext={() => { setPhone(""); setScreen("name"); }}
-              onBack={() => setScreen("phone")}
-            />
-          )}
           {screen === "name" && (
-            <NameScreen onNext={(n) => { setName(n); setScreen("greeting"); }} onBack={() => setScreen("otp")} />
+            <NameScreen
+              onNext={(n) => { setName(n); setScreen("greeting"); }}
+              // 가입은 이미 끝났다. 뒤로 가도 가입 화면으로 돌아가지 않는다 —
+              // 돌아가면 같은 아이디로 또 가입하려다 "이미 쓰고 있는 아이디예요" 를 만난다.
+              onBack={() => { setScreen("saved"); setTab("menu"); }}
+            />
           )}
           {screen === "greeting" && (
             <GreetingScreen name={name} onNext={() => { setScreen("saved"); setTab("menu"); }} />
           )}
-          {screen === "profile" && (
-            <ProfileScreen
-              showProgress={!guest}
-              onNext={(p) => { addProfile(p); setScreen("saved"); setTab("menu"); }}
+          {screen === "sheet" && (
+            <OrderSheetScreen
+              로그인함={!guest}
+              onNext={주문표저장}
               onBack={() => setScreen("saved")}
             />
           )}
@@ -2875,20 +3189,20 @@ export default function App() {
             />
           )}
           {inMain && tab === "menu" && (
-            <SavedProfilesScreen
-              profiles={profiles}
-              onAddProfile={() => { setScreen("profile"); }}
-              onDeleteProfile={deleteProfile}
-              // 매핑을 요청하기 전에 이 프로필을 서버가 찾을 수 있게 등록한다.
-              // 실서비스에서는 프로필 저장 시점에 서버로 올라가고 이 줄은 사라진다.
-              onOrder={(p) => { registerProfile(p); setOrderProfile(p); setScreen("order-confirm"); }}
+            <SavedSheetsScreen
+              sheets={sheets}
+              onAddSheet={() => { setScreen("sheet"); }}
+              onDeleteSheet={deleteSheet}
+              // 매핑을 요청하기 전에 이 주문표를 서버가 찾을 수 있게 등록한다.
+              // 실서비스에서는 주문표 저장 시점에 서버로 올라가고 이 줄은 사라진다.
+              onOrder={(p) => { registerSheet(p); setOrderSheet(p); setScreen("order-confirm"); }}
               showOrder={fromQr}
             />
           )}
-          {screen === "order-confirm" && pairingId && orderProfile && (
+          {screen === "order-confirm" && pairingId && orderSheet && (
             <OrderConfirmScreen
               pairingId={pairingId}
-              profile={orderProfile}
+              sheet={orderSheet}
               onBack={() => setScreen("saved")}
               onApproved={(id) => { setPlanId(id); setScreen("execution"); }}
             />
@@ -2898,30 +3212,38 @@ export default function App() {
               planId={planId}
               onHome={() => {
                 setScreen("saved"); setFromQr(false);
-                setPlanId(null); setOrderProfile(null); setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null);
+                setPlanId(null); setOrderSheet(null); setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null);
               }}
             />
           )}
           {inMain && tab === "account" && (
             <AccountScreen
-              name={name}
+              // 호칭을 안 적은 사람도 있다(로그인만 한 경우). 그때는 아이디로 부른다.
+              // "사용자님" 은 마지막 수단이다 — 게스트에게는 이 값을 쓰지 않는다.
+              name={name || 계정?.loginId || ""}
               guest={guest}
-              onLogout={() => {
-                setName(""); setPhone(""); setFromQr(false); setGuest(true);
-                setTab("menu"); setScreen("welcome");
-              }}
-              onLogin={() => { setGuest(false); setScreen("phone"); }}
-              // 저장된 정보를 지우는 길. 프로필까지 함께 비운다.
+              onLogout={로그아웃}
+              onLogin={() => setScreen("login")}
+              // 저장된 정보를 지우는 길. 주문표까지 함께 비운다.
               onClearLocal={() => set확인대기({
                 title: "이 기기에서 정보를 지울까요?",
-                body: "저장한 프로필과 호칭, 전화번호가 모두 사라져요. 되돌릴 수 없어요.",
+                body: 계정
+                  // 서버에 주문표 삭제 경로가 없다. 지운 척하지 않는다.
+                  ? "이 기기에 있는 주문표와 호칭이 사라지고 로그아웃돼요. 서버에 저장해 둔 주문표는 남아 있어서, 다시 로그인하면 그대로 보입니다."
+                  : "저장한 주문표와 호칭이 모두 사라져요. 되돌릴 수 없어요.",
                 confirmLabel: "모두 지우기",
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
                   서버까지지우기();
-                  setProfiles([]); setName(""); setPhone("");
-                  setOrderProfile(null); setPlanId(null);
+                  setSheets([]); setName("");
+                  // 계정도 함께 푼다. 안 풀면 주문표를 다 지운 화면에 회원으로 남아
+                  // '저장된 주문표 관리' 가 빈 목록을 회원 것처럼 보여 준다.
+                  // 세대를 올려 아직 오는 중인 불러오기 답도 무효로 만든다 — 안 그러면
+                  // 방금 비운 목록이 그 답으로 되돌아온다.
+                  계정세대.current += 1;
+                  set계정(null); 서버에서온것.current = new Set();
+                  setOrderSheet(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가
                   // 터지면서 QR 만료 화면으로 튕겨 나간다. 방금 다 지웠는데 왜 그러는지
                   // 사용자는 알 수 없다.
@@ -2930,7 +3252,7 @@ export default function App() {
               })}
               // 연결이 살아 있으면 주문 경로를 끊지 않는다. 하단 탭과 같은 판단이다.
               // 끊으면 QR 을 다시 찍는 것 말고 되돌릴 방법이 없다.
-              onProfiles={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
+              onSheets={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
               onA11y={() => setScreen("a11y")}
               onPrivacy={() => setScreen("privacy")}
             />
