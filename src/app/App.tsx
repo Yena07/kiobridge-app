@@ -2281,7 +2281,12 @@ function ExecInProgress({ statuses }: { statuses: StepStatus[] }) {
   );
 }
 
-function ExecSuccess({ cart, steps, onHome }: { cart: CartResult; steps: StepStatus[]; onHome: () => void }) {
+function ExecSuccess({ cart, steps, note, onHome }: {
+  cart: CartResult; steps: StepStatus[];
+  /** 서버가 증거를 읽어 만든 한 문장. 없으면 이 줄을 그리지 않는다. */
+  note?: string;
+  onHome: () => void;
+}) {
   return (
     <div className="flex flex-col gap-6">
       <StatusHero
@@ -2303,6 +2308,18 @@ function ExecSuccess({ cart, steps, onHome }: { cart: CartResult; steps: StepSta
           {cart.itemCountText} · {cart.totalText}
         </span>
       </div>
+
+      {/*
+        왜 이 메뉴였는지를 마지막에 한 번 더 말해 준다.
+        확인 화면에서 읽고 승인했더라도, 담기고 나서 "무엇을 담았더라" 를
+        되짚을 자리가 있어야 한다. 서버가 만든 문장이라 화면이 지어내지 않는다.
+      */}
+      {note && (
+        <div style={{ display: "flex", gap: 9, alignItems: "flex-start", paddingLeft: 2 }}>
+          <Pictogram name="checkCircle" size={17} color={TEXT_2} />
+          <p style={{ ...TYPE.caption, color: TEXT_2, flex: 1 }}>{note}</p>
+        </div>
+      )}
 
       <StepCard statuses={steps} />
 
@@ -2429,7 +2446,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
         )}
         {status.state === "running" && !pollError && <ExecInProgress statuses={status.steps} />}
         {status.state === "cart_ready" && status.cart && (
-          <ExecSuccess cart={status.cart} steps={status.steps} onHome={onHome} />
+          <ExecSuccess cart={status.cart} steps={status.steps} note={status.note} onHome={onHome} />
         )}
         {/*
          * 담기는 끝났는데 내역이 안 온 경우. cart 는 옵셔널이라 서버가 빠뜨릴 수 있다.

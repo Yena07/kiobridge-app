@@ -154,4 +154,9 @@ export interface PlanStatus {
   steps: StepStatus[];
   cart?: CartResult;
   abort?: AbortInfo;
+  /**
+   * 서버가 증거를 읽어 만든 한 문장. "왜 이걸 담았는지" 를 결과 화면에서 다시 말해 준다.
+   * 없으면 화면이 그 줄을 그리지 않는다 — 지어내지 않는다.
+   */
+  note?: string;
 }

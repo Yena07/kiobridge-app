@@ -121,6 +121,11 @@ export interface EvidenceSummary {
   reachedStep: number;
   cart?: CartResult;
   abort?: { code: string; title: string; message: string; userAction: string };
+  /**
+   * 서버가 증거를 읽어 만든 한 문장. 결과 화면에서 "왜 이걸 담았는지" 로 쓴다.
+   * 없으면 화면이 그 줄을 아예 그리지 않는다 — 지어내지 않는다.
+   */
+  note?: string;
 }
 
 // ─── 확신도 경계 ─────────────────────────────────────────────────────────────
@@ -416,7 +421,9 @@ export function createApi(
           abort: { ...(e.abort ?? { code: "UNKNOWN", title: "안전을 위해 중단되었습니다", message: "예상하지 못한 화면이 감지되어 작동을 멈췄어요.", userAction: "직원 초기화를 기다려 주세요" }), recoverable: false },
         };
       }
-      if (e.state === "cart_ready") return { state: "cart_ready", steps, cart: e.cart };
+      if (e.state === "cart_ready") {
+        return { state: "cart_ready", steps, cart: e.cart, ...(e.note ? { note: e.note } : {}) };
+      }
       return { state: "running", steps };
     },
   };
@@ -469,6 +476,22 @@ interface ExecuteResult {
     executedActions?: unknown[];
     reviewSnapshot?: ReviewSnapshot;
   };
+}
+
+/**
+ * POST /internal/orchestrator/approve 응답 (#48 이후).
+ *
+ * 예전에는 ExecuteResult 가 그대로 왔고, 지금은 한 겹 감싸여 온다.
+ *   기존: { valid, run, evidence, validation }
+ *   이후: { valid, summary, raw }   ← raw 안에 위의 것이 그대로 있다
+ *
+ * 둘 다 받는다. #48 이 머지되기 전에도 뒤에도 같은 코드로 돈다.
+ */
+interface ApprovalResult {
+  valid: boolean;
+  /** 서버가 증거를 읽어 만든 한 줄 요약. 화면은 recommendation 만 쓴다. */
+  summary?: { status?: string; recommendation?: string; stopReason?: string };
+  raw?: ExecuteResult;
 }
 
 /** 킷 fixture 의 후보. candidate-filters 가 이 모양으로 돌려준다. */
@@ -616,6 +639,8 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 실행결과 = new Map<string, ExecuteResult>();
   // 서버가 준 추천을 그대로 승인 요청에 되돌려 줘야 한다. 화면은 이 값을 보지 않는다.
   const 추천 = new Map<string, RecommendationResponse>();
+  // 승인 응답에 실려 온 서버 요약(#48). 결과 화면의 한 줄로 쓴다.
+  const 서버요약 = new Map<string, { status?: string; recommendation?: string; stopReason?: string }>();
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
   // 정규화를 거친 프로필·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
@@ -752,6 +777,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      */
     async forgetSession(sessionId) {
       실행결과.delete(sessionId);
+      서버요약.delete(sessionId);
       추천.clear();
       후보.clear();
       정규화됨.clear();
@@ -884,7 +910,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const 키 = 마지막키.get(profile.id);
       const 정 = 키 ? 정규화됨.get(키) : undefined;
       if (!정) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
-      const r = await 보내기<ExecuteResult>("/internal/orchestrator/approve", {
+      const r = await 보내기<ApprovalResult>("/internal/orchestrator/approve", {
         sessionId,
         profile: 정.profile,
         sessionContext: 정.sessionContext,
@@ -897,7 +923,9 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         // note 는 선택 필드다. null 을 보내면 킷 스키마가 'must be string' 으로 막는다.
         userDecision: { approved: true, decision: "APPROVE", confirmedAt: new Date().toISOString() },
       });
-      실행결과.set(sessionId, r);
+      // #48 이후에는 { valid, summary, raw } 로 감싸여 온다. 둘 다 받는다.
+      실행결과.set(sessionId, r.raw ?? (r as unknown as ExecuteResult));
+      if (r.summary) 서버요약.set(sessionId, r.summary);
     },
 
     // 서버가 실제로 판단한 결과를 읽는다.
@@ -969,10 +997,14 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const state: EvidenceSummary["state"] =
         e.result === "PASS" ? "cart_ready" : e.result === "FAIL" ? "aborted" : "running";
 
+      const 요약 = 서버요약.get(sessionId);
       return {
         state,
         // 몇 번째 화면까지 갔는지. 실행한 동작 수가 그대로 진행도다.
         reachedStep: e.executedActions?.length ?? 0,
+        // 서버가 만든 한 문장. status 는 "정상 완료" 같은 개발자 말투라 쓰지 않고,
+        // 왜 이 메뉴였는지를 말해 주는 recommendation 만 화면에 올린다.
+        ...(state === "cart_ready" && 요약?.recommendation ? { note: 요약.recommendation } : {}),
         ...(state === "cart_ready" ? { cart: 장바구니(e.reviewSnapshot) } : {}),
         ...(state === "aborted"
           ? {
@@ -980,7 +1012,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
                 code: e.stopType ?? "UNKNOWN",
                 title: 안전중단 ? "안전을 위해 중단되었습니다" : "끝까지 담지 못했어요",
                 // 서버가 이유를 주면 그대로 쓴다. 지어내지 않는다.
-                message: e.stopReason ?? (안전중단
+                message: e.stopReason ?? 서버요약.get(sessionId)?.stopReason ?? (안전중단
                   ? "예상하지 못한 화면이 감지되어 작동을 멈췄어요."
                   : "키오스크가 예상과 다르게 움직여서 멈췄어요."),
                 // 안전 중단은 기계가 중간 상태일 수 있어 직원 초기화가 필요하다.

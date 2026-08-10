@@ -454,6 +454,30 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(e.cart?.totalText).toBe("12,000원");
   });
 
+  it("서버 요약(#48)이 오면 결과 화면에 실어 준다", async () => {
+    // 승인 응답이 { valid, summary, raw } 로 감싸여 오는 경우다.
+    // raw 안에 예전 모양이 그대로 있다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      summary: { status: "정상 완료", recommendation: "선호하신 맵기와 맞는 메뉴라 우선 추천드립니다." },
+      raw: 실행성공,
+    });
+    const e = await b.getEvidence("s1");
+    expect(e.state).toBe("cart_ready");
+    // status 는 "정상 완료" 같은 개발자 말투라 화면에 올리지 않는다.
+    expect(e.note).toBe("선호하신 맵기와 맞는 메뉴라 우선 추천드립니다.");
+    // raw 안의 값도 그대로 읽힌다.
+    expect(e.cart?.totalText).toBe("12,000원");
+  });
+
+  it("요약이 없으면 그 줄을 만들지 않는다", async () => {
+    // #48 전 응답이거나 서버가 요약을 못 만든 경우다. 지어내지 않는다.
+    const b = 붙이기();
+    await 승인(b, 실행성공);
+    expect((await b.getEvidence("s1")).note).toBeUndefined();
+  });
+
   it("증거를 따로 조회하지 않는다 — 요청은 한 번뿐이다", async () => {
     const b = 붙이기();
     await 승인(b, 실행성공);
