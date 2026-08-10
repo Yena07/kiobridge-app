@@ -8,11 +8,15 @@ import org.springframework.stereotype.Service;
 public class EvidenceSummaryService {
 
     public EvidenceSummary summarize(Evidence evidence) {
+        if (evidence == null || evidence.result() == null) {
+            return new EvidenceSummary("처리 중 문제가 발생했습니다.", null, null);
+        }
+
         String status;
-        if ("PASS".equals(evidence.result())) {
-            status = "정상적으로 장바구니에 추가되었습니다.";
-        } else if (evidence.plannedPaymentActionCount() > 0) {
+        if (evidence.plannedPaymentActionCount() > 0) {
             status = "실행할 수 없습니다.";
+        } else if ("PASS".equals(evidence.result())) {
+            status = "정상적으로 장바구니에 추가되었습니다.";
         } else if ("SAFETY_STOP".equals(evidence.stopType())) {
             status = "안전하게 중단되었습니다.";
         } else {

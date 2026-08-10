@@ -51,17 +51,20 @@ class ExecutionPlanServiceTest {
 
     @Test
     void approved가_false면_빈_실행계획을_반환하고_외부_호출을_하지_않는다() {
-        ExecutionPlan plan = service.buildExecutionPlan(
+        ExecutionPlanResult result = service.buildExecutionPlan(
             SESSION_ID,
             ExecutionPlanTestFixtures.recommendation(CANDIDATE_ID),
             UserDecision.reject("사용자가 거절함"),
             fullPreferenceContext()
         );
 
+        ExecutionPlan plan = result.executionPlan();
         assertThat(plan.actions()).isEmpty();
         assertThat(plan.validationMode()).isEqualTo("SIMULATION_ONLY");
         assertThat(plan.executionEnvironment()).isEqualTo("DIGITAL_TWIN");
         assertThat(plan.actualDeviceCommandSent()).isFalse();
+        // approved=false면 environmentId 조회 자체를 생략한다 — 불필요한 Kit 호출을 피하기 위해서다.
+        assertThat(result.environmentId()).isNull();
         verifyNoInteractions(simulationApiClient);
     }
 
@@ -87,13 +90,15 @@ class ExecutionPlanServiceTest {
         when(simulationApiClient.getFixture(ENVIRONMENT_ID))
             .thenReturn(ExecutionPlanTestFixtures.fixture(ExecutionPlanTestFixtures.candidate(CANDIDATE_ID)));
 
-        ExecutionPlan plan = service.buildExecutionPlan(
+        ExecutionPlanResult result = service.buildExecutionPlan(
             SESSION_ID,
             ExecutionPlanTestFixtures.recommendation(CANDIDATE_ID),
             UserDecision.approve(),
             fullPreferenceContext()
         );
 
+        assertThat(result.environmentId()).isEqualTo(ENVIRONMENT_ID);
+        ExecutionPlan plan = result.executionPlan();
         assertThat(plan.actions()).hasSize(10);
         assertActionIndicesAreSequential(plan.actions());
 
@@ -170,7 +175,7 @@ class ExecutionPlanServiceTest {
             ExecutionPlanTestFixtures.recommendation(CANDIDATE_ID),
             UserDecision.approve(),
             ExecutionPlanTestFixtures.sessionContext(ServiceType.DINE_IN, SpicyLevel.HOT, BoneType.BONE, null, 2)
-        );
+        ).executionPlan();
 
         assertThat(plan.actions()).hasSize(9);
         assertThat(plan.actions()).noneMatch(a -> "CUP".equals(a.target().groupId()));
@@ -190,7 +195,7 @@ class ExecutionPlanServiceTest {
             ExecutionPlanTestFixtures.sessionContext(
                 ServiceType.DINE_IN, SpicyLevel.HOT, BoneType.BONE, CupOption.NO_PREFERENCE, 2
             )
-        );
+        ).executionPlan();
 
         assertThat(plan.actions()).hasSize(9);
         assertThat(plan.actions()).noneMatch(a -> "CUP".equals(a.target().groupId()));
@@ -216,7 +221,7 @@ class ExecutionPlanServiceTest {
             ExecutionPlanTestFixtures.recommendation(CANDIDATE_ID),
             UserDecision.approve(),
             fullPreferenceContext()
-        );
+        ).executionPlan();
 
         Action selectSpicy = plan.actions().stream()
             .filter(a -> "SPICY_LEVEL".equals(a.target().groupId()))
