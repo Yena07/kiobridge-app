@@ -1811,16 +1811,18 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
   onChange: (한칸: Partial<접근성>) => void;
   onBack: () => void;
 }) {
+  // 켜면 이 앱이 실제로 무언가를 한다. 무엇을 하는지 sub 에 그대로 적는다.
   const 바로바꾸는것: { key: keyof 접근성; label: string; sub: string }[] = [
     { key: "largeText", label: "큰 글씨", sub: "앱 전체의 글씨와 버튼을 크게 봐요" },
     { key: "highContrast", label: "고대비", sub: "글씨와 배경의 차이를 더 뚜렷하게 해요" },
+    { key: "simpleSteps", label: "쉬운 단계", sub: "이유 화면을 건너뛰고 바로 확인 화면으로 가요" },
+    { key: "mobilitySupport", label: "시간 여유", sub: "연결 시간이 지나도 보던 화면을 멋대로 닫지 않아요" },
+    { key: "staffAssistancePreferred", label: "직원 도움", sub: "승인 화면에도 직원에게 보여 달라는 안내를 띄워요" },
   ];
+  // 켜도 이 앱 화면은 그대로다. 키오스크로 전해지기만 한다.
   const 전해드릴것: { key: keyof 접근성; label: string; sub: string }[] = [
-    { key: "simpleSteps", label: "쉬운 단계", sub: "한 번에 하나씩, 단계를 줄여 달라고 전해요" },
     { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
-    { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 화면으로 알려 달라고 전해요" },
-    { key: "mobilitySupport", label: "시간 여유", sub: "서 있기나 손 조작이 힘들어요. 서두르지 말아 달라고 전해요" },
-    { key: "staffAssistancePreferred", label: "직원 도움", sub: "막히면 직원이 도와주는 편이 좋아요" },
+    { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 이 앱은 원래 소리를 쓰지 않아요" },
   ];
 
   return (
@@ -1842,8 +1844,8 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24, marginBottom: 8 }}>키오스크에 전해 드려요</h2>
         <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 8, lineHeight: 1.7 }}>
-          아래는 이 앱 화면을 바꾸지 않아요. 주문할 때 키오스크에 함께 전해서,
-          메뉴를 고르고 안내하는 방식에 반영되도록 합니다.
+          아래 둘은 이 앱 화면을 바꾸지 않아요. 주문할 때 키오스크에 함께 전해 드립니다.
+          다만 지금은 전달까지만 하고, 키오스크가 이 값을 쓰기 시작하면 그때부터 반영돼요.
         </p>
         <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
           {전해드릴것.map((r) => (
@@ -1860,6 +1862,7 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         <p style={{ fontSize: 13, color: TEXT_2, marginTop: 20, lineHeight: 1.7 }}>
           이 앱은 처음부터 큰 버튼과 또렷한 대비로 만들었어요.
           단계마다 한 가지만 물어보고, 상태는 색뿐 아니라 그림과 글씨로도 함께 알려드려요.
+          소리로만 알리는 것은 원래 하나도 없어요.
         </p>
         <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
           여기서 켠 것은 이 기기에만 있어요. 새로고침하면 처음 상태로 돌아가요.
@@ -2480,7 +2483,17 @@ function OrderConfirmScreen({
    *
    * 이유가 없으면 이 단계를 건너뛴다 - 빈 화면을 하나 더 지나가게 하지 않는다.
    */
-  const [이유먼저, set이유먼저] = useState(true);
+  /*
+   * '쉬운 단계' 를 켜면 이유 단계를 건너뛴다.
+   *
+   * 이 단계는 원래 스크롤을 줄이려고 만든 것인데, 단계를 하나 늘린 것도 사실이다.
+   * 단계를 줄여 달라고 한 사람에게는 그 맞바꿈이 반대로 작용한다.
+   *
+   * 건너뛰어도 확인 화면의 한 줄 요약과 '이유 N개 더 보기' 는 그대로 남는다 -
+   * 킷 가이드가 [필수] 로 정한 "왜 그런지 함께 보여준다" 는 지켜진다.
+   * 읽고 싶으면 한 번 눌러서 전체를 볼 수 있다.
+   */
+  const [이유먼저, set이유먼저] = useState(!접근성설정.읽기().simpleSteps);
   const 이유있나 = (mapping?.reasons?.length ?? 0) > 0;
   const 이유단계 = 이유먼저 && 이유있나 && mapping?.result !== "not_found";
 
@@ -2514,6 +2527,23 @@ function OrderConfirmScreen({
         )}
 
         {!mapping && error && <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>}
+
+        {/*
+          '직원 도움' 을 켠 사람에게는 승인 화면에서도 이 줄을 띄운다.
+
+          지금까지 이 안내는 실패.중단 화면에만 있었다. 그런데 막히는 곳은
+          대개 실패 화면이 아니라 "이게 맞나" 싶은 확인 화면이고, 거기서
+          도움을 청할 길이 없으면 사람은 그냥 앱을 닫는다.
+          켠 사람에게만 띄운다 - 안 켠 사람에게는 화면에 줄 하나가 더 늘 뿐이다.
+        */}
+        {mapping && 접근성설정.읽기().staffAssistancePreferred && (
+          <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginBottom: 16 }}>
+            <Pictogram name="warning" size={17} color={TEXT_2} />
+            <p style={{ ...TYPE.caption, color: TEXT_2, flex: 1 }}>
+              막히시면 이 화면을 매장 직원에게 보여 주세요. 직원이 이어서 도와드릴 수 있어요.
+            </p>
+          </div>
+        )}
 
         {/*
           이유 단계. 확인 카드 앞에 온다 — 스크롤을 내려야 읽히던 것을 앞으로 옮겼다.
@@ -3363,6 +3393,15 @@ export default function App() {
   // 폴링으로 따로 관리한다.
   useEffect(() => {
     if (!pairingExpiresAt || screen === "execution") return;
+    /*
+     * '시간 여유' 를 켜면 만료돼도 화면을 멋대로 되돌리지 않는다.
+     *
+     * 서버 세션은 어차피 끊긴다 — 그건 앱이 늘릴 수 없다. 앱이 할 수 있는 것은
+     * 보고 있던 화면을 갑자기 걷어내지 않는 것이다. 천천히 읽는 사람에게는
+     * 읽던 화면이 통째로 바뀌는 일이 가장 곤란하다. 다음에 승인을 누를 때
+     * 서버가 만료를 알려 주고, 그때 사용자가 스스로 다시 찍으면 된다.
+     */
+    if (접근성값.mobilitySupport) return;
     const 남은 = pairingExpiresAt - Date.now();
     const 되돌리기 = () => {
       setPairingId(null);
@@ -3378,7 +3417,7 @@ export default function App() {
     if (남은 <= 0) { 되돌리기(); return; }
     const t = setTimeout(되돌리기, 남은);
     return () => clearTimeout(t);
-  }, [pairingExpiresAt, screen]);
+  }, [pairingExpiresAt, screen, 접근성값.mobilitySupport]);
 
   // 화면이 바뀌면 포커스가 <body> 로 떨어진다. 누르던 버튼이 사라지기 때문이다.
   // 스크린리더 사용자는 자기가 어디로 갔는지 듣지 못하고, 키보드 사용자는
