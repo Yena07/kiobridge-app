@@ -93,6 +93,45 @@ describe("못올리는이유 — 서버가 받아 주지 않을 주문표를 미
     expect(못올리는이유(주문표({ memo: "가".repeat(MEMO_MAX + 1) }))).not.toBeNull();
   });
 
+  it("메모에 전화번호·주민등록번호·주소가 있으면 서버로 보내지 않는다", () => {
+    // 칸 옆의 안내 한 줄로는 안 지켜진다. 이 앱은 실제 개인정보를 받지도
+    // 저장하지도 않겠다고 화면에서 약속했다. 모양이 있는 것은 걸러 낸다.
+    for (const memo of [
+      "010-1234-5678 로 연락 주세요",
+      "01012345678",
+      "900101-1234567",
+      "서울시 강남구 역삼동 123-4 로 보내주세요",
+      "역삼로 12길 5",
+      "101동 202호",
+    ]) {
+      expect(못올리는이유(주문표({ memo }))).not.toBeNull();
+    }
+  });
+
+  it("주문에 필요한 말은 막지 않는다", () => {
+    // 너무 넓게 잡으면 정상적인 메모가 막힌다. 장소를 가리키는 말은 주문에
+    // 필요한 정보다 — 사는 곳이 아니다. 번지·호수까지 있어야 주소로 본다.
+    for (const memo of [
+      "얼음 적게, 2개 3000원",
+      "12시 30분에 찾으러 갈게요",
+      "강남역 앞에서 받을게요",
+      "2층에서 받을게요",
+      "매운 건 못 드세요",
+    ]) {
+      expect(못올리는이유(주문표({ memo }))).toBeNull();
+    }
+  });
+
+  it("이름은 못 거른다 — 이 검사의 한계를 잠가 둔다", () => {
+    /*
+     * 통과하는 것이 맞다. 사람 이름은 정해진 모양이 없어 정규식으로 가려낼 수 없다.
+     * 이 테스트는 "그래서 이 검사로 개인정보 미수집을 보장한다고 말하면 안 된다" 를
+     * 코드에 남겨 두는 자리다. 보장하는 것은 받는 칸이 없다는 사실이고,
+     * 메모는 거기서 예외다. 문서도 그렇게 적었다.
+     */
+    expect(못올리는이유(주문표({ memo: "김할머니 앞으로 해주세요" }))).toBeNull();
+  });
+
   it(`주문표 id 는 ${PROFILE_ID_MAX}자까지 올라간다`, () => {
     // 지금 만드는 id 는 17자쯤이라 넘을 일이 없지만, 검사가 있으니 함께 잠가 둔다.
     expect(못올리는이유(주문표({ id: "a".repeat(PROFILE_ID_MAX) }))).toBeNull();
@@ -399,6 +438,39 @@ describe("팀 백엔드 — 서버가 준 값을 화면 타입으로 좁힌다",
     const e = await createTeamAccount().login("할머니1", "1234").catch((x: KioBridgeError) => x);
     expect((e as KioBridgeError).code).toBe("BAD_RESPONSE");
     expect((e as KioBridgeError).recoverable).toBe(true);
+  });
+
+  it("목록 자리에 배열이 아닌 것이 오면 개발자 문장을 화면에 올리지 않는다", async () => {
+    // .map 이 TypeError 를 던지면 그건 KioBridgeError 가 아니라서, 화면이
+    // e.message 를 그대로 보여 준다. 이 함수의 계약은 "모든 실패를 KioBridgeError 로".
+    globalThis.fetch = vi.fn(async () => 응답({ profiles: [] })) as unknown as typeof fetch;
+    const e = await createTeamAccount().listSheets(7).catch((x: KioBridgeError) => x);
+    expect((e as KioBridgeError).code).toBe("BAD_RESPONSE");
+    expect((e as KioBridgeError).recoverable).toBe(true);
+  });
+
+  it("목록 안에 이상한 원소가 하나 있어도 나머지는 불러온다", async () => {
+    // 하나가 이상하다고 저장해 둔 주문표를 전부 못 보게 하지 않는다.
+    globalThis.fetch = vi.fn(async () => 응답([
+      { profileId: "p1", menuName: "닭강정", place: "음식점", selections: {}, memo: null },
+      null,
+      "이상한 값",
+    ])) as unknown as typeof fetch;
+    const 것들 = await createTeamAccount().listSheets(7);
+    expect(것들).toHaveLength(1);
+    expect(것들[0].menuName).toBe("닭강정");
+  });
+
+  it("본문 스트림이 끊겨도 KioBridgeError 로 나온다", async () => {
+    // res.json() 은 .catch 로 막혀 있었는데 res.text() 만 열려 있었다.
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({}),
+      text: async () => { throw new TypeError("network error"); },
+    }) as unknown as Response) as unknown as typeof fetch;
+
+    const e = await createTeamAccount().login("할머니1", "1234").catch((x: KioBridgeError) => x);
+    expect((e as KioBridgeError).code).toBe("BAD_RESPONSE");
   });
 
   it("응답이 오지 않으면 끊고 사용자에게 말한다", async () => {

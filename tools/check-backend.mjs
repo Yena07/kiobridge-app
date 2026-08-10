@@ -22,9 +22,14 @@ let 실패 = 0;
 async function 확인(이름, 경로, 본문, 검사) {
   const 시작 = Date.now();
   let res, body;
+  // 이 도구의 용도는 "붙었는지 확인" 이고, 안 붙은 경우가 주 사용 사례다.
+  // 상한이 없으면 서버가 답을 안 줄 때 바로 그 경우에 스크립트가 매달린다.
+  const ac = new AbortController();
+  const 시계 = setTimeout(() => ac.abort(), 20_000);
   try {
     res = await fetch(`${BFF}/${경로}`, {
       method: "POST",
+      signal: ac.signal,
       headers: { "content-type": "application/json" },
       body: JSON.stringify(본문),
     });
@@ -32,8 +37,11 @@ async function 확인(이름, 경로, 본문, 검사) {
     body = t ? JSON.parse(t) : {};
   } catch (e) {
     실패++;
-    console.log(`${빨강("✗")} ${이름}\n  ${회색(`연결 실패 — ${e.message}`)}`);
+    const 사유 = e.name === "AbortError" ? "20초 안에 응답이 없습니다" : e.message;
+    console.log(`${빨강("✗")} ${이름}\n  ${회색(`연결 실패 — ${사유}`)}`);
     return null;
+  } finally {
+    clearTimeout(시계);
   }
   const 걸린 = Date.now() - 시작;
 
@@ -112,8 +120,12 @@ const cf = sn && await 확인("후보 필터", "api/v1/candidate-filters",
     return null;
   });
 if (cf) {
-  const c = (cf.eligibleCandidates ?? [])[0];
-  console.log(`  ${회색(`후보 ${cf.eligibleCandidates.length}개 · 예: ${c?.name} ${c?.price}원`)}`);
+  // 검사가 문제를 돌려줘도 확인() 은 body 를 준다. 옛 백엔드는 eligibleCandidates
+  // 자체를 안 주는데, 여기서 .length 를 바로 읽으면 도구가 가장 필요한 순간에
+  // TypeError 로 죽고 아래 원인 안내까지 출력되지 않는다.
+  const 목록 = cf.eligibleCandidates ?? [];
+  const c = 목록[0];
+  console.log(`  ${회색(`후보 ${목록.length}개 · 예: ${c?.name ?? "-"} ${c?.price ?? "-"}원`)}`);
 }
 
 // 6. 추천

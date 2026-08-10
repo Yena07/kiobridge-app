@@ -16,7 +16,7 @@ import type {
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_SHEETS, STEPS } from "@/domain/catalog";
 import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerSheet, unregisterSheet, type Scenario } from "@/api/client";
 import {
-  account, 아이디검사, 비밀번호검사, 못올리는이유,
+  account, 아이디검사, 비밀번호검사, 못올리는이유, 개인정보같은메모,
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
@@ -453,17 +453,17 @@ function LoginScreen({ onDone, onBack, onGoSignup }: {
  * 비밀번호를 두 번 받는다. 서버는 한 번만 받지만, 가려진 칸에 오타가 나면 사용자는
  * 다음 로그인에서야 그 사실을 알게 되고 그때는 고칠 방법이 없다.
  */
-function SignupScreen({ onDone, onBack, onGoLogin, onPrivacy }: {
+function SignupScreen({ onDone, onBack, onGoLogin }: {
   onDone: (a: Account) => void;
   onBack: () => void;
   onGoLogin: () => void;
-  onPrivacy: () => void;
 }) {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [다시, set다시] = useState("");
   const [오류, set오류] = useState<string | null>(null);
   const [보내는중, set보내는중] = useState(false);
+  const [안내펼침, set안내펼침] = useState(false);
 
   /*
    * 적기 시작한 칸만 검사한다.
@@ -532,21 +532,37 @@ function SignupScreen({ onDone, onBack, onGoLogin, onPrivacy }: {
           </div>
         )}
 
+        {/*
+          * 안내를 이 화면 안에서 펼친다. 다른 화면으로 보내지 않는다.
+          *
+          * 예전에는 개인정보 화면으로 넘어갔는데, 그 화면의 뒤로가기는 늘 홈으로
+          * 간다. 가입 화면으로 돌아올 길이 없어서 적어 둔 아이디와 비밀번호가
+          * 둘 다 사라졌다. 무엇을 저장하는지 확인하고 가입하려는 사람이 가장
+          * 먼저 밟는 길인데, 확인하면 처음부터 다시 적어야 했다.
+          */}
         <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7, marginBottom: 8 }}>
           실제 이름·주소·주민등록번호는 받지 않아요. 무엇을 저장하고 무엇을 저장하지 않는지는{" "}
           <button
             type="button"
-            onClick={onPrivacy}
+            onClick={() => set안내펼침((v) => !v)}
+            aria-expanded={안내펼침}
+            aria-controls="signup-privacy"
             style={{
               color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3,
               background: "none", border: "none", padding: "6px 2px", minHeight: 44,
               cursor: "pointer", fontFamily: FONT, fontSize: 13,
             }}
           >
-            개인정보 안내
+            {안내펼침 ? "개인정보 안내 접기" : "개인정보 안내"}
           </button>
           에 적어 두었어요.
         </p>
+
+        {안내펼침 && (
+          <div id="signup-privacy" style={{ marginBottom: 8 }}>
+            <PrivacyRows guest />
+          </div>
+        )}
       </div>
 
       <StickyFooter>
@@ -928,6 +944,18 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
           <p id="memo-notice" style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8 }}>
             주문에 필요한 내용만 적어 주세요. <strong style={{ fontWeight: 600, color: TEXT_1 }}>이름·전화번호·주민등록번호 같은 개인정보는 적지 마세요.</strong>
           </p>
+          {/*
+            안내 한 줄로는 안 지켜진다. 안내를 못 보거나 습관대로 적는 사람이 있고,
+            이 앱은 실제 개인정보를 받지도 저장하지도 않겠다고 약속했다.
+            모양으로 걸러낸다 — 완벽하진 않지만(이름은 못 가려낸다) 저장되면 가장
+            곤란한 두 가지는 여기서 막힌다. 지우지는 않는다. 사용자가 적은 것을
+            앱이 말없이 고치면 화면에 보이는 것과 저장되는 것이 달라진다.
+          */}
+          {개인정보같은메모(memo) && (
+            <p role="alert" style={{ ...TYPE.caption, color: FAIL, marginTop: 8 }}>
+              전화번호·주민등록번호·주소처럼 보이는 것이 있어요. 지워 주시면 저장할 수 있어요.
+            </p>
+          )}
         </div>
       </div>
 
@@ -956,7 +984,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
           // Date.now() 만 쓰면 같은 밀리초에 두 개를 만들 때 id 가 겹친다.
           // 겹치면 주문표 하나를 지울 때 다른 하나도 같이 사라진다.
           onClick={() => onNext({ id: newSheetId(), menuName, place, selections, memo })}
-          disabled={!menuName.trim()}
+          disabled={!menuName.trim() || 개인정보같은메모(memo)}
         >
           저장하고 시작하기
         </PrimaryBtn>
@@ -987,6 +1015,10 @@ function OrderSheetCard({
 }) {
   const allTags = [...(sheet.place ? [sheet.place] : []), ...Object.values(sheet.selections).flat()];
   const visibleTags = allTags.slice(0, 4);
+  // 화면은 태그를 넷까지만 보여 주지만 소리로는 전부 읽는다. 눈으로 보는 사람은
+  // 잘린 뒤에도 카드 두 개가 다르게 생긴 걸 알지만, 듣는 사람은 읽어 준 만큼만 안다.
+  const 듣는이름 = (p: OrderSheet) =>
+    [p.menuName, p.place, ...Object.values(p.selections).flat(), p.memo].filter(Boolean).join(", ");
   const overflow = allTags.length - visibleTags.length;
   const [focused, setFocused] = useState(false);
 
@@ -1022,7 +1054,9 @@ function OrderSheetCard({
           onChange={onSelect}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          aria-label={`${sheet.menuName}${sheet.place ? `, ${sheet.place}` : ""}`}
+          // 이름과 장소만 읽으면 "닭강정, 음식점" 두 개를 소리로 구분할 수 없다.
+          // 화면은 태그와 메모로 구분되는데 듣는 사람만 못 고른다.
+          aria-label={듣는이름(sheet)}
         />
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
@@ -1094,7 +1128,8 @@ function OrderSheetCard({
       <div className="flex justify-end" style={{ padding: "0 20px 20px", marginTop: 4 }}>
         <button
           type="button"
-          aria-label={`${sheet.menuName} 주문표 삭제`}
+          // 삭제는 되돌릴 수 없다. 고르는 쪽보다 더 정확히 말해 줘야 한다.
+          aria-label={`${듣는이름(sheet)} 주문표 삭제`}
           onClick={onDelete}
           style={{
             // 높이만 44 였고 폭이 30 이었다. 밑줄은 글자에만 걸리므로
@@ -1788,13 +1823,15 @@ function AccessibilityScreen({
  *
  * 약관 문구를 그대로 옮기지 않는다. 이 앱이 실제로 하는 일만 사용자의 말로 적는다.
  */
-function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }) {
+const 개인정보항목 = (guest: boolean): { title: string; body: string }[] => {
   const rows: { title: string; body: string }[] = [
     {
       title: "저장하는 것",
       body: guest
         ? "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요."
-        : "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서 이 내용은 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요.",
+        // 전부 올라간다고 적으면 사실이 아니다. 장소를 안 고른 주문표는 서버가
+        // 받아 주지 않아서(place 가 필수) 이 기기에만 남는다.
+        : "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서, 장소를 정해 두신 주문표는 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요. 장소를 안 고르신 주문표는 이 기기에만 있어요.",
     },
     {
       title: "저장하지 않는 것",
@@ -1810,25 +1847,39 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
     },
     {
       title: "지우는 방법",
+      // 서버에 지우기 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
+      // 주문표만이 아니라 키오스크에 보낸 승인·거절 기록도 서버에 남는다.
       body: guest
-        ? "지금은 로그인 없이 쓰고 계셔서 이번 이용이 끝나면 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요."
-        // 서버에 주문표 삭제 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
-        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고 로그아웃돼요. 다만 서버에 올라간 주문표는 아직 지우는 길이 없어서, 다시 로그인하면 그대로 보입니다.",
+        ? "지금은 로그인 없이 쓰고 계셔서 이 기기에는 이번 이용이 끝나면 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요. 다만 키오스크에 보낸 주문 기록은 서버에 남아요 — 아직 지우는 길이 없어서요."
+        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고 로그아웃돼요. 다만 서버에 올라간 주문표와 키오스크에 보낸 주문 기록은 아직 지우는 길이 없어서, 다시 로그인하면 주문표는 그대로 보입니다.",
     },
   ];
+  return rows;
+};
+
+/** 같은 내용을 개인정보 화면과 가입 화면 두 곳에서 쓴다. 한쪽만 고치는 날이 없도록 한 곳에 둔다. */
+function PrivacyRows({ guest }: { guest: boolean }) {
+  return (
+    <>
+      {개인정보항목(guest).map(({ title, body }) => (
+        <section key={title} style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: "16px 18px", marginBottom: 10 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: TEXT_1, letterSpacing: "-0.01em" }}>{title}</h2>
+          <p style={{ fontSize: 14, color: TEXT_2, marginTop: 6, lineHeight: 1.65 }}>{body}</p>
+        </section>
+      ))}
+      <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
+        이 앱은 주문을 장바구니에 담는 데까지만 도와드려요. 결제는 키오스크에서 직접 하시면 돼요.
+      </p>
+    </>
+  );
+}
+
+function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }) {
   return (
     <div className="flex flex-col h-full bg-white">
       <SubScreenHeader title="개인정보 안내" onBack={onBack} />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
-        {rows.map(({ title, body }) => (
-          <section key={title} style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: "16px 18px", marginBottom: 10 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: TEXT_1, letterSpacing: "-0.01em" }}>{title}</h2>
-            <p style={{ fontSize: 14, color: TEXT_2, marginTop: 6, lineHeight: 1.65 }}>{body}</p>
-          </section>
-        ))}
-        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
-          이 앱은 주문을 장바구니에 담는 데까지만 도와드려요. 결제는 키오스크에서 직접 하시면 돼요.
-        </p>
+        <PrivacyRows guest={guest} />
       </div>
     </div>
   );
@@ -2928,17 +2979,31 @@ export default function App() {
    * 않는다 — 삼키면 "저장했어요" 가 절반만 사실이 되고, 사용자는 다음에 열었을 때
    * 없어진 것을 보고서야 알게 된다. 재시도도 자기 자신을 부른다.
    */
-  const 주문표올리기 = (userId: number, p: OrderSheet): void => {
-    const 내세대 = 계정세대.current;
+  const 주문표올리기 = (userId: number, p: OrderSheet, 세대 = 계정세대.current): void => {
+    /*
+     * 언제 부르든 그때의 계정이 맞는지 먼저 본다.
+     *
+     * 확인창의 '다시 시도' 는 사용자가 원할 때 눌린다. 그 사이에 로그아웃하고
+     * 다른 계정으로 들어갈 수 있다. 예전에는 실패한 순간에만 세대를 봐서,
+     * 다음 순서가 그대로 통했다.
+     *
+     *   ① A 로 저장 → 업로드 실패 → 확인창이 뜬다
+     *   ② 확인창을 둔 채 로그아웃하고 B 로 로그인한다
+     *   ③ '다시 시도' 를 누른다 → A 의 userId 로 요청이 나간다
+     *
+     * B 가 쓰는 기기에서 A 의 계정에 데이터가 올라간다. 재시도는 처음의 세대를
+     * 그대로 들고 다니므로, 계정이 바뀌었으면 여기서 조용히 끝난다.
+     */
+    if (세대 !== 계정세대.current) return;
     account.saveSheet(userId, p).catch((e: KioBridgeError) => {
       // 기다리는 사이 로그아웃했거나 정보를 지웠으면 묻지 않는다. 나간 사람에게
       // 남의 계정으로 다시 올리겠냐고 묻는 셈이 된다.
-      if (내세대 !== 계정세대.current) return;
+      if (세대 !== 계정세대.current) return;
       set확인대기({
         title: "이 기기에는 저장했어요",
         body: `${e?.message ?? "서버에 올리지 못했어요"} 지금은 이 기기에만 있어서, 다음에 로그인하면 안 보일 수 있어요.`,
         confirmLabel: "다시 시도",
-        run: () => 주문표올리기(userId, p),
+        run: () => 주문표올리기(userId, p, 세대),
       });
     });
   };
@@ -3020,6 +3085,8 @@ export default function App() {
     // 아직 오는 중인 답을 무효로 만든다. 안 그러면 로그아웃한 뒤에 도착한 목록이
     // 방금 뺀 주문표를 그대로 돌려놓는다.
     계정세대.current += 1;
+    // 떠 있는 확인창도 닫는다. 앞 계정에 대해 묻고 있던 창을 다음 사람이 받는다.
+    set확인대기(null);
     const 뺄것 = 서버에서온것.current;
     setSheets((prev) => prev.filter((p) => !뺄것.has(p.id)));
     for (const id of 뺄것) unregisterSheet(id);
@@ -3152,7 +3219,6 @@ export default function App() {
               onDone={(a) => 계정으로들어가기(a, "name")}
               onBack={() => setScreen("login")}
               onGoLogin={() => setScreen("login")}
-              onPrivacy={() => setScreen("privacy")}
             />
           )}
           {screen === "name" && (

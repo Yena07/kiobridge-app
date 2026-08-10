@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:team": "vite build --mode team",
     "dev": "vite",
     "dev:team": "vite --mode team --port 5199 --strictPort",
     "typecheck": "tsc --noEmit",

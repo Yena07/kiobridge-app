@@ -106,8 +106,47 @@ export const 비밀번호검사 = (v: string): string | null => {
  * 뒤집히면 장소가 빈 주문표가 서버로 가서 이유 없는 실패 안내를 받는다.
  * 이름을 반환값에 맞춘다 — `!못올리는이유(p)` 는 "못 올릴 이유가 없으면" 으로 읽힌다.
  */
+/*
+ * 메모에 개인정보로 보이는 것이 들어 있는가.
+ *
+ * 메모는 자유 입력이다. "얼음 적게 부탁드려요" 처럼 주문에 필요한 말을 적으라고
+ * 둔 칸인데, 자유 입력인 이상 무엇이든 적을 수 있다. 이 앱은 실제 개인정보를
+ * 받지도 저장하지도 않겠다고 화면에서 약속했고, 그 약속은 칸 옆의 안내 한 줄만으로
+ * 지켜지지 않는다. 안내를 못 보거나 습관대로 적는 사람이 있다.
+ *
+ * ── 이 검사가 무엇을 하고 무엇을 못 하는지 ─────────────────────────────────
+ *
+ *   막는다      전화번호, 주민등록번호, 주소로 보이는 것(행정구역 + 번지·호)
+ *   못 막는다   사람 이름, 환자번호, 그 밖에 정해진 모양이 없는 것
+ *
+ * **못 막는 쪽이 있다는 것이 이 함수의 핵심이다.** 모양이 없는 값은 정규식으로
+ * 가려낼 수 없다. "이름은 안 받습니다" 라고 말할 근거는 이 함수가 아니라,
+ * 이 앱에 이름을 받는 칸이 하나도 없다는 사실이다(호칭은 이 기기 밖으로
+ * 나가지 않는다). 메모는 그 원칙에 뚫린 구멍이고, 여기서는 모양이 있는 것만
+ * 막는다. 그 한계를 docs/BACKEND_INTEGRATION.md 와 README 에도 같은 말로 적었다 —
+ * 구현이 보장하지 못하는 것을 문서가 단정하면 그게 더 나쁘다.
+ *
+ * 걸러도 지우지는 않는다. 사용자가 적은 것을 앱이 말없이 고치면, 화면에 보이는
+ * 것과 저장된 것이 달라진다. 무엇을 지워야 하는지 말해 주고 사용자가 고친다.
+ */
+const 전화번호꼴 = /\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}/;
+const 주민번호꼴 = /\d{6}[-.\s]?[1-4]\d{6}/;
+/*
+ * 주소는 행정구역 이름만으로 보지 않는다. "강남역 앞에서 받을게요" 처럼 장소를
+ * 가리키는 말은 주문에 필요한 정보다. 번지·호수까지 있어야 사는 곳으로 본다.
+ *   막힌다  "서울시 강남구 역삼동 123-4"  ·  "역삼로 12길 5"  ·  "101동 202호"
+ *   안 막힌다  "강남역 앞"  ·  "2층에서 받을게요"
+ */
+const 주소꼴 =
+  /([가-힣]{2,}(시|군|구|읍|면|동|리)\s*)?[가-힣]{2,}(로|길)\s*\d+|[가-힣]{2,}(동|리)\s*\d+\s*-\s*\d+|\d+\s*동\s*\d+\s*호/;
+export const 개인정보같은메모 = (memo: string): boolean =>
+  주민번호꼴.test(memo) || 전화번호꼴.test(memo) || 주소꼴.test(memo);
+
 export const 못올리는이유 = (p: OrderSheet): string | null => {
   if (!p.place) return "장소를 정해 두시면 다음에도 불러올 수 있어요";
+  if (개인정보같은메모(p.memo ?? "")) {
+    return "메모에 전화번호·주민등록번호·주소처럼 보이는 것이 있어요. 지우고 다시 저장해 주세요";
+  }
   if (!p.menuName.trim()) return "메뉴 이름이 있어야 저장할 수 있어요";
   if (p.menuName.length > MENU_NAME_MAX) return `메뉴 이름은 ${MENU_NAME_MAX}자까지 저장돼요`;
   if ((p.memo ?? "").length > MEMO_MAX) return `메모는 ${MEMO_MAX}자까지 저장돼요`;
@@ -336,7 +375,10 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
       throw new KioBridgeError(code, 문구(code, b.message, res.status), true);
     }
 
-    const t = await res.text();
+    // 본문을 읽는 것도 실패할 수 있다. 스트림이 중간에 끊기면 res.json() 과 달리
+    // 여기는 막혀 있지 않아서 TypeError 가 그대로 화면까지 올라갔다.
+    const t = await res.text().catch(() => null);
+    if (t === null) throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
     if (!t) return undefined as T;
     try {
       return JSON.parse(t) as T;
@@ -360,7 +402,13 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
 
     async listSheets(userId) {
       const r = await 부르기<UserProfileResponse[]>("GET", `/api/v1/users/${encodeURIComponent(userId)}/profiles`);
-      return (r ?? []).map(주문표읽기);
+      if (r == null) return [];
+      // 배열이 아닌 것이 오면 .map 에서 TypeError 가 난다. 그 오류는 KioBridgeError 가
+      // 아니라서 화면이 개발자 문장을 그대로 보여 준다. 이 함수의 계약을 지킨다.
+      if (!Array.isArray(r)) throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
+      // 원소가 객체가 아니면 그 항목만 버린다. 하나가 이상하다고 저장해 둔 주문표를
+      // 전부 못 불러오게 하지 않는다.
+      return r.filter((x): x is UserProfileResponse => Boolean(x) && typeof x === "object").map(주문표읽기);
     },
 
     async saveSheet(userId, sheet) {
