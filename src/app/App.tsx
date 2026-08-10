@@ -6,7 +6,7 @@ import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, ACCENT, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
   SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
-  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES,
+  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES,
 } from "@/design/tokens";
 import type {
   Screen, MainTab, PlaceType, PairingState, StepStatus, OrderSheet, PairingResult,
@@ -3467,7 +3467,7 @@ export default function App() {
       className="min-h-screen flex items-center justify-center gap-8 p-6"
       style={{ backgroundColor: BACKDROP, fontFamily: FONT }}
     >
-      <style>{FOCUS_STYLES}</style>
+      <style>{PALETTE_STYLES}{FOCUS_STYLES}</style>
       {시연패널보임 && <ScenarioPanel />}
       {/* 나란히 보는 중에는 구석 패널을 감춘다. 같은 것을 두 번 띄울 이유가 없다. */}
       {팀백엔드모드 && 로그모드 !== "나란히" && (
@@ -3492,23 +3492,20 @@ export default function App() {
       <div style={{ width: "100%", maxWidth: FRAME_W, height: FRAME_H }}>
         <div
           ref={화면영역}
+          /*
+           * 고대비는 색 토큰을 갈아 끼워서 만든다. tokens.ts 의 PALETTE_STYLES 가
+           * 이 표시를 보고 CSS 변수를 다른 값으로 채운다.
+           *
+           * 예전에는 filter: contrast(1.3) 이었는데 그게 화면을 더 나쁘게 만들었다 -
+           * 흰색에 가까운 값이 전부 순백으로 뭉개져서 카드 경계가 사라졌다.
+           */
+          data-contrast={접근성값.highContrast ? "high" : undefined}
           className="bg-white overflow-hidden flex flex-col"
           style={{
             zoom: largeText ? LARGE_TEXT_SCALE : 1,
             width: largeText ? FRAME_W / LARGE_TEXT_SCALE : "100%",
             height: largeText ? FRAME_H / LARGE_TEXT_SCALE : FRAME_H,
-            /*
-             * 고대비. 화면 전체의 대비를 올린다.
-             *
-             * 색 토큰을 갈아 끼우는 방법도 있지만, 이 앱은 색을 상수로 인라인에
-             * 박아 써서 그러려면 화면 코드를 전부 손봐야 한다. filter 는 이미 그린
-             * 결과에 걸리므로 글씨.테두리.픽토그램.사진에 한 번에 적용된다.
-             *
-             * contrast 는 중간 회색을 축으로 벌린다 — 흰 바탕은 그대로 두고 옅은
-             * 회색 글씨(TEXT_2)와 테두리를 어둡게 만든다. 대비가 필요한 쪽이
-             * 정확히 그쪽이다. 1.35 를 넘기면 사진이 타서 메뉴를 못 알아본다.
-             */
-            filter: 접근성값.highContrast ? "contrast(1.3)" : undefined,
+
             // absolute 로 띄우는 것들(확인 시트·QR 스캐너)이 이 안에 갇히려면
             // 여기가 컨테이닝 블록이어야 한다. overflow-hidden 만으로는
             // 자기가 기준이 아니면 클리핑도 못 해서 화면 전체를 덮어 버린다.
@@ -3625,6 +3622,10 @@ export default function App() {
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
+                  // 접근성 설정도 함께 비운다. 안 그러면 다음 사람이 앞사람의 도움
+                  // 설정을 그대로 보게 되고, 그 값이 서버로도 계속 나간다.
+                  // 화면이 '모두 지워요' 라고 말한 것에 이것도 들어간다.
+                  접근성설정.비우기();
                   서버까지지우기();
                   setSheets([]); setName("");
                   // 계정도 함께 푼다. 안 풀면 주문표를 다 지운 화면에 회원으로 남아

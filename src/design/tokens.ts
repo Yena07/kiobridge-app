@@ -11,18 +11,18 @@ export const TEXT_1 = "#111111";     // heading — 본문은 검정 유지
 // 예전 값 #8A8A8E 는 흰 배경에서 3.44:1 로 WCAG AA(4.5:1)에 미달했다.
 // 옅은 면(SURFACE #F7F7F8) 위에서는 3.21:1 까지 떨어져서 더 나빴다.
 // #6B6B70 은 흰 배경 5.30:1, SURFACE 위 4.95:1 로 두 경우 모두 통과한다.
-export const TEXT_2 = "#6B6B70";     // subtext
+export const TEXT_2 = "var(--kb-text-2)";     // subtext
 // 글자에 쓰지 않는다. 머리카락 선·점·비활성 컨트롤처럼 읽을 필요가 없는 것에만 쓴다.
 // 읽어야 하는 글자에 이 색을 쓰면 1.74:1 이라 사실상 안 보인다.
-export const TEXT_3 = "#C4C4C8";     // hairline / dot / disabled — 글자 금지
+export const TEXT_3 = "var(--kb-text-3)";     // hairline / dot / disabled — 글자 금지
 // 아래 둘은 App.tsx 에 직접 적혀 있던 값이다. 대비는 각각 8.2:1, 6.5:1 로 통과하지만
 // 색이 토큰 밖에 흩어져 있으면 이 파일이 팔레트의 기준이라는 말이 사실이 아니게 된다.
 // 보이는 색은 그대로 두고 이름만 여기로 가져왔다.
-export const TEXT_BTN = "#4A4A4F";   // 테두리 버튼 글자
-export const TEXT_CHIP = "#4E5968";  // 안 고른 칩 글자
-export const BORDER = "#EDEDEF";     // hairline
-export const SURFACE = "#F7F7F8";    // 옅은 면
-export const CANVAS = "#F4F4F5";     // 입력 필드 배경
+export const TEXT_BTN = "var(--kb-text-btn)";   // 테두리 버튼 글자
+export const TEXT_CHIP = "var(--kb-text-chip)";  // 안 고른 칩 글자
+export const BORDER = "var(--kb-border)";     // hairline
+export const SURFACE = "var(--kb-surface)";    // 옅은 면
+export const CANVAS = "var(--kb-canvas)";     // 입력 필드 배경
 export const BACKDROP = "#1A1A1A";   // 폰 프레임 밖 배경 (레퍼런스의 어두운 보드)
 
 // 상태색은 최소한만. 흑백 안에서 튀지 않게 채도를 낮춘다.
@@ -64,6 +64,49 @@ export const RADIUS = { card: 16, button: 100, pill: 100, input: 12 } as const;
 // Instrument Serif 는 styles/fonts.css 로 옮겼다.
 // @import 는 스타일시트 맨 위에만 유효한데 이 문자열은 런타임에 <style> 로 꽂히므로
 // 앞에 다른 규칙이 오면 브라우저가 조용히 무시한다. 폰트가 안 뜨는데 이유도 안 보인다.
+
+/*
+ * 고대비 팔레트.
+ *
+ * 처음에는 filter: contrast() 로 만들었는데 그게 화면을 더 나쁘게 만들었다.
+ * contrast 는 중간 회색을 축으로 벌리므로 흰색에 가까운 값이 전부 순백으로
+ * 뭉개진다 - SURFACE(#F7F7F8) 1.109, CANVAS(#F4F4F5) 1.094, 흰 배경 1.150 이
+ * 모두 1.0 으로 잘려서 카드 경계가 사라졌다. 대비를 높이겠다고 만든 기능이
+ * 정작 경계 대비를 없앤 셈이다.
+ *
+ * 그래서 값을 직접 바꾼다. 위의 색 토큰은 CSS 변수를 가리키고, 아래 두 벌이
+ * 그 변수를 채운다. 화면 코드는 한 줄도 바뀌지 않는다 - 토큰을 쓰는 곳이
+ * 220 군데라 거기를 다 고치는 대신 값이 사는 자리를 하나로 모았다.
+ *
+ * 흰 배경 위 대비 (WCAG: 본문 4.5 · 큰 글씨 3 · 컨트롤 경계 3)
+ *   TEXT_2     5.30 -> 11.31
+ *   TEXT_3     1.74 ->  5.30   (원래 글자 금지 값이었다. 고대비에서는 읽힌다)
+ *   BORDER     1.17 ->  3.43   (컨트롤 경계 기준을 넘긴다)
+ *   TEXT_BTN            14.29
+ *   TEXT_CHIP           12.36
+ * 면은 흰 배경과 갈리게 조금 더 어둡게 둔다 - 카드가 배경에 붙지 않도록.
+ */
+export const PALETTE_STYLES = `
+  :root {
+    --kb-text-2: #6B6B70;
+    --kb-text-3: #C4C4C8;
+    --kb-text-btn: #4A4A4F;
+    --kb-text-chip: #4E5968;
+    --kb-border: #EDEDEF;
+    --kb-surface: #F7F7F8;
+    --kb-canvas: #F4F4F5;
+  }
+  [data-contrast="high"] {
+    --kb-text-2: #3A3A3F;
+    --kb-text-3: #6B6B70;
+    --kb-text-btn: #2A2A2E;
+    --kb-text-chip: #2E3540;
+    --kb-border: #8A8A90;
+    --kb-surface: #E8E8EA;
+    --kb-canvas: #E2E2E5;
+  }
+`;
+
 export const FOCUS_STYLES = `
 
   button:focus-visible,
