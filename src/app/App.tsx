@@ -9,12 +9,12 @@ import {
   FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES,
 } from "@/design/tokens";
 import type {
-  Screen, MainTab, PlaceType, PairingState, StepStatus, ProfileData, PairingResult,
+  Screen, MainTab, PlaceType, PairingState, StepStatus, OrderSheet, PairingResult,
   MappingResponse, MappedItem, MappedOption, MappingCandidate, ApproveInput, RecommendationReason,
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
-import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_PROFILES, STEPS } from "@/domain/catalog";
-import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerProfile, unregisterProfile, type Scenario } from "@/api/client";
+import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_SHEETS, STEPS } from "@/domain/catalog";
+import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerSheet, unregisterSheet, type Scenario } from "@/api/client";
 import {
   account, 아이디검사, 비밀번호검사, 올릴수있나,
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
@@ -48,7 +48,7 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
 
 // 레퍼런스에는 진행 막대가 없다. 점 형태로 최소화해 상단 여백을 비워 둔다.
 //
-// 전체 3단계다 — 회원가입 → 호칭 → 첫 프로필. 예전에는 전화번호·인증번호가 앞에 있어
+// 전체 3단계다 — 회원가입 → 호칭 → 첫 주문표. 예전에는 전화번호·인증번호가 앞에 있어
 // 4단계였는데, 그 둘을 걷어내면서 하나 줄었다. 기본값만 고치고 넘어가면 화면마다
 // "3단계 중 4단계" 처럼 실제와 어긋난 값이 남으므로 부르는 쪽에서 전부 명시한다.
 function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
@@ -259,7 +259,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
 //
 // 로그인은 끝까지 선택이다. 이 두 화면을 한 번도 열지 않아도 QR 을 찍고 추천을 받고
 // 장바구니에 담는 전 과정이 그대로 동작한다. 로그인해서 얻는 것은 하나뿐이다 —
-// 저장해 둔 프로필을 다음에 열었을 때도 불러오는 것.
+// 저장해 둔 주문표를 다음에 열었을 때도 불러오는 것.
 //
 // 예전에는 이 자리에 전화번호·인증번호 화면이 있었다. 붙일 백엔드가 없어서 번호는 고칠 수
 // 없는 시연값이었고 인증번호는 아무 여섯 자리나 통과했다 — 로그인한 척하는 화면이었다.
@@ -399,7 +399,7 @@ function LoginScreen({ onDone, onBack, onGoSignup }: {
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `24px ${GAP.screenX}px 0` }}>
         <h1 style={{ ...TYPE.display, color: TEXT_1 }}>로그인</h1>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 28 }}>
-          저장해 두신 프로필을 다시 불러와요
+          저장해 두신 주문표를 다시 불러와요
         </p>
 
         <AccountField
@@ -660,7 +660,7 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
  * 되돌릴 수 없는 동작 앞에서만 띄운다.
  * 장소를 바꾸는 것처럼 되돌릴 수 있는 일에는 쓰지 않는다 — 매번 물으면
  * 사람은 읽지 않고 누르게 되고, 정작 위험할 때도 그냥 누른다.
- * 지금 이걸 쓰는 곳은 프로필 삭제와 '이 기기에서 정보 지우기' 둘뿐이다.
+ * 지금 이걸 쓰는 곳은 주문표 삭제와 '이 기기에서 정보 지우기' 둘뿐이다.
  */
 function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
   title: string; body: string; confirmLabel: string;
@@ -756,17 +756,17 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 
 // ─── Profile Form ─────────────────────────────────────────────────────────────
 
-// 프로필 id. 사람이 읽을 값이 아니고 서버로도 나가지 않는 화면 내부 표식이다.
+// 주문표 id. 사람이 읽을 값이 아니고 서버로도 나가지 않는 화면 내부 표식이다.
 // 시각은 사람이 만든 순서를 알아보기 쉬워서 남기고, 뒤에 카운터를 붙여 충돌을 막는다.
-let 프로필일련번호 = 0;
-const newProfileId = () => `p${Date.now()}_${++프로필일련번호}`;
+let 주문표일련번호 = 0;
+const newSheetId = () => `p${Date.now()}_${++주문표일련번호}`;
 
-function ProfileScreen({ onNext, onBack, showProgress = true, 로그인함 = false }: {
-  onNext: (p: ProfileData) => void;
+function OrderSheetScreen({ onNext, onBack, showProgress = true, 로그인함 = false }: {
+  onNext: (p: OrderSheet) => void;
   onBack: () => void;
   showProgress?: boolean;
   /**
-   * 로그인한 사람인가. 저장한 프로필이 서버에도 올라가는지가 달라지므로 화면이 말해 준다.
+   * 로그인한 사람인가. 저장한 주문표가 서버에도 올라가는지가 달라지므로 화면이 말해 준다.
    * 로그인하지 않았으면 서버 이야기를 꺼내지 않는다 — 하지 않는 일을 설명할 이유가 없다.
    */
   로그인함?: boolean;
@@ -819,14 +819,14 @@ function ProfileScreen({ onNext, onBack, showProgress = true, 로그인함 = fal
           <BackButton onClick={onBack} />
           <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
             {/*
-             * 진행 표시는 가입 흐름(가입 1 → 호칭 2 → 프로필 3)을 전제한다.
-             * 주 경로인 게스트는 앞의 둘을 건너뛰므로, 처음 프로필을 만드는 사람에게
+             * 진행 표시는 가입 흐름(가입 1 → 호칭 2 → 주문표 3)을 전제한다.
+             * 주 경로인 게스트는 앞의 둘을 건너뛰므로, 처음 주문표를 만드는 사람에게
              * "3단계 중 3단계" 라고 읽히는 건 사실이 아니다. 게스트에게는 숨긴다.
              */}
             {showProgress && <ProgressBar step={3} total={3} />}
           </div>
         </div>
-        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 프로필</h1>
+        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 주문표</h1>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 24 }}>자주 주문하는 메뉴를 저장해두세요</p>
       </div>
 
@@ -945,7 +945,7 @@ function ProfileScreen({ onNext, onBack, showProgress = true, 로그인함 = fal
           </p>
         )}
         {/*
-          서버는 장소가 빈 프로필을 받지 않는다(place 가 @NotBlank). 올리고 나서 400 을
+          서버는 장소가 빈 주문표를 받지 않는다(place 가 @NotBlank). 올리고 나서 400 을
           받아 "못 올렸어요" 를 띄우는 대신, 저장하기 전에 무엇을 하면 되는지 말한다.
           막지는 않는다 — 장소는 선택 항목이고, 이 기기에는 그대로 저장된다.
         */}
@@ -956,8 +956,8 @@ function ProfileScreen({ onNext, onBack, showProgress = true, 로그인함 = fal
         )}
         <PrimaryBtn
           // Date.now() 만 쓰면 같은 밀리초에 두 개를 만들 때 id 가 겹친다.
-          // 겹치면 프로필 하나를 지울 때 다른 하나도 같이 사라진다.
-          onClick={() => onNext({ id: newProfileId(), menuName, place, selections, memo })}
+          // 겹치면 주문표 하나를 지울 때 다른 하나도 같이 사라진다.
+          onClick={() => onNext({ id: newSheetId(), menuName, place, selections, memo })}
           disabled={!menuName.trim()}
         >
           저장하고 시작하기
@@ -982,12 +982,12 @@ const SR_ONLY: React.CSSProperties = {
   whiteSpace: "nowrap", border: 0,
 };
 
-function ProfileCard({
-  profile, selected, onSelect, onDelete,
+function OrderSheetCard({
+  sheet, selected, onSelect, onDelete,
 }: {
-  profile: ProfileData; selected: boolean; onSelect: () => void; onDelete: () => void;
+  sheet: OrderSheet; selected: boolean; onSelect: () => void; onDelete: () => void;
 }) {
-  const allTags = [...(profile.place ? [profile.place] : []), ...Object.values(profile.selections).flat()];
+  const allTags = [...(sheet.place ? [sheet.place] : []), ...Object.values(sheet.selections).flat()];
   const visibleTags = allTags.slice(0, 4);
   const overflow = allTags.length - visibleTags.length;
   const [focused, setFocused] = useState(false);
@@ -998,7 +998,7 @@ function ProfileCard({
    * 예전에는 카드 전체가 role="radio" 이고 그 안에 삭제 버튼이 들어 있었다.
    * 그러면 삭제 버튼에 포커스를 두고 Enter 를 눌러도 카드만 선택되고 지워지지 않는다.
    * 부모가 그 Enter 를 가로채 preventDefault() 해 버리기 때문이다.
-   * 키보드만 쓰는 사람에게는 프로필을 지울 방법이 아예 없었다.
+   * 키보드만 쓰는 사람에게는 주문표를 지울 방법이 아예 없었다.
    *
    * 고르는 일은 진짜 input[type=radio] 에 맡긴다. 화살표 키로 옮겨 다니는 것과
    * 그룹 전체에 탭이 한 번만 걸리는 것을 브라우저가 알아서 해 준다.
@@ -1018,17 +1018,17 @@ function ProfileCard({
       <label style={{ display: "block", padding: "20px 20px 0", cursor: "pointer" }}>
         <input
           type="radio"
-          name="saved-profile"
+          name="saved-sheet"
           style={SR_ONLY}
           checked={selected}
           onChange={onSelect}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          aria-label={`${profile.menuName}${profile.place ? `, ${profile.place}` : ""}`}
+          aria-label={`${sheet.menuName}${sheet.place ? `, ${sheet.place}` : ""}`}
         />
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            {/* 저장된 프로필에는 사진을 붙이지 않는다. 아직 어느 키오스크에도 물어보기 전이라
+            {/* 저장된 주문표에는 사진을 붙이지 않는다. 아직 어느 키오스크에도 물어보기 전이라
                 여기서 사진을 보여 주면 오늘 실제로 나올 메뉴를 앱이 장담하는 꼴이 된다. */}
             <div
               aria-hidden="true"
@@ -1039,9 +1039,9 @@ function ProfileCard({
                 color: selected ? "white" : P, flexShrink: 0,
               }}
             >
-              {profile.place ? PLACE_ICONS[profile.place] : <Pictogram name="squaresFour" size={19} />}
+              {sheet.place ? PLACE_ICONS[sheet.place] : <Pictogram name="squaresFour" size={19} />}
             </div>
-            <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{profile.menuName}</span>
+            <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{sheet.menuName}</span>
           </div>
           <div
             aria-hidden="true"
@@ -1087,8 +1087,8 @@ function ProfileCard({
         </div>
 
         {/* 반투명 흰색(70%)은 초록 위에서 3.31:1 이라 읽히지 않는다. 흰색은 5.08:1 이다. */}
-        {profile.memo && (
-          <p style={{ fontSize: 14, color: selected ? "white" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{profile.memo}</p>
+        {sheet.memo && (
+          <p style={{ fontSize: 14, color: selected ? "white" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{sheet.memo}</p>
         )}
       </label>
 
@@ -1096,7 +1096,7 @@ function ProfileCard({
       <div className="flex justify-end" style={{ padding: "0 20px 20px", marginTop: 4 }}>
         <button
           type="button"
-          aria-label={`${profile.menuName} 프로필 삭제`}
+          aria-label={`${sheet.menuName} 주문표 삭제`}
           onClick={onDelete}
           style={{
             // 높이만 44 였고 폭이 30 이었다. 밑줄은 글자에만 걸리므로
@@ -1115,46 +1115,46 @@ function ProfileCard({
   );
 }
 
-function SavedProfilesScreen({
-  profiles, onAddProfile, onDeleteProfile, onOrder, showOrder = false,
+function SavedSheetsScreen({
+  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false,
 }: {
-  profiles: ProfileData[];
-  onAddProfile: () => void;
-  onDeleteProfile: (id: string) => void;
-  onOrder: (profile: ProfileData) => void;
+  sheets: OrderSheet[];
+  onAddSheet: () => void;
+  onDeleteSheet: (id: string) => void;
+  onOrder: (sheet: OrderSheet) => void;
   showOrder?: boolean;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(profiles[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(sheets[0]?.id ?? null);
 
   // 목록이 바뀌면 고른 것도 따라가야 한다. 초기값에 갇혀 있으면
   // 전부 지웠다가 새로 만들었을 때 아무것도 안 골라진 채로 남고,
-  // '이 프로필로 주문하기'가 계속 잠겨서 빠져나갈 방법이 없어진다.
+  // '이 주문표로 주문하기'가 계속 잠겨서 빠져나갈 방법이 없어진다.
   useEffect(() => {
-    if (profiles.length === 0) {
+    if (sheets.length === 0) {
       if (selectedId !== null) setSelectedId(null);
       return;
     }
     // 목록이 실제로 바뀌었을 때만 따라간다.
-    // 지워진 프로필이 골라져 있었으면 첫 번째로 옮긴다. 삭제를 취소한 경우에는
-    // profiles 가 그대로라 이 이펙트가 돌지 않으므로 선택도 움직이지 않는다.
-    if (!profiles.some((p) => p.id === selectedId)) setSelectedId(profiles[0].id);
+    // 지워진 주문표가 골라져 있었으면 첫 번째로 옮긴다. 삭제를 취소한 경우에는
+    // sheets 가 그대로라 이 이펙트가 돌지 않으므로 선택도 움직이지 않는다.
+    if (!sheets.some((p) => p.id === selectedId)) setSelectedId(sheets[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profiles]);
+  }, [sheets]);
 
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
         <AppLogo size={26} />
-        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 22 }}>저장된 프로필</h1>
-        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>사용할 프로필을 선택하세요</p>
+        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 22 }}>저장된 주문표</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>사용할 주문표를 선택하세요</p>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-2" style={{ minHeight: 0, paddingLeft: GAP.screenX, paddingRight: GAP.screenX }}>
-        {profiles.length === 0 ? (
+        {sheets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Pictogram name="squaresFour" size={56} color={TEXT_3} />
-            <p style={{ ...TYPE.bodyBold, color: TEXT_1, marginTop: 20 }}>저장된 프로필이 없어요</p>
-            <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>새 프로필을 추가해보세요</p>
+            <p style={{ ...TYPE.bodyBold, color: TEXT_1, marginTop: 20 }}>저장된 주문표가 없어요</p>
+            <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>새 주문표를 추가해보세요</p>
           </div>
         ) : (
           /*
@@ -1164,18 +1164,18 @@ function SavedProfilesScreen({
            * 같은 name 을 가진 라디오끼리 화살표 키로 옮겨 다니는 것도 그대로 동작한다.
            */
           <fieldset style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}>
-            <legend style={SR_ONLY}>저장된 프로필 목록</legend>
-            {profiles.map((profile) => (
-              <ProfileCard
-                key={profile.id}
-                profile={profile}
-                selected={selectedId === profile.id}
-                onSelect={() => setSelectedId(profile.id)}
-                // 선택을 여기서 옮기지 않는다. onDeleteProfile 은 이제 확인창만
+            <legend style={SR_ONLY}>저장된 주문표 목록</legend>
+            {sheets.map((sheet) => (
+              <OrderSheetCard
+                key={sheet.id}
+                sheet={sheet}
+                selected={selectedId === sheet.id}
+                onSelect={() => setSelectedId(sheet.id)}
+                // 선택을 여기서 옮기지 않는다. onDeleteSheet 은 이제 확인창만
                 // 열고 아직 지우지 않는데, 여기서 옮기면 대답도 하기 전에 선택이
                 // 움직이고 '그대로 두기' 를 눌러도 돌아오지 않는다.
                 // 실제로 지워진 뒤의 선택 이동은 아래 useEffect 가 맡는다.
-                onDelete={() => onDeleteProfile(profile.id)}
+                onDelete={() => onDeleteSheet(sheet.id)}
               />
             ))}
           </fieldset>
@@ -1186,16 +1186,16 @@ function SavedProfilesScreen({
         {showOrder && (
           <PrimaryBtn
             onClick={() => {
-              const picked = profiles.find((p) => p.id === selectedId);
+              const picked = sheets.find((p) => p.id === selectedId);
               if (picked) onOrder(picked);
             }}
             disabled={!selectedId}
           >
-            이 프로필로 주문하기
+            이 주문표로 주문하기
           </PrimaryBtn>
         )}
-        <OutlineBtn onClick={onAddProfile}>
-          + 새 프로필 추가
+        <OutlineBtn onClick={onAddSheet}>
+          + 새 주문표 추가
         </OutlineBtn>
       </StickyFooter>
     </div>
@@ -1207,7 +1207,7 @@ function SavedProfilesScreen({
 function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => void }) {
   const items: { id: MainTab; icon: React.ReactNode; label: string }[] = [
     { id: "qr", icon: <Pictogram name="qrCode" size={25} />, label: "QR 찍기" },
-    { id: "menu", icon: <Pictogram name="notePencil" size={25} />, label: "내 프로필" },
+    { id: "menu", icon: <Pictogram name="notePencil" size={25} />, label: "내 주문표" },
     { id: "account", icon: <Pictogram name="userCircle" size={25} />, label: "계정" },
   ];
   return (
@@ -1276,12 +1276,12 @@ function PairingConnecting() {
 }
 
 function PairingConnected({
-  kioskName, expiresAt, onExpire, onSelectProfile,
+  kioskName, expiresAt, onExpire, onSelectSheet,
 }: {
   kioskName: string;
   expiresAt: number;
   onExpire: () => void;
-  onSelectProfile: () => void;
+  onSelectSheet: () => void;
 }) {
   const [secs, setSecs] = useState(() => Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
   const expire = useRef(onExpire);
@@ -1321,7 +1321,7 @@ function PairingConnected({
       </div>
 
       <div className="mt-auto" style={{ paddingTop: 24 }}>
-        <PrimaryBtn onClick={onSelectProfile}>프로필 선택하기</PrimaryBtn>
+        <PrimaryBtn onClick={onSelectSheet}>주문표 선택하기</PrimaryBtn>
       </div>
     </div>
   );
@@ -1387,7 +1387,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
   const [scanning, setScanning] = useState(true);
 
   // 검은 화면을 덮어 놓기만 하고 role 도 포커스 가둠도 없었다.
-  // 스크린리더로는 뒤에 있는 프로필 목록과 하단 탭이 그대로 읽히고,
+  // 스크린리더로는 뒤에 있는 주문표 목록과 하단 탭이 그대로 읽히고,
   // Tab 을 누르면 보이지도 않는 곳으로 포커스가 나간다.
   const 모달 = useRef<HTMLDivElement>(null);
   useEffect(() => { 모달.current?.focus(); }, []);
@@ -1524,7 +1524,7 @@ function PairingIdle({ onScan }: { onScan: () => void }) {
 
       <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
         <p style={{ ...TYPE.caption, color: TEXT_1 }}>
-          찍지 않아도 <strong style={{ fontWeight: 600 }}>내 프로필</strong>에서 저장한 조건을 먼저 확인할 수 있어요
+          찍지 않아도 <strong style={{ fontWeight: 600 }}>내 주문표</strong>에서 저장한 조건을 먼저 확인할 수 있어요
         </p>
       </div>
 
@@ -1590,7 +1590,7 @@ function QrScreen({ onPaired, initialPhase = "scan", connected = null }: {
             kioskName={pairing.kioskName}
             expiresAt={pairing.expiresAt}
             onExpire={() => setPhase("expired")}
-            onSelectProfile={() => onPaired(pairing.pairingId, pairing.expiresAt, pairing.kioskName)}
+            onSelectSheet={() => onPaired(pairing.pairingId, pairing.expiresAt, pairing.kioskName)}
           />
         )}
         {phase === "failed" && <PairingFailed reason={failReason} onScan={handleRescan} />}
@@ -1609,22 +1609,22 @@ function QrScreen({ onPaired, initialPhase = "scan", connected = null }: {
  * 이 화면이 하는 일은 두 가지뿐이다 — 저장된 것을 지우는 길과, 원하면 로그인하는 길.
  */
 function AccountScreen({
-  name, guest, onLogout, onLogin, onClearLocal, onProfiles, onA11y, onPrivacy,
+  name, guest, onLogout, onLogin, onClearLocal, onSheets, onA11y, onPrivacy,
 }: {
   name: string; guest: boolean;
   onLogout: () => void; onLogin: () => void; onClearLocal: () => void;
-  onProfiles: () => void; onA11y: () => void; onPrivacy: () => void;
+  onSheets: () => void; onA11y: () => void; onPrivacy: () => void;
 }) {
   // 목록에 올린 항목은 전부 실제로 열린다. 눌러도 아무 일이 없는 줄은 두지 않는다.
   const items = guest
     ? [
-        { label: "저장된 프로필 관리", sub: "이번 이용에만 쓰는 메뉴 프로필이에요", action: onProfiles, danger: false },
+        { label: "저장된 주문표 관리", sub: "이번 이용에만 쓰는 메뉴 주문표예요", action: onSheets, danger: false },
         { label: "접근성 설정", sub: "큰 글씨", action: onA11y, danger: false },
         { label: "개인정보 안내", sub: "무엇을 저장하고 무엇을 저장하지 않는지", action: onPrivacy, danger: false },
         { label: "이 기기에서 정보 지우기", sub: "지금까지 입력한 내용을 모두 지워요", action: onClearLocal, danger: true },
       ]
     : [
-        { label: "저장된 프로필 관리", sub: "내 메뉴 프로필을 확인하고 수정해요", action: onProfiles, danger: false },
+        { label: "저장된 주문표 관리", sub: "내 메뉴 주문표를 확인하고 수정해요", action: onSheets, danger: false },
         { label: "접근성 설정", sub: "큰 글씨", action: onA11y, danger: false },
         { label: "개인정보 안내", sub: "무엇을 저장하고 무엇을 저장하지 않는지", action: onPrivacy, danger: false },
         { label: "이 기기에서 정보 지우기", sub: "저장해 둔 내용을 모두 지워요", action: onClearLocal, danger: true },
@@ -1795,8 +1795,8 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
     {
       title: "저장하는 것",
       body: guest
-        ? "메뉴 프로필에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요."
-        : "메뉴 프로필에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서 이 내용은 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요.",
+        ? "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요."
+        : "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서 이 내용은 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요.",
     },
     {
       title: "저장하지 않는 것",
@@ -1814,8 +1814,8 @@ function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }
       title: "지우는 방법",
       body: guest
         ? "지금은 로그인 없이 쓰고 계셔서 이번 이용이 끝나면 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요."
-        // 서버에 프로필 삭제 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
-        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고 로그아웃돼요. 다만 서버에 올라간 프로필은 아직 지우는 길이 없어서, 다시 로그인하면 그대로 보입니다.",
+        // 서버에 주문표 삭제 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
+        : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고 로그아웃돼요. 다만 서버에 올라간 주문표는 아직 지우는 길이 없어서, 다시 로그인하면 그대로 보입니다.",
     },
   ];
   return (
@@ -1960,7 +1960,7 @@ function InfoBox({ children, variant = "warn" }: { children: React.ReactNode; va
  *
  * 흉내 내는 대신 진짜 <input type="radio"> 를 쓴다. 화살표 이동·그룹 안 단일 포커스가
  * 브라우저 기본으로 동작하고, 우리가 유지할 코드도 줄어든다.
- * 프로필 목록(SavedProfilesScreen)이 같은 이유로 이미 이렇게 되어 있다.
+ * 주문표 목록(SavedSheetsScreen)이 같은 이유로 이미 이렇게 되어 있다.
  *
  * 예전에는 role="button" 분기도 있었다. low_confidence 에서 '이게 맞아요' 를
  * 짚는 자리였는데, 확인 카드와 같은 메뉴를 카드 모양으로 두 번 그리게 되어
@@ -2134,7 +2134,7 @@ function OrderNotFound({ message, onCancel }: { message?: string; onCancel: () =
         desc={message}
       />
       <div style={{ width: "100%", marginTop: 36 }}>
-        <OutlineBtn onClick={onCancel}>프로필 다시 보기</OutlineBtn>
+        <OutlineBtn onClick={onCancel}>주문표 다시 보기</OutlineBtn>
       </div>
     </div>
   );
@@ -2250,10 +2250,10 @@ function OrderMappingLoading() {
 }
 
 function OrderConfirmScreen({
-  pairingId, profile, onBack, onApproved,
+  pairingId, sheet, onBack, onApproved,
 }: {
   pairingId: string;
-  profile: ProfileData;
+  sheet: OrderSheet;
   onBack: () => void;
   onApproved: (planId: string) => void;
 }) {
@@ -2264,11 +2264,11 @@ function OrderConfirmScreen({
 
   useEffect(() => {
     let alive = true;
-    api.requestMapping(pairingId, profile.id)
+    api.requestMapping(pairingId, sheet.id)
       .then((res) => { if (alive) setMapping(res); })
       .catch((e: KioBridgeError) => { if (alive) setError(e.message); });
     return () => { alive = false; };
-  }, [pairingId, profile.id]);
+  }, [pairingId, sheet.id]);
 
   // P0-4: 실행 계획 생성은 이 핸들러 안에서만 일어난다.
   // 매핑 조회(useEffect)는 계획을 만들지 않으므로 승인 전 실행 경로가 존재하지 않는다.
@@ -2284,14 +2284,14 @@ function OrderConfirmScreen({
    */
   const 거절하기 = () => {
     onBack();
-    void api.reject({ pairingId, profileId: profile.id }).catch(() => {});
+    void api.reject({ pairingId, sheetId: sheet.id }).catch(() => {});
   };
 
-  const approve = (extra: Omit<ApproveInput, "pairingId" | "profileId" | "mappingResult"> = {}) => {
+  const approve = (extra: Omit<ApproveInput, "pairingId" | "sheetId" | "mappingResult"> = {}) => {
     if (!mapping || approving.current) return;
     approving.current = true;
     setError(null);
-    api.approve({ pairingId, profileId: profile.id, mappingResult: mapping.result, ...extra })
+    api.approve({ pairingId, sheetId: sheet.id, mappingResult: mapping.result, ...extra })
       .then((res) => onApproved(res.planId))
       .catch((e: KioBridgeError) => { approving.current = false; setError(e.message); });
   };
@@ -2301,8 +2301,8 @@ function OrderConfirmScreen({
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-2" style={{ marginTop: 20, paddingBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "white", backgroundColor: P, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 프로필</span>
-          <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{profile.menuName}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "white", backgroundColor: P, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 주문표</span>
+          <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
         </div>
         <div style={{ height: 1, backgroundColor: BORDER, marginLeft: -GAP.screenX, marginRight: -GAP.screenX }} />
       </div>
@@ -2316,7 +2316,7 @@ function OrderConfirmScreen({
           </div>
         )}
 
-        {!mapping && error && <OutlineBtn onClick={onBack}>프로필 다시 보기</OutlineBtn>}
+        {!mapping && error && <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>}
 
         {/*
          * item 이 없으면 그리지 않는다. 예전에는 mapping.item! 로 있다고 단정했는데,
@@ -2331,7 +2331,7 @@ function OrderConfirmScreen({
             candidates={mapping.candidates ?? []}
             reason={mapping.reason}
             reasons={mapping.reasons}
-            options={mapping.profileOptions}
+            options={mapping.sheetOptions}
             onApprove={(candidateId) => approve({ candidateId })}
             onCancel={거절하기}
           />
@@ -2354,7 +2354,7 @@ function OrderConfirmScreen({
         {(mapping?.result === "exact" || mapping?.result === "changed" || mapping?.result === "low_confidence") && !mapping.item && (
           <div className="flex flex-col gap-4">
             <InfoBox>메뉴 정보를 불러오지 못했어요. 키오스크 화면을 직접 확인해 주세요.</InfoBox>
-            <OutlineBtn onClick={onBack}>프로필 다시 보기</OutlineBtn>
+            <OutlineBtn onClick={onBack}>주문표 다시 보기</OutlineBtn>
           </div>
         )}
         {mapping?.result === "low_confidence" && mapping.item && (
@@ -2814,7 +2814,7 @@ export default function App() {
    * 안내 화면이 "이번 이용이 끝나면 남지 않아요" 라고 약속하고 있어서 그대로 둔다.
    *
    * 서버가 토큰을 주지 않는다 — 응답이 { userId, loginId } 뿐이다. 그래서 여기 있는 것은
-   * 인증 증명이 아니라 식별자다. 이 값으로 할 수 있는 일은 프로필을 불러오고 올리는 것뿐이고,
+   * 인증 증명이 아니라 식별자다. 이 값으로 할 수 있는 일은 주문표를 불러오고 올리는 것뿐이고,
    * 화면 어디에도 "안전하게 보관됩니다" 같은 말을 쓰지 않는다.
    */
   const [계정, set계정] = useState<Account | null>(null);
@@ -2825,42 +2825,42 @@ export default function App() {
    */
   const guest = 계정 === null;
   /**
-   * 서버에서 불러온 프로필의 id.
+   * 서버에서 불러온 주문표의 id.
    *
-   * 로그아웃할 때 이것만 목록에서 뺀다. 전부 지우면 로그인 전에 게스트로 만들어 둔 프로필까지
-   * 사라지고, 남겨 두면 다음 사람이 이 기기를 열었을 때 앞사람 프로필이 그대로 보인다.
+   * 로그아웃할 때 이것만 목록에서 뺀다. 전부 지우면 로그인 전에 게스트로 만들어 둔 주문표까지
+   * 사라지고, 남겨 두면 다음 사람이 이 기기를 열었을 때 앞사람 주문표가 그대로 보인다.
    */
   const 서버에서온것 = useRef<Set<string>>(new Set());
   /** 큰 글씨 모드. 휴대폰 틀 안 전체에 적용된다. */
   const [largeText, setLargeText] = useState(false);
-  const [profiles, setProfiles] = useState<ProfileData[]>(MOCK_PROFILES);
+  const [sheets, setSheets] = useState<OrderSheet[]>(MOCK_SHEETS);
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
   // 되돌릴 수 없는 동작은 물어보고 실행한다. null 이면 물어볼 게 없다는 뜻이다.
   const [확인대기, set확인대기] = useState<{ title: string; body: string; confirmLabel: string; run: () => void } | null>(null);
   const [pairingId, setPairingId] = useState<string | null>(null);
   // 만료 시각을 루트가 들고 있어야 한다. 예전에는 QrScreen 안에만 있어서
-  // 프로필을 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
+  // 주문표를 고르는 순간 그 화면이 사라지고 감시도 같이 사라졌다.
   // 그러면 이미 끝난 연결로 승인까지 진행되고, 화면은 아무 말도 하지 않는다.
   const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
   // 연결된 키오스크 이름. QR 탭으로 돌아왔을 때 무엇에 연결돼 있는지 말하려면 필요하다.
   const [pairingKiosk, setPairingKiosk] = useState<string | null>(null);
   // 만료 때문에 QR 화면으로 되돌아왔는지. 되돌아왔으면 안내부터 띄운다.
   const [qrExpired, setQrExpired] = useState(false);
-  const [orderProfile, setOrderProfile] = useState<ProfileData | null>(null);
+  const [orderSheet, setOrderSheet] = useState<OrderSheet | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
 
-  const addProfile = (p: ProfileData) => setProfiles((prev) => [...prev, p]);
+  const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
-  const deleteProfile = (id: string) => {
-    const 이름 = profiles.find((p) => p.id === id)?.menuName ?? "이 프로필";
+  const deleteSheet = (id: string) => {
+    const 이름 = sheets.find((p) => p.id === id)?.menuName ?? "이 주문표";
     set확인대기({
       title: `'${이름}'을 지울까요?`,
       body: "지우면 되돌릴 수 없어요. 저장해 두신 조건이 함께 사라져요.",
       confirmLabel: "지우기",
       run: () => {
-        unregisterProfile(id);
-        setProfiles((prev) => prev.filter((p) => p.id !== id));
+        unregisterSheet(id);
+        setSheets((prev) => prev.filter((p) => p.id !== id));
       },
     });
   };
@@ -2883,42 +2883,42 @@ export default function App() {
   };
 
   /**
-   * 프로필 하나를 서버에 올린다. 로그인한 사람에게만 일어난다.
+   * 주문표 하나를 서버에 올린다. 로그인한 사람에게만 일어난다.
    *
    * 실패해도 이 기기에는 이미 저장돼 있으므로 흐름을 막지 않는다. 다만 조용히 삼키지는
    * 않는다 — 삼키면 "저장했어요" 가 절반만 사실이 되고, 사용자는 다음에 열었을 때
    * 없어진 것을 보고서야 알게 된다. 재시도도 자기 자신을 부른다.
    */
-  const 프로필올리기 = (userId: number, p: ProfileData): void => {
-    account.saveProfile(userId, p).catch((e: KioBridgeError) => {
+  const 주문표올리기 = (userId: number, p: OrderSheet): void => {
+    account.saveSheet(userId, p).catch((e: KioBridgeError) => {
       set확인대기({
         title: "이 기기에는 저장했어요",
         body: `${e?.message ?? "서버에 올리지 못했어요"} 지금은 이 기기에만 있어서, 다음에 로그인하면 안 보일 수 있어요.`,
         confirmLabel: "다시 시도",
-        run: () => 프로필올리기(userId, p),
+        run: () => 주문표올리기(userId, p),
       });
     });
   };
 
   /**
-   * 새 프로필을 저장한다. 로그인했으면 서버에도 올린다.
+   * 새 주문표를 저장한다. 로그인했으면 서버에도 올린다.
    *
-   * 장소를 안 고른 프로필은 올리지 않는다 — 서버의 place 가 @NotBlank 라 400 이 나는데,
+   * 장소를 안 고른 주문표는 올리지 않는다 — 서버의 place 가 @NotBlank 라 400 이 나는데,
    * 그 400 은 code 도 message 도 없는 스프링 기본 응답이라 사용자에게 이유를 말해 줄 수 없다.
-   * 대신 프로필 화면이 저장하기 전에 미리 알려 준다(아래 ProfileScreen 의 안내 한 줄).
+   * 대신 주문표 화면이 저장하기 전에 미리 알려 준다(아래 OrderSheetScreen 의 안내 한 줄).
    */
-  const 프로필저장 = (p: ProfileData): void => {
-    addProfile(p);
+  const 주문표저장 = (p: OrderSheet): void => {
+    addSheet(p);
     setScreen("saved");
     setTab("menu");
-    if (계정 && !올릴수있나(p)) 프로필올리기(계정.userId, p);
+    if (계정 && !올릴수있나(p)) 주문표올리기(계정.userId, p);
   };
 
   /**
    * 로그인·회원가입이 끝났다.
    *
-   * 서버에 저장해 둔 프로필을 가져와 목록 앞에 붙인다. 같은 id 는 서버 것으로 덮는다 —
-   * 서버가 최신이다. 게스트로 만들어 둔 프로필은 지우지 않는다. 방금 만든 것이
+   * 서버에 저장해 둔 주문표를 가져와 목록 앞에 붙인다. 같은 id 는 서버 것으로 덮는다 —
+   * 서버가 최신이다. 게스트로 만들어 둔 주문표는 지우지 않는다. 방금 만든 것이
    * 로그인했다는 이유로 사라지면 그게 가장 나쁘다.
    *
    * 불러오기에 실패해도 로그인 자체는 된 것이다. 다만 말은 해 준다 — 아무 말 없이
@@ -2930,19 +2930,19 @@ export default function App() {
     if (다음화면 === "saved") setTab("menu");
 
     const 불러오기 = (): void => {
-      account.listProfiles(a.userId)
+      account.listSheets(a.userId)
         .then((서버것) => {
           if (서버것.length === 0) return;
           for (const p of 서버것) 서버에서온것.current.add(p.id);
-          setProfiles((prev) => {
+          setSheets((prev) => {
             const 서버id = new Set(서버것.map((p) => p.id));
             return [...서버것, ...prev.filter((p) => !서버id.has(p.id))];
           });
         })
         .catch((e: KioBridgeError) => {
           set확인대기({
-            title: "저장해 두신 프로필을 못 불러왔어요",
-            body: `${e?.message ?? "서버에 연결하지 못했어요"} 로그인은 됐어요. 이 기기에 있는 프로필은 그대로 쓸 수 있어요.`,
+            title: "저장해 두신 주문표를 못 불러왔어요",
+            body: `${e?.message ?? "서버에 연결하지 못했어요"} 로그인은 됐어요. 이 기기에 있는 주문표는 그대로 쓸 수 있어요.`,
             confirmLabel: "다시 시도",
             run: 불러오기,
           });
@@ -2954,14 +2954,14 @@ export default function App() {
   /**
    * 로그아웃.
    *
-   * 서버에서 불러온 프로필은 목록에서 뺀다. 남겨 두면 로그아웃했는데도 그 사람 프로필이
+   * 서버에서 불러온 주문표는 목록에서 뺀다. 남겨 두면 로그아웃했는데도 그 사람 주문표가
    * 화면에 그대로 있고, 다음 사람이 이 기기를 열었을 때 앞사람 것을 보게 된다.
-   * 게스트로 만든 프로필은 이 기기 것이므로 건드리지 않는다.
+   * 게스트로 만든 주문표는 이 기기 것이므로 건드리지 않는다.
    */
   const 로그아웃 = (): void => {
     const 뺄것 = 서버에서온것.current;
-    setProfiles((prev) => prev.filter((p) => !뺄것.has(p.id)));
-    for (const id of 뺄것) unregisterProfile(id);
+    setSheets((prev) => prev.filter((p) => !뺄것.has(p.id)));
+    for (const id of 뺄것) unregisterSheet(id);
     서버에서온것.current = new Set();
     set계정(null);
     setName("");
@@ -2981,7 +2981,7 @@ export default function App() {
       setPairingId(null);
       setPairingExpiresAt(null);
       setPairingKiosk(null);
-      setOrderProfile(null);
+      setOrderSheet(null);
       setFromQr(false);
       setScreen("saved");
       setTab("qr");
@@ -3031,7 +3031,7 @@ export default function App() {
     setTab(t);
     setScreen("saved");
     // 연결이 아직 살아 있으면 주문 경로를 유지한다. 예전에는 무조건 껐더니
-    // 하단 탭으로 '내 프로필'에 가는 순간 주문 버튼이 사라졌고,
+    // 하단 탭으로 '내 주문표'에 가는 순간 주문 버튼이 사라졌고,
     // QR 을 다시 찍는 것 말고는 되돌릴 방법이 없었다.
     if (!pairingId) setFromQr(false);
   };
@@ -3086,7 +3086,7 @@ export default function App() {
           )}
           {screen === "signup" && (
             <SignupScreen
-              // 가입 직후에는 서버에 프로필이 없다. 그래도 같은 경로를 탄다 —
+              // 가입 직후에는 서버에 주문표가 없다. 그래도 같은 경로를 탄다 —
               // 갈래를 둘로 두면 한쪽만 고치는 날이 온다. 빈 목록이면 아무 일도 안 한다.
               onDone={(a) => 계정으로들어가기(a, "name")}
               onBack={() => setScreen("login")}
@@ -3105,11 +3105,11 @@ export default function App() {
           {screen === "greeting" && (
             <GreetingScreen name={name} onNext={() => { setScreen("saved"); setTab("menu"); }} />
           )}
-          {screen === "profile" && (
-            <ProfileScreen
+          {screen === "sheet" && (
+            <OrderSheetScreen
               showProgress={!guest}
               로그인함={!guest}
-              onNext={프로필저장}
+              onNext={주문표저장}
               onBack={() => setScreen("saved")}
             />
           )}
@@ -3129,20 +3129,20 @@ export default function App() {
             />
           )}
           {inMain && tab === "menu" && (
-            <SavedProfilesScreen
-              profiles={profiles}
-              onAddProfile={() => { setScreen("profile"); }}
-              onDeleteProfile={deleteProfile}
-              // 매핑을 요청하기 전에 이 프로필을 서버가 찾을 수 있게 등록한다.
-              // 실서비스에서는 프로필 저장 시점에 서버로 올라가고 이 줄은 사라진다.
-              onOrder={(p) => { registerProfile(p); setOrderProfile(p); setScreen("order-confirm"); }}
+            <SavedSheetsScreen
+              sheets={sheets}
+              onAddSheet={() => { setScreen("sheet"); }}
+              onDeleteSheet={deleteSheet}
+              // 매핑을 요청하기 전에 이 주문표를 서버가 찾을 수 있게 등록한다.
+              // 실서비스에서는 주문표 저장 시점에 서버로 올라가고 이 줄은 사라진다.
+              onOrder={(p) => { registerSheet(p); setOrderSheet(p); setScreen("order-confirm"); }}
               showOrder={fromQr}
             />
           )}
-          {screen === "order-confirm" && pairingId && orderProfile && (
+          {screen === "order-confirm" && pairingId && orderSheet && (
             <OrderConfirmScreen
               pairingId={pairingId}
-              profile={orderProfile}
+              sheet={orderSheet}
               onBack={() => setScreen("saved")}
               onApproved={(id) => { setPlanId(id); setScreen("execution"); }}
             />
@@ -3152,7 +3152,7 @@ export default function App() {
               planId={planId}
               onHome={() => {
                 setScreen("saved"); setFromQr(false);
-                setPlanId(null); setOrderProfile(null); setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null);
+                setPlanId(null); setOrderSheet(null); setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null);
               }}
             />
           )}
@@ -3164,23 +3164,23 @@ export default function App() {
               guest={guest}
               onLogout={로그아웃}
               onLogin={() => setScreen("login")}
-              // 저장된 정보를 지우는 길. 프로필까지 함께 비운다.
+              // 저장된 정보를 지우는 길. 주문표까지 함께 비운다.
               onClearLocal={() => set확인대기({
                 title: "이 기기에서 정보를 지울까요?",
                 body: 계정
-                  // 서버에 프로필 삭제 경로가 없다. 지운 척하지 않는다.
-                  ? "이 기기에 있는 프로필과 호칭이 사라지고 로그아웃돼요. 서버에 저장해 둔 프로필은 남아 있어서, 다시 로그인하면 그대로 보입니다."
-                  : "저장한 프로필과 호칭이 모두 사라져요. 되돌릴 수 없어요.",
+                  // 서버에 주문표 삭제 경로가 없다. 지운 척하지 않는다.
+                  ? "이 기기에 있는 주문표와 호칭이 사라지고 로그아웃돼요. 서버에 저장해 둔 주문표는 남아 있어서, 다시 로그인하면 그대로 보입니다."
+                  : "저장한 주문표와 호칭이 모두 사라져요. 되돌릴 수 없어요.",
                 confirmLabel: "모두 지우기",
                 run: () => {
                   // 목 전용 함수가 아니라 계약의 삭제 메서드를 부른다.
                   // 실제 client 로 바꿔도 서버에 남은 것까지 함께 지워진다.
                   서버까지지우기();
-                  setProfiles([]); setName("");
-                  // 계정도 함께 푼다. 안 풀면 프로필을 다 지운 화면에 회원으로 남아
-                  // '저장된 프로필 관리' 가 빈 목록을 회원 것처럼 보여 준다.
+                  setSheets([]); setName("");
+                  // 계정도 함께 푼다. 안 풀면 주문표를 다 지운 화면에 회원으로 남아
+                  // '저장된 주문표 관리' 가 빈 목록을 회원 것처럼 보여 준다.
                   set계정(null); 서버에서온것.current = new Set();
-                  setOrderProfile(null); setPlanId(null);
+                  setOrderSheet(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가
                   // 터지면서 QR 만료 화면으로 튕겨 나간다. 방금 다 지웠는데 왜 그러는지
                   // 사용자는 알 수 없다.
@@ -3189,7 +3189,7 @@ export default function App() {
               })}
               // 연결이 살아 있으면 주문 경로를 끊지 않는다. 하단 탭과 같은 판단이다.
               // 끊으면 QR 을 다시 찍는 것 말고 되돌릴 방법이 없다.
-              onProfiles={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
+              onSheets={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
               onA11y={() => setScreen("a11y")}
               onPrivacy={() => setScreen("privacy")}
             />

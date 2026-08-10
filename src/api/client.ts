@@ -1,5 +1,5 @@
 import type {
-  ApproveInput, CartResult, RejectInput, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
+  ApproveInput, CartResult, RejectInput, MappingResponse, MappingState, PairingResult, PlanCreated, PlanStatus, OrderSheet, StepStatus,
 } from "@/domain/types";
 import { buildCart, buildMapping } from "@/api/mock";
 import { STEPS } from "@/domain/catalog";
@@ -39,7 +39,7 @@ export class KioBridgeError extends Error {
  */
 export interface KioBridgeApi {
   claimPairing(claimCode: string): Promise<PairingResult>;
-  requestMapping(pairingId: string, profileId: string): Promise<MappingResponse>;
+  requestMapping(pairingId: string, sheetId: string): Promise<MappingResponse>;
   /**
    * P0-4: 실행 계획은 오직 이 메서드에서만 만들어진다.
    * 사용자가 승인 버튼을 누르기 전에 이 함수를 호출하는 코드 경로가 있으면 요건 위반이다.
@@ -59,7 +59,7 @@ export interface KioBridgeApi {
   /**
    * '이 기기에서 정보 지우기'. 서버에 남은 것까지 함께 지운다.
    *
-   * 화면이 목 전용 함수(clearProfiles)를 직접 부르면, 실제 client 로 바꾸는 순간
+   * 화면이 목 전용 함수(clearSheets)를 직접 부르면, 실제 client 로 바꾸는 순간
    * 그 호출은 목의 Map 만 비우고 실서버 데이터는 그대로 남는다. 사용자에게는
    * "모두 지워요" 라고 말해 놓고 조용히 아무 일도 안 하게 된다.
    * 그래서 삭제도 계약에 넣는다.
@@ -84,30 +84,30 @@ export const setScenario = (patch: Partial<Scenario>): void => {
   scenario = { ...scenario, ...patch };
 };
 
-// 실제 백엔드는 profileId 를 받아 자기 저장소에서 프로필을 찾는다.
-// 목 구현에는 그 저장소가 없어서, 앱이 주문에 쓸 프로필을 여기에 등록해 둔다.
+// 실제 백엔드는 profileId 를 받아 자기 저장소에서 주문표를 찾는다.
+// 목 구현에는 그 저장소가 없어서, 앱이 주문에 쓸 주문표를 여기에 등록해 둔다.
 // 등록하지 않으면 requestMapping 이 사용자가 고른 적 없는 조건을 답으로 돌려주게 된다.
-// 실제 client 로 교체할 때 이 맵과 registerProfile 은 함께 사라진다.
+// 실제 client 로 교체할 때 이 맵과 registerSheet 은 함께 사라진다.
 // 지우는 경로를 같이 둔다. 화면의 '이 기기에서 정보 지우기'는 "모두 지워요"라고
 // 약속하는데, 여기 사본이 남으면 그 문장이 사실이 아니게 된다.
-const profiles = new Map<string, ProfileData>();
-export const registerProfile = (profile: ProfileData): void => {
-  profiles.set(profile.id, profile);
+const sheets = new Map<string, OrderSheet>();
+export const registerSheet = (sheet: OrderSheet): void => {
+  sheets.set(sheet.id, sheet);
 };
 /**
- * 등록해 둔 프로필을 id 로 찾는다.
+ * 등록해 둔 주문표를 id 로 찾는다.
  *
- * 팀 백엔드에는 프로필 저장소가 없어서, 후보 필터·추천·승인 때마다 내용을 함께
+ * 팀 백엔드에는 주문표 저장소가 없어서, 후보 필터·추천·승인 때마다 내용을 함께
  * 보내야 한다. 그 내용을 들고 있는 곳이 여기다. createApi 의 세 번째 인자로 넘긴다.
- * 서버가 profileId 로 찾아 줄 수 있게 되면 이 함수도 registerProfile 과 함께 사라진다.
+ * 서버가 profileId 로 찾아 줄 수 있게 되면 이 함수도 registerSheet 과 함께 사라진다.
  */
-export const getProfile = (id: string): ProfileData | undefined => profiles.get(id);
-export const unregisterProfile = (id: string): void => {
-  profiles.delete(id);
+export const getSheet = (id: string): OrderSheet | undefined => sheets.get(id);
+export const unregisterSheet = (id: string): void => {
+  sheets.delete(id);
 };
-export const clearProfiles = (): void => {
-  profiles.clear();
-  // 진행 중이던 매핑 세션도 같이 지운다. 프로필은 지웠는데 그 프로필로 만든
+export const clearSheets = (): void => {
+  sheets.clear();
+  // 진행 중이던 매핑 세션도 같이 지운다. 주문표는 지웠는데 그 주문표로 만든
   // 답이 서버에 남아 있으면 "모두 지워요" 가 여전히 사실이 아니다.
   sessions.clear();
   pairings.clear();
@@ -146,7 +146,7 @@ const pairings = new Map<string, number>();
 
 // 서버가 이 페어링에 뭐라고 답했는지. 승인 검사의 기준이 된다.
 const sessions = new Map<string, {
-  profileId: string;
+  sheetId: string;
   expiresAt: number;
   approved: boolean;
   result: MappingState;
@@ -174,7 +174,7 @@ export const mockApi: KioBridgeApi = {
     return { pairingId, kioskName: "OO분식 1번 키오스크", expiresAt };
   },
 
-  async requestMapping(pairingId, profileId) {
+  async requestMapping(pairingId, sheetId) {
     await delay(delays.mapping);
     // 페어링을 거치지 않은 pairingId 로는 매핑하지 않는다. 실제 서버는
     // 세션을 모르면 거절한다. 목이 아무 값이나 받아 주면 화면이 그 경로를
@@ -182,20 +182,20 @@ export const mockApi: KioBridgeApi = {
     if (!pairings.has(pairingId)) {
       throw new KioBridgeError("PAIRING_NOT_FOUND", "키오스크와 다시 연결해 주세요", true);
     }
-    // 등록되지 않은 프로필로는 답을 만들지 않는다. undefined 를 그대로 넘기면
+    // 등록되지 않은 주문표로는 답을 만들지 않는다. undefined 를 그대로 넘기면
     // 사용자가 고른 적 없는 임의 메뉴가 승인 화면까지 올라간다.
-    // 지운 프로필로 조회하는 경우도 여기서 걸린다.
-    const profile = profiles.get(profileId);
-    if (!profile) {
-      throw new KioBridgeError("PROFILE_NOT_FOUND", "프로필을 찾을 수 없어요", false);
+    // 지운 주문표로 조회하는 경우도 여기서 걸린다.
+    const sheet = sheets.get(sheetId);
+    if (!sheet) {
+      throw new KioBridgeError("PROFILE_NOT_FOUND", "주문표를 찾을 수 없어요", false);
     }
-    // 응답 내용은 전부 이 프로필에서 나온다. 시나리오 스위치는 결과의 '종류'만 고른다.
-    const res = buildMapping(scenario.mapping, profile);
+    // 응답 내용은 전부 이 주문표에서 나온다. 시나리오 스위치는 결과의 '종류'만 고른다.
+    const res = buildMapping(scenario.mapping, sheet);
     // 서버가 자기가 뭐라고 답했는지 기억해 둔다. 이게 없으면 승인 검사에서
     // 클라이언트가 보낸 mappingResult 를 믿어야 하고, candidateId 가 실제로
     // 우리가 준 후보인지도 확인할 수 없다.
     sessions.set(pairingId, {
-      profileId,
+      sheetId,
       expiresAt: pairings.get(pairingId)!,
       approved: false,
       result: res.result,
@@ -204,11 +204,11 @@ export const mockApi: KioBridgeApi = {
       // 화면이 보여 준 값과 결과 화면의 값이 어긋나면 안 되기 때문이다.
       item: res.item && { displayName: res.item.displayName, priceText: res.item.priceText },
       byId: Object.fromEntries((res.candidates ?? []).map((c) => [c.candidateId, { displayName: c.displayName, priceText: c.priceText }])),
-      // 수량은 응답이 아니라 프로필에서 읽는다.
+      // 수량은 응답이 아니라 주문표에서 읽는다.
       // 응답의 item 에서 꺼내면 clarification 처럼 item 이 없는 상태에서 undefined 가 되고,
       // buildCart 가 조용히 1개로 떨어뜨린다. 3개를 저장해 둔 사람이 1개를 받는다.
       // 수량은 사용자가 고른 값이지 서버가 정하는 값이 아니다.
-      수량: profile.selections?.["수량"]?.[0],
+      수량: sheet.selections?.["수량"]?.[0],
     });
     return res;
   },
@@ -220,9 +220,9 @@ export const mockApi: KioBridgeApi = {
     if (!session) {
       throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
     }
-    // 매핑을 요청한 프로필과 승인하는 프로필이 같아야 한다.
+    // 매핑을 요청한 주문표와 승인하는 주문표가 같아야 한다.
     // 다르면 A 로 찾아 놓고 B 를 담는 게 된다.
-    if (session.profileId !== input.profileId) {
+    if (session.sheetId !== input.sheetId) {
       throw new KioBridgeError("PROFILE_MISMATCH", "메뉴를 다시 찾아 주세요", true);
     }
     // 끝난 연결로는 승인할 수 없다. 화면이 막고 있지만 서버도 다시 본다.
@@ -297,13 +297,13 @@ export const mockApi: KioBridgeApi = {
   async reject(input) {
     const session = sessions.get(input.pairingId);
     if (!session) return;                       // 이미 없는 세션이면 조용히 끝낸다
-    if (session.profileId !== input.profileId) return;
+    if (session.sheetId !== input.sheetId) return;
     sessions.delete(input.pairingId);
   },
 
   async forgetAll() {
-    // clearProfiles 가 profiles·sessions·plans 를 모두 비운다.
-    clearProfiles();
+    // clearSheets 가 profiles·sessions·plans 를 모두 비운다.
+    clearSheets();
   },
 
   async getPlanStatus(planId) {
@@ -349,6 +349,6 @@ export const mockApi: KioBridgeApi = {
  */
 export const api: KioBridgeApi =
   import.meta.env.VITE_BACKEND === "team"
-    ? createApi(createTeamBackend(), "chicken-store", getProfile)
+    ? createApi(createTeamBackend(), "chicken-store", getSheet)
     : mockApi;
 export const POLL_MS = 600;

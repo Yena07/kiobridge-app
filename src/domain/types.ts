@@ -1,7 +1,7 @@
 // 로그인은 끝까지 선택이다. login·signup 은 welcome 과 계정 화면에서만 들어갈 수 있고,
 // 주 흐름(saved → order-confirm → execution)은 이 둘을 거치지 않는다.
 export type Screen =
-  | "welcome" | "login" | "signup" | "name" | "greeting" | "profile" | "saved"
+  | "welcome" | "login" | "signup" | "name" | "greeting" | "sheet" | "saved"
   | "order-confirm" | "execution"
   | "a11y"      // 접근성 설정
   | "privacy";  // 무엇을 저장하고 무엇을 저장하지 않는지
@@ -11,8 +11,17 @@ export type PairingState = "connecting" | "connected" | "failed" | "expired";
 export type MappingState = "exact" | "clarification" | "not_found" | "changed" | "low_confidence";
 export type StepStatus = "done" | "active" | "waiting" | "failed";
 
-// P0-1: 프로필은 의미값(사람이 읽는 텍스트)만 담는다. 상품 ID·화면 좌표 금지.
-export interface ProfileData {
+/**
+ * 사용자가 미리 저장해 둔 주문 하나.
+ *
+ * 예전 이름은 ProfileData 였다. '프로필' 은 사람을 가리키는 말로 읽히는데 실제로 담기는 건
+ * 주문 하나의 조건 묶음이라(닭강정 · 매운맛 · 순살 · 종이컵 · 1개) 이름과 내용이 어긋났다.
+ *
+ * 백엔드는 이걸 여전히 profile 이라 부른다(profileId · /users/{id}/profiles).
+ * 그 이름은 계약이라 바꾸지 않고, 서버로 나가는 경계에서만 맞춰 준다(api/account.ts).
+ */
+// P0-1: 주문표는 의미값(사람이 읽는 텍스트)만 담는다. 상품 ID·화면 좌표 금지.
+export interface OrderSheet {
   id: string;
   menuName: string;
   place: PlaceType;
@@ -45,7 +54,7 @@ export interface MappedOption {
 //
 // imageUrl 은 키오스크가 오늘 걸어 둔 메뉴 사진이다. 앱이 이름을 보고 짐작하는 게 아니라
 // 매핑 응답에 실려 온 것만 쓴다. 사진이 없으면 안 보여 준다 — 틀린 사진을 보여 주느니
-// 아예 없는 게 낫다. 프로필(ProfileData)에는 이 값을 저장하지 않으므로 P0-1(의미값만)은 그대로다.
+// 아예 없는 게 낫다. 주문표(OrderSheet)에는 이 값을 저장하지 않으므로 P0-1(의미값만)은 그대로다.
 export interface MappedItem {
   displayName: string;
   priceText: string;
@@ -92,7 +101,7 @@ export interface MappingResponse {
    * 조건만 보여 줄 때 쓴다. item 에 빈 displayName 을 넣어 실어 보내면
    * 타입이 거짓말을 하게 되고, 누가 item.displayName 을 그리면 빈칸이 뜬다.
    */
-  profileOptions?: MappedOption[];
+  sheetOptions?: MappedOption[];
 }
 
 // P0-7: 최종 상태는 cart_ready뿐. completed/paid 상태는 존재하지 않는다.
@@ -120,14 +129,16 @@ export interface PairingResult {
  */
 export interface RejectInput {
   pairingId: string;
-  profileId: string;
+  /** 어느 주문표로 찾은 것을 거절하는가. 서버로는 profileId 라는 이름으로 나간다. */
+  sheetId: string;
   /** 왜 거절했는지. 화면이 묻지 않으면 비워 둔다 — 지어내지 않는다. */
   note?: string;
 }
 
 export interface ApproveInput {
   pairingId: string;
-  profileId: string;
+  /** 어느 주문표로 찾은 것을 승인하는가. 서버로는 profileId 라는 이름으로 나간다. */
+  sheetId: string;
   mappingResult: MappingState;
   /** clarification: 여러 후보 중 사용자가 고른 것 */
   candidateId?: string;

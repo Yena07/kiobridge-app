@@ -1,5 +1,5 @@
-﻿import type {
-  ApproveInput, CartResult, MappedOption, RejectInput, MappingResponse, PairingResult, PlanCreated, PlanStatus, ProfileData, StepStatus,
+import type {
+  ApproveInput, CartResult, MappedOption, RejectInput, MappingResponse, PairingResult, PlanCreated, PlanStatus, OrderSheet, StepStatus,
 } from "@/domain/types";
 import {
   toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput,
@@ -40,10 +40,10 @@ export interface Backend {
   /**
    * POST /api/v1/candidate-filters — severity=BLOCK 위반 후보를 제외하고 생존 후보 반환
    *
-   * profile 은 선택 항목이다. 서버가 프로필을 id 로 찾아 줄 수 있으면 필요 없지만,
-   * 팀 백엔드는 프로필 저장소가 없어서 내용을 그대로 받아야 한다.
+   * profile 은 선택 항목이다. 서버가 주문표를 id 로 찾아 줄 수 있으면 필요 없지만,
+   * 팀 백엔드는 주문표 저장소가 없어서 내용을 그대로 받아야 한다.
    */
-  filterCandidates(input: { environmentId: string; profileId: string; profile?: ProfileData }): Promise<{
+  filterCandidates(input: { environmentId: string; profileId: string; profile?: OrderSheet }): Promise<{
     survivingCandidateIds: string[];
     excluded: { candidateId: string; reasonCode: string; explanation: string }[];
     /** 후보 표시 정보. 서버가 이름·가격을 함께 주면 여기 실린다. */
@@ -53,9 +53,10 @@ export interface Backend {
   /** POST /api/v1/recommendations — 1순위 추천·이유·대안·제외 사유·확신도 */
   recommend(input: {
     environmentId: string;
+    /** 백엔드가 이 값을 profileId 라 부른다. 앱 쪽 이름(sheetId)은 경계에서 여기로 맞춘다. */
     profileId: string;
     survivingCandidateIds: string[];
-    profile?: ProfileData;
+    profile?: OrderSheet;
   }): Promise<RecommendationResult>;
 
   /** POST /api/v1/sessions/:sessionId/submission — 검증 X, 저장만 */
@@ -135,14 +136,14 @@ export const LOW_CONFIDENCE = 0.7;
 /**
  * 화면이 쓰는 API 를 백엔드 위에 조립한다.
  *
- * getProfile 은 프로필 id 로 실제 내용을 찾아 주는 함수다. 팀 백엔드는 프로필
+ * getSheet 은 주문표 id 로 실제 내용을 찾아 주는 함수다. 팀 백엔드는 주문표
  * 저장소가 없어서 매번 내용을 함께 보내야 하고, 그 내용은 화면이 들고 있다.
  * 서버가 id 로 찾아 줄 수 있게 되면 이 인자는 빼면 된다.
  */
 export function createApi(
   backend: Backend,
   environmentId = "chicken-store",
-  getProfile?: (profileId: string) => ProfileData | undefined,
+  getSheet?: (sheetId: string) => OrderSheet | undefined,
 ): KioBridgeApi {
   // 세션 하나에 대해 서버가 뭐라고 답했는지. 승인 검사와 실행 조회의 기준이 된다.
   // 페어링 만료 시각. 승인 때 끝난 연결인지 다시 보려면 필요하다.
@@ -168,7 +169,7 @@ export function createApi(
   const 세션 = new Map<string, {
     rec: RecommendationResult;
     result: MappingResponse["result"];
-    profileId: string;
+    sheetId: string;
     expiresAt: number;
     executed?: boolean;
   }>();
@@ -196,13 +197,13 @@ export function createApi(
       return out;
     },
 
-    async requestMapping(pairingId, profileId) {
-      // 서버에 프로필 저장소가 없으면 내용을 함께 보내야 한다. 있으면 id 만으로 충분하다.
-      const profile = getProfile?.(profileId);
+    async requestMapping(pairingId, sheetId) {
+      // 서버에 주문표 저장소가 없으면 내용을 함께 보내야 한다. 있으면 id 만으로 충분하다.
+      const profile = getSheet?.(sheetId);
       const env = 환경.get(pairingId) ?? environmentId;
-      const filtered = await backend.filterCandidates({ environmentId: env, profileId, ...(profile ? { profile } : {}) });
+      const filtered = await backend.filterCandidates({ environmentId: env, profileId: sheetId, ...(profile ? { profile } : {}) });
       const rec = await backend.recommend({
-        environmentId: env, profileId, survivingCandidateIds: filtered.survivingCandidateIds,
+        environmentId: env, profileId: sheetId, survivingCandidateIds: filtered.survivingCandidateIds,
         ...(profile ? { profile } : {}),
       });
       // 이름·가격을 추천이 안 주면 후보 필터가 준 것으로 채운다.
@@ -212,7 +213,7 @@ export function createApi(
       }
       const result = 판정(rec);
       세션.set(pairingId, {
-        rec, result, profileId,
+        rec, result, sheetId,
         // 페어링을 안 거치고 바로 매핑을 부르는 경우는 없어야 하지만,
         // 없으면 만료를 알 수 없으므로 0 으로 두어 승인에서 막힌다.
         expiresAt: 만료.get(pairingId) ?? 0,
@@ -261,7 +262,7 @@ export function createApi(
           // '맞았는지' 는 판단하지 않는다 — 어느 후보를 고르느냐에 따라 달라진다.
           // 서버가 준 matched 를 그대로 쓴다. 전부 true 로 덮으면
           // 어느 후보를 고르든 안 맞는 축이 있다는 사실이 사라진다.
-          profileOptions: rec.matchedOptions,
+          sheetOptions: rec.matchedOptions,
           // 상품 ID 를 화면으로 내보내지 않는다. 이번 응답 안에서만 쓰는 표식으로 바꾼다.
           candidates: 보일후보
             .map((id, i) => ({
@@ -293,7 +294,7 @@ export function createApi(
       const s = 세션.get(input.pairingId);
       if (!s) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
       // client.ts 와 같은 검사를 여기서도 한다. 한쪽만 막으면 구현을 바꿀 때 샌다.
-      if (s.profileId !== input.profileId) {
+      if (s.sheetId !== input.sheetId) {
         throw new KioBridgeError("PROFILE_MISMATCH", "메뉴를 다시 찾아 주세요", true);
       }
       if (s.expiresAt <= Date.now()) {
@@ -348,9 +349,9 @@ export function createApi(
       let planId: string;
       try {
         // 제출 → 검증 → 실행. 어느 단계에서 멈췄는지 구분해서 알린다.
-        // 프로필 내용을 함께 넘긴다. 팀 백엔드는 프로필 저장소가 없어서
+        // 주문표 내용을 함께 넘긴다. 팀 백엔드는 주문표 저장소가 없어서
         // 승인 때도 내용을 다시 받아야 제출물을 조립할 수 있다.
-        const profile = getProfile?.(input.profileId);
+        const profile = getSheet?.(input.sheetId);
         await backend.submit(input.pairingId, { ...input, candidateId, ...(profile ? { profile } : {}) });
         const v = await backend.validate(input.pairingId);
         if (!v.valid) {
@@ -376,11 +377,11 @@ export function createApi(
     async reject(input) {
       const s = 세션.get(input.pairingId);
       // 매핑도 안 한 상태면 거절할 대상이 없다. 조용히 끝낸다.
-      if (!s || s.profileId !== input.profileId) return;
+      if (!s || s.sheetId !== input.sheetId) return;
       세션.delete(input.pairingId);
       if (!backend.reject) return;
       try {
-        const profile = getProfile?.(input.profileId);
+        const profile = getSheet?.(input.sheetId);
         await backend.reject(input.pairingId, { ...input, ...(profile ? { profile } : {}) });
       } catch {
         // 기록에 실패해도 화면은 되돌아간다.
@@ -526,7 +527,7 @@ interface RecommendationResponse {
  *
  * 서버가 값을 안 주는 축은 넣지 않는다. 모르는 것을 '맞았다' 고 하지 않는다.
  */
-function 확인표(c: KitCandidate | undefined, p: ProfileData): MappedOption[] {
+function 확인표(c: KitCandidate | undefined, p: OrderSheet): MappedOption[] {
   if (!c) return [];
   const ctx = toChickenStoreContext(p);
   const 축: { label: string; 고른: string | number | null; 후보: string | undefined; 어긋날때: string }[] = [
@@ -618,18 +619,18 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 추천 = new Map<string, RecommendationResponse>();
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
-  // 정규화를 거친 프로필·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
-  // 키는 환경 + 정규화에 넣은 입력 전체다. 프로필 id 만 쓰면 프로필을 고치거나
+  // 정규화를 거친 주문표·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
+  // 키는 환경 + 정규화에 넣은 입력 전체다. 주문표 id 만 쓰면 주문표를 고치거나
   // 다른 키오스크에 붙었을 때 낡은 값을 그대로 쓰게 된다.
   const 정규화됨 = new Map<string, { profile: CanonicalProfile; sessionContext: ChickenStoreSessionContext }>();
-  // 승인은 매핑 때 쓴 그 키를 찾아야 한다. 프로필별로 마지막 키를 기억해 둔다.
+  // 승인은 매핑 때 쓴 그 키를 찾아야 한다. 주문표별로 마지막 키를 기억해 둔다.
   const 마지막키 = new Map<string, string>();
 
-  const 캐시키 = (environmentId: string, p: ProfileData) => {
+  const 캐시키 = (environmentId: string, p: OrderSheet) => {
     // collectedAt 은 부를 때마다 달라진다(현재 시각). 키에 넣으면 캐시가 한 번도
     // 안 맞는다. 결과를 바꾸는 건 고른 조건과 접근성 설정이라 그것만 넣는다.
-    const { collectedAt: _버림, ...프로필 } = toProfileNormalizationInput(p);
-    const 키 = `${environmentId}|${JSON.stringify(프로필)}|${JSON.stringify(toContextNormalizationInput(p).contextInput)}`;
+    const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p);
+    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p).contextInput)}`;
     마지막키.set(p.id, 키);
     return 키;
   };
@@ -642,11 +643,11 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
    *   - 킷 스키마에 맞는지 아무도 확인하지 않는다. 승인 때 가서야 터진다.
    *
    * 정규화 경로는 원자료를 받아 표준형을 만들어 주고 킷으로 검증까지 해 준다.
-   * 그걸 그대로 후보 필터·추천·승인에 쓴다. 결과는 프로필당 한 번만 받아 둔다.
+   * 그걸 그대로 후보 필터·추천·승인에 쓴다. 결과는 주문표당 한 번만 받아 둔다.
    */
-  const 정규화 = async (environmentId: string, p: ProfileData) => {
-    // 같은 프로필이라도 붙은 키오스크가 다르면 표준형이 달라질 수 있다.
-    // 프로필 내용을 고쳤을 때도 낡은 값을 쓰면 안 된다. 둘 다 키에 넣는다.
+  const 정규화 = async (environmentId: string, p: OrderSheet) => {
+    // 같은 주문표라도 붙은 키오스크가 다르면 표준형이 달라질 수 있다.
+    // 주문표 내용을 고쳤을 때도 낡은 값을 쓰면 안 된다. 둘 다 키에 넣는다.
     const 키 = 캐시키(environmentId, p);
     const 있음 = 정규화됨.get(키);
     if (있음) return 있음;
@@ -676,7 +677,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       throw new KioBridgeError("RECONFIRM_REQUIRED", 첫줄 ?? "저장하신 조건을 다시 확인해 주세요", true);
     }
 
-    // 마지막 관문. 프로필과 세션 맥락을 합쳐 놓고 다시 본다.
+    // 마지막 관문. 주문표와 세션 맥락을 합쳐 놓고 다시 본다.
     //
     // 개별 정규화는 각자 반쪽만 검사한다. 합쳐야 보이는 게 있다 —
     // 특히 알레르기가 UNKNOWN 이면 여기서만 걸린다.
@@ -702,7 +703,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       throw new KioBridgeError(
         오류[0]?.code ?? "NOT_RECOMMENDATION_READY",
         알레르기모름
-          ? "저장하신 알레르기 중에 저희가 확인하지 못한 것이 있어요. 프로필에서 다시 골라 주시거나 직원에게 도움을 청해 주세요."
+          ? "저장하신 알레르기 중에 저희가 확인하지 못한 것이 있어요. 주문표에서 다시 골라 주시거나 직원에게 도움을 청해 주세요."
           : "저장하신 조건을 다시 확인해 주세요.",
         true,
       );
@@ -744,10 +745,10 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      * 이 계층이 들고 있는 것을 비운다.
      *
      * 화면의 '이 기기에서 정보 지우기' 가 여기까지 닿아야 한다. 안 그러면
-     * 정규화된 프로필과 세션 맥락(고른 알레르기·맵기 전부)이 메모리에 그대로
+     * 정규화된 주문표와 세션 맥락(고른 알레르기·맵기 전부)이 메모리에 그대로
      * 남는다. 화면이 약속한 일이 실제로 일어나지 않는 것이다.
      *
-     * 세션 하나만 지우라고 불려도 프로필 단위 캐시까지 비운다. 이 계층은
+     * 세션 하나만 지우라고 불려도 주문표 단위 캐시까지 비운다. 이 계층은
      * 한 번에 한 사람을 도우므로, 남겨 둘 이유가 없다.
      */
     async forgetSession(sessionId) {
@@ -787,7 +788,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      * 추천 응답에는 그 값이 없어서, 이게 없으면 화면에 상품 ID 밖에 보여 줄 게 없다.
      */
     async filterCandidates({ environmentId, profile }) {
-      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "주문표를 찾을 수 없어요", false);
       const { sessionContext } = await 정규화(environmentId, profile);
       const r = await 보내기<CandidateFilterResponse>("/api/v1/candidate-filters", { environmentId, sessionContext });
 
@@ -825,7 +826,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      * 그 판단이 옳아서 여기서도 따로 보내지 않는다.
      */
     async recommend({ environmentId, profile }) {
-      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "주문표를 찾을 수 없어요", false);
       const 정 = await 정규화(environmentId, profile);
       const r = await 보내기<RecommendationResponse>("/api/v1/recommendations", {
         environmentId, profile: 정.profile, sessionContext: 정.sessionContext,
@@ -873,9 +874,9 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      * P0-4 는 그대로다 — 이 호출은 승인 버튼 핸들러 안에서만 일어난다.
      */
     async submit(sessionId, submission) {
-      const input = submission as ApproveInput & { candidateId?: string; profile?: ProfileData };
+      const input = submission as ApproveInput & { candidateId?: string; profile?: OrderSheet };
       const profile = input.profile;
-      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "프로필을 찾을 수 없어요", false);
+      if (!profile) throw new KioBridgeError("PROFILE_REQUIRED", "주문표를 찾을 수 없어요", false);
       const rec = 추천.get(profile.id);
       if (!rec) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
 
@@ -930,7 +931,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
      * 키오스크는 건드려지지 않는다.
      */
     async reject(sessionId, payload) {
-      const input = payload as RejectInput & { profile?: ProfileData };
+      const input = payload as RejectInput & { profile?: OrderSheet };
       const profile = input.profile;
       if (!profile) return;
       const 키 = 마지막키.get(profile.id);

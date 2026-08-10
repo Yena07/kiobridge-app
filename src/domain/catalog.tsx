@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { DetailOption, PlaceType, ProfileData } from "@/domain/types";
+import type { DetailOption, PlaceType, OrderSheet } from "@/domain/types";
 import { Pictogram } from "@/design/Pictogram";
 
 // 키를 PlaceType 으로 좁혀 둔다. string 이면 장소를 새로 넣을 때 한쪽만 채워도
@@ -20,7 +20,7 @@ export const DETAIL_OPTIONS: Record<NonNullable<PlaceType>, DetailOption[]> = {
   // fixture 에 없는 축(드라이브스루·버거 세트·사이드 변경 등)을 화면에만 두면
   // 어르신은 골랐는데 결과는 아무것도 달라지지 않는, 물어만 보고 버리는 질문이 된다.
   //
-  // 메뉴 이름은 여기 두지 않는다. 프로필 화면 맨 위의 자유 입력(menuName)으로 받는다.
+  // 메뉴 이름은 여기 두지 않는다. 주문표 화면 맨 위의 자유 입력(menuName)으로 받는다.
   // 사용자가 부르는 이름("닭강정")과 오늘 화면의 이름("매운 순살 닭강정")을 맞추는 건
   // 매핑의 일이지 앱이 목록에서 고르게 할 일이 아니다.
   음식점: [
@@ -74,10 +74,10 @@ export const PLACE_ICONS: Record<NonNullable<PlaceType>, ReactNode> = {
   관공서: <Pictogram name="bank" size={19} />,
 };
 
-// 메뉴 사진은 여기 두지 않는다. 저장된 프로필은 의미값(텍스트)만 갖고,
+// 메뉴 사진은 여기 두지 않는다. 저장된 주문표는 의미값(텍스트)만 갖고,
 // 사진은 키오스크 카탈로그가 매핑 응답으로 내려 준 것만 쓴다. (src/api/mock.ts)
 
-export const MOCK_PROFILES: ProfileData[] = [
+export const MOCK_SHEETS: OrderSheet[] = [
   {
     id: "1",
     menuName: "닭강정",
@@ -100,7 +100,7 @@ export const MOCK_PROFILES: ProfileData[] = [
     id: "3",
     menuName: "닭강정",
     place: "음식점",
-    // 같은 가게, 다른 사람의 조건. 첫 번째 프로필과 모든 축이 반대라
+    // 같은 가게, 다른 사람의 조건. 첫 번째 주문표와 모든 축이 반대라
     // 저장한 조건이 결과를 실제로 바꾼다는 걸 목록에서 바로 보여 준다.
     selections: {
       "이용 방식": ["먹고 가기"], "맵기": ["순한맛"], "형태": ["뼈"],

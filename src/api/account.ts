@@ -1,15 +1,15 @@
-import type { PlaceType, ProfileData } from "@/domain/types";
+import type { PlaceType, OrderSheet } from "@/domain/types";
 // client.ts 의 KioBridgeError 를 그대로 쓴다. 화면은 이미 그 타입 하나로 오류를 다루고 있어서
 // 계정 오류만 다른 타입이면 화면에 분기가 하나 더 생긴다. backend.ts 도 같은 방식이다.
 import { KioBridgeError } from "@/api/client";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 
 /**
- * 계정과 그 계정에 딸린 프로필.
+ * 계정과 그 계정에 딸린 주문표.
  *
  * 로그인은 이 앱에서 끝까지 **선택**이다. 심사 항목이 "로그인하지 않아도 추천부터 최종
  * 확인까지 전 과정이 동작하는지" 이므로, 이 파일의 어떤 것도 주 흐름을 막지 않는다.
- * 로그인해서 얻는 것은 하나뿐이다 — 저장해 둔 프로필을 다음에도 불러오는 것.
+ * 로그인해서 얻는 것은 하나뿐이다 — 저장해 둔 주문표를 다음에도 불러오는 것.
  *
  * ── 백엔드가 주는 것 (modules/member) ─────────────────────────────────────────
  *
@@ -20,15 +20,15 @@ import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
  *
  * ── 알고 써야 하는 것 세 가지 ────────────────────────────────────────────────
  *
- * 1. **토큰이 없다.** 응답이 { userId, loginId } 뿐이라 이후 프로필 요청은 userId 를
- *    경로에 넣어 부른다. 남의 userId 를 넣으면 남의 프로필이 열린다는 뜻이다.
+ * 1. **토큰이 없다.** 응답이 { userId, loginId } 뿐이라 이후 주문표 요청은 userId 를
+ *    경로에 넣어 부른다. 남의 userId 를 넣으면 남의 주문표가 열린다는 뜻이다.
  *    프론트에서 고칠 수 있는 문제가 아니라 docs/BACKEND_INTEGRATION.md 에 적어 두었다.
  *    그래서 화면 어디에도 "안전하게 보관됩니다" 같은 말을 쓰지 않는다.
  *
- * 2. **프로필 삭제 경로가 없다.** 화면에서 프로필을 지워도 서버에는 남는다.
+ * 2. **주문표 삭제 경로가 없다.** 화면에서 주문표를 지워도 서버에는 남는다.
  *    '이 기기에서 정보 지우기' 가 서버까지 닿지 못하므로 그 화면의 문구도 그렇게 적었다.
  *
- * 3. **place 가 @NotBlank 다.** 장소를 안 고른 프로필은 서버가 400 으로 막는다.
+ * 3. **place 가 @NotBlank 다.** 장소를 안 고른 주문표는 서버가 400 으로 막는다.
  *    올리기 전에 여기서 걸러내고, 왜 안 올라갔는지 화면이 말한다.
  */
 
@@ -40,10 +40,10 @@ export interface Account {
 export interface AccountApi {
   signup(loginId: string, password: string): Promise<Account>;
   login(loginId: string, password: string): Promise<Account>;
-  /** 이 계정이 서버에 저장해 둔 프로필. 없으면 빈 배열. */
-  listProfiles(userId: number): Promise<ProfileData[]>;
+  /** 이 계정이 서버에 저장해 둔 주문표. 없으면 빈 배열. */
+  listSheets(userId: number): Promise<OrderSheet[]>;
   /** (userId, profileId) 기준 upsert. 같은 id 로 다시 부르면 덮어쓴다. */
-  saveProfile(userId: number, profile: ProfileData): Promise<void>;
+  saveSheet(userId: number, sheet: OrderSheet): Promise<void>;
 }
 
 // ─── 입력 규칙 — 백엔드 제약을 그대로 옮긴다 ──────────────────────────────────
@@ -96,17 +96,17 @@ export const 비밀번호검사 = (v: string): string | null => {
 };
 
 /**
- * 이 프로필을 서버에 올릴 수 있는가. 올릴 수 있으면 null, 아니면 못 올리는 이유.
+ * 이 주문표를 서버에 올릴 수 있는가. 올릴 수 있으면 null, 아니면 못 올리는 이유.
  *
  * 지어내지 않는다 — 장소가 비어 있으면 서버가 받아 주지 않으므로, 올린 척하지 않고
  * 무엇을 하면 올라가는지 말한다.
  */
-export const 올릴수있나 = (p: ProfileData): string | null => {
+export const 올릴수있나 = (p: OrderSheet): string | null => {
   if (!p.place) return "장소를 정해 두시면 다음에도 불러올 수 있어요";
   if (!p.menuName.trim()) return "메뉴 이름이 있어야 저장할 수 있어요";
   if (p.menuName.length > MENU_NAME_MAX) return `메뉴 이름은 ${MENU_NAME_MAX}자까지 저장돼요`;
   if ((p.memo ?? "").length > MEMO_MAX) return `메모는 ${MEMO_MAX}자까지 저장돼요`;
-  if (p.id.length > PROFILE_ID_MAX) return "프로필을 저장할 수 없어요";
+  if (p.id.length > PROFILE_ID_MAX) return "주문표를 저장할 수 없어요";
   return null;
 };
 
@@ -126,13 +126,13 @@ const 장소목록: NonNullable<PlaceType>[] = ["카페", "음식점", "병원",
 /**
  * 서버가 준 place 문자열을 화면이 아는 장소로 좁힌다.
  *
- * 모르는 값이면 null 이다. 아무 장소로나 떨어뜨리면 병원 프로필이 음식점으로 되살아나고,
- * 그 프로필로 주문하면 어르신이 병원에서 닭강정을 승인하라는 화면을 받는다.
+ * 모르는 값이면 null 이다. 아무 장소로나 떨어뜨리면 병원 주문표가 음식점으로 되살아나고,
+ * 그 주문표로 주문하면 어르신이 병원에서 닭강정을 승인하라는 화면을 받는다.
  */
 const 장소읽기 = (v: string): PlaceType =>
   (장소목록 as string[]).includes(v) ? (v as PlaceType) : null;
 
-const 프로필로 = (r: UserProfileResponse): ProfileData => ({
+const 주문표읽기 = (r: UserProfileResponse): OrderSheet => ({
   id: r.profileId,
   menuName: r.menuName,
   place: 장소읽기(r.place),
@@ -149,14 +149,14 @@ export const setAccountMockDelay = (ms: number): void => { 목지연 = ms; };
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /*
- * 목은 브라우저 메모리에만 있다. 새로고침하면 계정도 프로필도 사라진다.
+ * 목은 브라우저 메모리에만 있다. 새로고침하면 계정도 주문표도 사라진다.
  *
  * 비밀번호를 평문으로 들고 있는데, 이 Map 은 탭이 살아 있는 동안 그 탭 안에만 존재하고
  * 네트워크로 나가지도 디스크에 남지도 않는다. 실제 저장은 서버가 bcrypt 로 한다.
  * localStorage 로 옮기지 말 것 — 옮기는 순간 평문 비밀번호가 디스크에 남는다.
  */
 const 계정들 = new Map<string, { userId: number; password: string }>();
-const 서버프로필 = new Map<number, Map<string, ProfileData>>();
+const 서버주문표 = new Map<number, Map<string, OrderSheet>>();
 let 다음userId = 1;
 
 export const mockAccount: AccountApi = {
@@ -189,26 +189,26 @@ export const mockAccount: AccountApi = {
     return { userId: 계정.userId, loginId: 아이디 };
   },
 
-  async listProfiles(userId) {
+  async listSheets(userId) {
     await delay(목지연);
-    return [...(서버프로필.get(userId)?.values() ?? [])];
+    return [...(서버주문표.get(userId)?.values() ?? [])];
   },
 
-  async saveProfile(userId, profile) {
+  async saveSheet(userId, sheet) {
     await delay(목지연);
-    const 문제 = 올릴수있나(profile);
+    const 문제 = 올릴수있나(sheet);
     if (문제) throw new KioBridgeError("INVALID_REQUEST", 문제, true);
-    const 것들 = 서버프로필.get(userId) ?? new Map<string, ProfileData>();
+    const 것들 = 서버주문표.get(userId) ?? new Map<string, OrderSheet>();
     // 서버가 (userId, profileId) 유일 제약으로 upsert 한다. 목도 같게 둔다.
-    것들.set(profile.id, { ...profile });
-    서버프로필.set(userId, 것들);
+    것들.set(sheet.id, { ...sheet });
+    서버주문표.set(userId, 것들);
   },
 };
 
 /** 테스트가 목 저장소를 비운다. 앱은 부르지 않는다. */
 export const clearAccountMock = (): void => {
   계정들.clear();
-  서버프로필.clear();
+  서버주문표.clear();
   다음userId = 1;
 };
 
@@ -279,23 +279,23 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
     login: (loginId, password) =>
       부르기<Account>("POST", "/api/v1/auth/login", { loginId: loginId.trim(), password }),
 
-    async listProfiles(userId) {
+    async listSheets(userId) {
       const r = await 부르기<UserProfileResponse[]>("GET", `/api/v1/users/${encodeURIComponent(userId)}/profiles`);
-      return (r ?? []).map(프로필로);
+      return (r ?? []).map(주문표읽기);
     },
 
-    async saveProfile(userId, profile) {
+    async saveSheet(userId, sheet) {
       // 서버가 400 으로 막을 것을 미리 거른다. 400 은 code 없는 스프링 기본 응답이라
       // 사용자에게 무엇이 문제인지 말해 줄 수 없다.
-      const 문제 = 올릴수있나(profile);
+      const 문제 = 올릴수있나(sheet);
       if (문제) throw new KioBridgeError("PROFILE_NOT_UPLOADABLE", 문제, true);
       await 부르기<UserProfileResponse>("POST", `/api/v1/users/${encodeURIComponent(userId)}/profiles`, {
-        profileId: profile.id,
-        menuName: profile.menuName.trim(),
+        profileId: sheet.id,
+        menuName: sheet.menuName.trim(),
         // 위에서 place 가 비어 있으면 걸렀으므로 여기서는 반드시 있다.
-        place: profile.place,
-        selections: profile.selections ?? {},
-        memo: profile.memo ?? "",
+        place: sheet.place,
+        selections: sheet.selections ?? {},
+        memo: sheet.memo ?? "",
       });
     },
   };

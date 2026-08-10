@@ -5,13 +5,13 @@ import {
   LOGIN_ID_MAX, PASSWORD_MIN,
 } from "./account";
 import { KioBridgeError } from "./client";
-import type { ProfileData } from "@/domain/types";
+import type { OrderSheet } from "@/domain/types";
 
 // 이 파일이 잠그는 것은 하나다 — 로그인은 선택이지만, 하기로 한 사람에게는
 // 화면이 말한 그대로 동작해야 한다. 저장했다고 했으면 저장돼 있어야 하고,
 // 안 된 것은 안 됐다고 말해야 한다.
 
-const 프로필 = (over: Partial<ProfileData> = {}): ProfileData => ({
+const 주문표 = (over: Partial<OrderSheet> = {}): OrderSheet => ({
   id: "p1",
   menuName: "닭강정",
   place: "음식점",
@@ -71,22 +71,22 @@ describe("비밀번호검사 — 길이는 글자로, 상한은 바이트로", (
   });
 });
 
-describe("올릴수있나 — 서버가 받아 주지 않을 프로필을 미리 가린다", () => {
+describe("올릴수있나 — 서버가 받아 주지 않을 주문표를 미리 가린다", () => {
   it("장소가 없으면 못 올린다", () => {
     // 서버의 place 가 @NotBlank 다. 올려 봐야 code 없는 400 이라 이유를 전할 수 없다.
-    expect(올릴수있나(프로필({ place: null }))).toBe("장소를 정해 두시면 다음에도 불러올 수 있어요");
+    expect(올릴수있나(주문표({ place: null }))).toBe("장소를 정해 두시면 다음에도 불러올 수 있어요");
   });
 
   it("장소가 있으면 올릴 수 있다", () => {
-    expect(올릴수있나(프로필())).toBeNull();
+    expect(올릴수있나(주문표())).toBeNull();
   });
 
   it("메뉴 이름이 100자를 넘으면 못 올린다", () => {
-    expect(올릴수있나(프로필({ menuName: "가".repeat(101) }))).not.toBeNull();
+    expect(올릴수있나(주문표({ menuName: "가".repeat(101) }))).not.toBeNull();
   });
 
   it("메모가 500자를 넘으면 못 올린다", () => {
-    expect(올릴수있나(프로필({ memo: "가".repeat(501) }))).not.toBeNull();
+    expect(올릴수있나(주문표({ memo: "가".repeat(501) }))).not.toBeNull();
   });
 });
 
@@ -145,44 +145,44 @@ describe("목 — 로그인", () => {
   });
 });
 
-describe("목 — 프로필", () => {
-  it("올린 프로필을 그대로 돌려준다", async () => {
+describe("목 — 주문표", () => {
+  it("올린 주문표를 그대로 돌려준다", async () => {
     const a = await mockAccount.signup("할머니1", "1234");
-    await mockAccount.saveProfile(a.userId, 프로필());
-    expect(await mockAccount.listProfiles(a.userId)).toEqual([프로필()]);
+    await mockAccount.saveSheet(a.userId, 주문표());
+    expect(await mockAccount.listSheets(a.userId)).toEqual([주문표()]);
   });
 
   it("같은 id 로 다시 올리면 덮어쓴다", async () => {
     // 서버가 (userId, profileId) 유일 제약으로 upsert 한다. 목도 같아야
-    // 프로필을 고쳤을 때 화면이 목과 실서버에서 다르게 동작하지 않는다.
+    // 주문표를 고쳤을 때 화면이 목과 실서버에서 다르게 동작하지 않는다.
     const a = await mockAccount.signup("할머니1", "1234");
-    await mockAccount.saveProfile(a.userId, 프로필());
-    await mockAccount.saveProfile(a.userId, 프로필({ menuName: "고친 이름" }));
-    const 것들 = await mockAccount.listProfiles(a.userId);
+    await mockAccount.saveSheet(a.userId, 주문표());
+    await mockAccount.saveSheet(a.userId, 주문표({ menuName: "고친 이름" }));
+    const 것들 = await mockAccount.listSheets(a.userId);
     expect(것들).toHaveLength(1);
     expect(것들[0].menuName).toBe("고친 이름");
   });
 
-  it("다른 사람 프로필은 보이지 않는다", async () => {
+  it("다른 사람 주문표는 보이지 않는다", async () => {
     const a = await mockAccount.signup("할머니1", "1234");
     const b = await mockAccount.signup("할머니2", "1234");
-    await mockAccount.saveProfile(a.userId, 프로필());
-    expect(await mockAccount.listProfiles(b.userId)).toEqual([]);
+    await mockAccount.saveSheet(a.userId, 주문표());
+    expect(await mockAccount.listSheets(b.userId)).toEqual([]);
   });
 
-  it("장소 없는 프로필은 받지 않는다", async () => {
+  it("장소 없는 주문표는 받지 않는다", async () => {
     const a = await mockAccount.signup("할머니1", "1234");
-    await expect(mockAccount.saveProfile(a.userId, 프로필({ place: null }))).rejects.toBeInstanceOf(KioBridgeError);
+    await expect(mockAccount.saveSheet(a.userId, 주문표({ place: null }))).rejects.toBeInstanceOf(KioBridgeError);
   });
 
   it("저장한 뒤 원본을 고쳐도 저장된 것은 그대로다", async () => {
-    // 참조를 그대로 들고 있으면 화면에서 프로필을 고치는 순간 '서버에 저장된 값' 도
+    // 참조를 그대로 들고 있으면 화면에서 주문표를 고치는 순간 '서버에 저장된 값' 도
     // 같이 바뀌어, 안 올린 변경이 올라간 것처럼 보인다.
     const a = await mockAccount.signup("할머니1", "1234");
-    const p = 프로필();
-    await mockAccount.saveProfile(a.userId, p);
+    const p = 주문표();
+    await mockAccount.saveSheet(a.userId, p);
     p.menuName = "몰래 고침";
-    expect((await mockAccount.listProfiles(a.userId))[0].menuName).toBe("닭강정");
+    expect((await mockAccount.listSheets(a.userId))[0].menuName).toBe("닭강정");
   });
 });
 
@@ -223,18 +223,18 @@ describe("팀 백엔드 — 보내는 모양", () => {
     expect(부른것()[0][0]).toBe("/api/bff/api/v1/auth/login");
   });
 
-  it("프로필 조회는 GET 이라 본문을 싣지 않는다", async () => {
+  it("주문표 조회는 GET 이라 본문을 싣지 않는다", async () => {
     globalThis.fetch = vi.fn(async () => 응답([])) as unknown as typeof fetch;
-    await createTeamAccount().listProfiles(7);
+    await createTeamAccount().listSheets(7);
     const [url, init] = 부른것()[0];
     expect(url).toBe("/api/bff/api/v1/users/7/profiles");
     expect(init.method).toBe("GET");
     expect(init.body).toBeUndefined();
   });
 
-  it("프로필 저장은 서버 DTO 모양 그대로 보낸다", async () => {
+  it("주문표 저장은 서버 DTO 모양 그대로 보낸다", async () => {
     globalThis.fetch = vi.fn(async () => 응답({})) as unknown as typeof fetch;
-    await createTeamAccount().saveProfile(7, 프로필({ memo: "  얼음 적게  " }));
+    await createTeamAccount().saveSheet(7, 주문표({ memo: "  얼음 적게  " }));
     const [, init] = 부른것()[0];
     expect(JSON.parse(String(init.body))).toEqual({
       profileId: "p1",
@@ -245,10 +245,10 @@ describe("팀 백엔드 — 보내는 모양", () => {
     });
   });
 
-  it("장소 없는 프로필은 요청 자체를 보내지 않는다", async () => {
+  it("장소 없는 주문표는 요청 자체를 보내지 않는다", async () => {
     globalThis.fetch = vi.fn(async () => 응답({})) as unknown as typeof fetch;
     // 보내 봐야 code 없는 400 이 돌아와 사용자에게 이유를 말해 줄 수 없다.
-    await expect(createTeamAccount().saveProfile(7, 프로필({ place: null })))
+    await expect(createTeamAccount().saveSheet(7, 주문표({ place: null })))
       .rejects.toMatchObject({ code: "PROFILE_NOT_UPLOADABLE" });
     expect(부른것()).toHaveLength(0);
   });
@@ -303,14 +303,14 @@ describe("팀 백엔드 — 오류를 사용자가 할 수 있는 말로 바꾼�
 
 describe("팀 백엔드 — 서버가 준 값을 화면 타입으로 좁힌다", () => {
   it("모르는 장소는 지어내지 않고 비워 둔다", async () => {
-    // 병원 프로필이 음식점으로 되살아나면, 그 프로필로 주문했을 때
+    // 병원 주문표가 음식점으로 되살아나면, 그 주문표로 주문했을 때
     // 어르신이 병원에서 닭강정을 승인하라는 화면을 받는다.
     globalThis.fetch = vi.fn(async () => 응답([
       { profileId: "p1", menuName: "닭강정", place: "음식점", selections: {}, memo: null },
       { profileId: "p2", menuName: "접수", place: "우주정거장", selections: {}, memo: null },
     ])) as unknown as typeof fetch;
 
-    const 것들 = await createTeamAccount().listProfiles(7);
+    const 것들 = await createTeamAccount().listSheets(7);
     expect(것들[0].place).toBe("음식점");
     expect(것들[1].place).toBeNull();
   });
@@ -319,11 +319,11 @@ describe("팀 백엔드 — 서버가 준 값을 화면 타입으로 좁힌다",
     globalThis.fetch = vi.fn(async () => 응답([
       { profileId: "p1", menuName: "닭강정", place: "음식점", selections: {}, memo: null },
     ])) as unknown as typeof fetch;
-    expect((await createTeamAccount().listProfiles(7))[0].memo).toBe("");
+    expect((await createTeamAccount().listSheets(7))[0].memo).toBe("");
   });
 
   it("빈 목록이어도 터지지 않는다", async () => {
     globalThis.fetch = vi.fn(async () => 응답([])) as unknown as typeof fetch;
-    expect(await createTeamAccount().listProfiles(7)).toEqual([]);
+    expect(await createTeamAccount().listSheets(7)).toEqual([]);
   });
 });
