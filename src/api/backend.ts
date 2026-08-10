@@ -5,7 +5,7 @@ import {
   toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput,
   type CanonicalProfile, type ChickenStoreSessionContext,
 } from "@/api/canonical";
-import { KioBridgeError, type KioBridgeApi } from "@/api/client";
+import { KioBridgeError, clearSheets, type KioBridgeApi } from "@/api/client";
 import { STEPS } from "@/domain/catalog";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 
@@ -177,6 +177,15 @@ export function createApi(
     sheetId: string;
     expiresAt: number;
     executed?: boolean;
+    /*
+     * 거절한 세션. 지우지 않고 표시만 남긴다.
+     *
+     * 예전에는 reject 가 세션을 지웠다. 그러면 forgetAll 이 세션 목록으로
+     * 지울 대상을 찾을 때 이 페어링이 이미 없어서, 거절까지 갔던 사람의
+     * 정규화된 주문표(고른 알레르기·맵기 전부)가 메모리에 그대로 남았다.
+     * '이 기기에서 정보 지우기' 가 약속한 일이 실제로 안 일어난 것이다.
+     */
+    rejected?: boolean;
   }>();
 
   const 판정 = (r: RecommendationResult): MappingResponse["result"] => {
@@ -298,6 +307,8 @@ export function createApi(
     async approve(input: ApproveInput): Promise<PlanCreated> {
       const s = 세션.get(input.pairingId);
       if (!s) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
+      // 아니라고 한 것을 뒤에서 되살리지 않는다. 담으려면 메뉴를 처음부터 다시 찾는다.
+      if (s.rejected) throw new KioBridgeError("MAPPING_REQUIRED", "메뉴를 먼저 찾아야 해요", false);
       // client.ts 와 같은 검사를 여기서도 한다. 한쪽만 막으면 구현을 바꿀 때 샌다.
       if (s.sheetId !== input.sheetId) {
         throw new KioBridgeError("PROFILE_MISMATCH", "메뉴를 다시 찾아 주세요", true);
@@ -383,7 +394,9 @@ export function createApi(
       const s = 세션.get(input.pairingId);
       // 매핑도 안 한 상태면 거절할 대상이 없다. 조용히 끝낸다.
       if (!s || s.sheetId !== input.sheetId) return;
-      세션.delete(input.pairingId);
+      // 지우지 않고 표시만 한다. 지우면 forgetAll 이 이 페어링을 못 찾아서,
+      // 거절까지 갔던 사람의 정규화된 주문표가 '정보 지우기' 뒤에도 남는다.
+      s.rejected = true;
       if (!backend.reject) return;
       try {
         const profile = getSheet?.(input.sheetId);
@@ -393,16 +406,28 @@ export function createApi(
       }
     },
 
-    // 서버에 지우기 경로가 생기면 여기서 함께 부른다. 지금은 이 계층이 들고 있는
-    // 것만 지운다. 세션 Map 은 비우는 경로가 없으면 무한히 자라기도 한다.
+    /**
+     * '이 기기에서 정보 지우기'.
+     *
+     * 이 계층이 들고 있는 것을 전부 비운다. 서버에 지우기 경로가 생기면 여기서
+     * 함께 부른다 — 지금은 백엔드에 그 경로가 없어서, 이미 올라간 주문표와
+     * 승인·거절 기록은 남는다. 그 사실은 개인정보 안내 화면이 그대로 말한다.
+     * 지운 척하지 않는 것이 여기서 할 수 있는 전부다.
+     *
+     * 붙인 구현이 들고 있는 것도 함께 비운다. 세션이 하나도 없을 때도 부른다 —
+     * 예전에는 세션 목록으로만 돌아서, 거절해서 세션이 비었거나 매핑 전에
+     * 지운 경우에 정규화된 주문표가 그대로 남았다.
+     */
     async forgetAll() {
-      // 서버에 지우기 경로가 있으면 함께 부른다. 없으면 이 계층 것만 지운다.
       const ids = [...세션.keys()];
       세션.clear();
       만료.clear();
       환경.clear();
+      // 화면이 주문에 쓰라고 등록해 둔 주문표 사본. 여기 남으면 '모두 지워요' 가
+      // 사실이 아니다. 목(mockApi)은 이미 지우고 있었고 이 경로만 빠져 있었다.
+      clearSheets();
       if (backend.forgetSession) {
-        await Promise.all(ids.map((id) => backend.forgetSession!(id)));
+        await Promise.all((ids.length > 0 ? ids : [""]).map((id) => backend.forgetSession!(id)));
       }
     },
 
@@ -590,6 +615,27 @@ const 원 = (n: number | undefined) => (typeof n === "number" ? `${n.toLocaleStr
  * 한글이 아닌 이름은 판별할 방법이 없어 받침 없는 쪽으로 둔다.
  */
 /** 사용자가 고른 후보를 1순위로 올린다. 대안 목록도 함께 맞춘다. */
+/*
+ * 서버가 준 summary.status(#48)를 이 앱의 말투로 옮긴다.
+ *
+ * 서버 문장은 이미 한국어지만 '~되었습니다' 체다. 이 앱은 처음부터 끝까지
+ * '~해요' 로 말하는데, 마지막 화면에서만 문체가 바뀌면 거기부터는 앱이
+ * 사용자에게 하는 말이 아니라 기계가 뱉은 말로 읽힌다.
+ *
+ * stopType 만 보면 서버가 '실행할 수 없습니다' 로 판단한 경우를 구분하지 못한다.
+ * 그래서 중단 화면 제목은 이 표를 먼저 본다.
+ *
+ * 지금은 코드가 없고 문장만 온다(EvidenceSummary.status). 서버가 문구를 바꾸면
+ * 여기가 안 맞으므로 모르는 값이면 우리 문구로 물러난다 — 서버 문장을 그대로
+ * 올리지는 않는다. 문장 대신 코드로 달라고 docs 에 적어 두었다.
+ */
+const 앱말투: Record<string, string> = {
+  "정상적으로 장바구니에 추가되었습니다.": "장바구니에 담았어요",
+  "실행할 수 없습니다.": "담을 수 없어요",
+  "안전하게 중단되었습니다.": "안전을 위해 멈췄어요",
+  "처리 중 문제가 발생했습니다.": "끝까지 담지 못했어요",
+};
+
 function 고른것반영(rec: RecommendationResponse, 고른: string | undefined): RecommendationResponse {
   if (!고른 || 고른 === rec.recommendedCandidateId) return rec;
   const 대안 = (rec.alternativeCandidateIds ?? []).filter((id) => id !== 고른);
@@ -650,6 +696,18 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 정규화됨 = new Map<string, { profile: CanonicalProfile; sessionContext: ChickenStoreSessionContext }>();
   // 승인은 매핑 때 쓴 그 키를 찾아야 한다. 주문표별로 마지막 키를 기억해 둔다.
   const 마지막키 = new Map<string, string>();
+
+  /*
+   * 위 네 Map(추천·후보·마지막키와 그 짝)은 주문표 id 를 키로 쓴다.
+   *
+   * 이건 "이 앱은 한 번에 연결 하나만 든다" 를 전제로 한다. App.tsx 가 pairingId 를
+   * 하나만 들고, QR 을 새로 찍으면 앞 연결을 대체하면서 확인 화면도 닫는다.
+   * 그래서 같은 주문표로 두 연결이 겹칠 일이 없다.
+   *
+   * 여러 연결을 동시에 다루게 되면 이 전제가 깨진다. 뒤 요청이 앞 요청의 추천과
+   * 정규화 결과를 덮어써서, 앞 세션의 승인이 사용자가 확인한 것과 다른 내용을
+   * 제출할 수 있다. 그때는 키를 pairingId(또는 서버 sessionId)로 옮겨야 한다.
+   */
 
   const 캐시키 = (environmentId: string, p: OrderSheet) => {
     // collectedAt 은 부를 때마다 달라진다(현재 시각). 키에 넣으면 캐시가 한 번도
@@ -1003,15 +1061,19 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         state,
         // 몇 번째 화면까지 갔는지. 실행한 동작 수가 그대로 진행도다.
         reachedStep: e.executedActions?.length ?? 0,
-        // 서버가 만든 한 문장. status 는 "정상 완료" 같은 개발자 말투라 쓰지 않고,
-        // 왜 이 메뉴였는지를 말해 주는 recommendation 만 화면에 올린다.
+        // 담긴 화면의 제목은 우리 문구다("장바구니에 담았어요"). status 를 여기에
+        // 또 쓰면 같은 말이 두 번 나온다. 그래서 성공했을 때는 왜 이 메뉴였는지를
+        // 말해 주는 recommendation 만 한 줄로 올린다.
         ...(state === "cart_ready" && 요약?.recommendation ? { note: 요약.recommendation } : {}),
         ...(state === "cart_ready" ? { cart: 장바구니(e.reviewSnapshot) } : {}),
         ...(state === "aborted"
           ? {
               abort: {
                 code: e.stopType ?? "UNKNOWN",
-                title: 안전중단 ? "안전을 위해 중단되었습니다" : "끝까지 담지 못했어요",
+                // 서버가 분류한 결과를 제목으로 쓴다. stopType 만 보면 서버가
+                // '실행할 수 없습니다' 로 판단한 경우를 구분하지 못한다.
+                title: 앱말투[요약?.status ?? ""]
+                  ?? (안전중단 ? "안전을 위해 멈췄어요" : "끝까지 담지 못했어요"),
                 // 서버가 이유를 주면 그대로 쓴다. 지어내지 않는다.
                 message: e.stopReason ?? 서버요약.get(sessionId)?.stopReason ?? (안전중단
                   ? "예상하지 못한 화면이 감지되어 작동을 멈췄어요."

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApi, createTeamBackend, type Backend, type EvidenceSummary, type RecommendationResult } from "./backend";
+import { getSheet, registerSheet } from "./client";
 import type { OrderSheet } from "@/domain/types";
 
 // 백엔드가 아직 없으므로, 명세서대로 응답하는 가짜를 만들어 조립이 맞는지 본다.
@@ -248,6 +249,50 @@ describe("forgetAll", () => {
     await api.requestMapping("s1", "p1");
 
     await api.forgetAll();
+
+    await expect(
+      api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" }),
+    ).rejects.toThrow();
+  });
+
+  it("화면이 등록해 둔 주문표 사본까지 지운다", async () => {
+    // 목(mockApi)은 이미 지우고 있었고 이 경로만 빠져 있었다. 남으면 '모두
+    // 지워요' 가 사실이 아니다 — 이름·고른 조건·메모가 그대로 들어 있다.
+    const api = createApi(가짜백엔드());
+    registerSheet({ id: "p9", menuName: "닭강정", place: "음식점", selections: {}, memo: "" });
+    expect(getSheet("p9")).toBeDefined();
+
+    await api.forgetAll();
+
+    expect(getSheet("p9")).toBeUndefined();
+  });
+
+  it("거절까지 갔던 세션도 지워진다", async () => {
+    /*
+     * 예전에는 reject 가 세션을 지웠다. 그러면 forgetAll 이 세션 목록으로
+     * 지울 대상을 찾을 때 이 페어링이 이미 없어서, 붙인 구현이 들고 있던
+     * 정규화된 주문표(고른 알레르기·맵기 전부)가 그대로 남았다.
+     */
+    const forgetSession = vi.fn(async () => {});
+    const api = createApi(가짜백엔드({ forgetSession }));
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    await api.reject!({ pairingId: "s1", sheetId: "p1" });
+
+    await api.forgetAll();
+
+    // toHaveBeenCalled() 로는 부족하다. forgetAll 은 세션이 하나도 없어도
+    // forgetSession("") 을 한 번 부르므로, reject 가 다시 세션을 지우도록
+    // 되돌아가도 그 단언은 통과한다. 거절한 그 페어링으로 불렸는지를 본다.
+    expect(forgetSession).toHaveBeenCalledWith("s1");
+  });
+
+  it("거절한 세션으로는 다시 승인할 수 없다", async () => {
+    // 아니라고 한 것을 뒤에서 되살리지 않는다.
+    const api = createApi(가짜백엔드());
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    await api.reject!({ pairingId: "s1", sheetId: "p1" });
 
     await expect(
       api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" }),
@@ -541,8 +586,35 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     });
     const e = await b.getEvidence("s1");
     expect(e.state).toBe("aborted");
-    expect(e.abort?.title).toBe("안전을 위해 중단되었습니다");
+    expect(e.abort?.title).toBe("안전을 위해 멈췄어요");
     expect(e.abort?.userAction).toContain("초기화");
+  });
+
+  it("서버가 분류한 결과(#48 status)를 제목으로 쓴다 — 앱 말투로", async () => {
+    /*
+     * stopType 만 보면 '실행할 수 없습니다' 를 구분할 수 없다. 서버는 summary.status
+     * 로 그것까지 나눠 주는데, 문장이 '~습니다' 체라 그대로 쓰면 마지막 화면에서만
+     * 문체가 바뀐다. 옮겨서 쓴다.
+     */
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      summary: { status: "실행할 수 없습니다." },
+      raw: { valid: true, evidence: { result: "FAIL", stopType: "NONE", executedActions: [] } },
+    });
+    const e = await b.getEvidence("s1");
+    expect(e.abort?.title).toBe("담을 수 없어요");
+  });
+
+  it("모르는 status 면 서버 문장을 그대로 올리지 않고 우리 문구로 물러난다", async () => {
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      summary: { status: "무언가 새로 생긴 문장입니다." },
+      raw: { valid: true, evidence: { result: "FAIL", stopType: "NONE", executedActions: [] } },
+    });
+    const e = await b.getEvidence("s1");
+    expect(e.abort?.title).toBe("끝까지 담지 못했어요");
   });
 
   it("cartItems 가 없는 환경에서는 개수·금액을 지어내지 않는다", async () => {

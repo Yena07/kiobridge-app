@@ -8,6 +8,12 @@
       "port": 5199
     },
     {
+      "name": "kiobridge-team",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--mode", "team", "--port", "5199", "--strictPort"],
+      "port": 5199
+    },
+    {
       "name": "kiobridge-prod",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "preview", "--port", "4199", "--strictPort"],
