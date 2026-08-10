@@ -435,4 +435,4 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
  * 주문은 실서버로 가는데 로그인은 목으로 가는 상태가 되고, 그때 화면은 아무 말도 하지 않는다.
  */
 export const account: AccountApi =
-  import.meta.env.VITE_BACKEND === "team" ? createTeamAccount() : mockAccount;
+  __TEAM_BACKEND__ ? createTeamAccount() : mockAccount;
