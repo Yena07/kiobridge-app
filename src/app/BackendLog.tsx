@@ -205,16 +205,34 @@ const 예쁘게 = (s: string | undefined) => {
   try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
 };
 
-function 한줄({ x }: { x: 오간것 }) {
+function 한줄({ x, 방금 = false }: { x: 오간것; 방금?: boolean }) {
   const [펼침, 펼치기] = useState(false);
   const 설명 = 설명찾기(x.경로);
   const 성공 = typeof x.상태 === "number" && x.상태 < 400;
+  /*
+   * 방금 들어온 줄에 잠깐 표를 남긴다.
+   *
+   * 나란히 놓고 보면 누를 때마다 목록이 위로 자라는데, 줄이 다 비슷하게 생겨서
+   * 무엇이 새로 온 것인지 눈으로 잡기 어렵다. 2초 뒤 스스로 사라진다 —
+   * 계속 남겨 두면 다음에 새로 온 것과 구분이 안 된다.
+   */
+  const [새것, 새것으로] = useState(방금);
+  useEffect(() => {
+    if (!방금) return;
+    새것으로(true);
+    const t = setTimeout(() => 새것으로(false), 2000);
+    return () => clearTimeout(t);
+  }, [방금, x.시각]);
   const 짚은것 = 펼침 && x.응답 ? (() => {
     try { return 짚어내기(x.경로, JSON.parse(x.응답)); } catch { return []; }
   })() : [];
 
   return (
-    <div style={{ borderTop: `1px solid ${색.선}` }}>
+    <div style={{
+      borderTop: `1px solid ${색.선}`,
+      background: 새것 ? "rgba(124,196,255,.10)" : undefined,
+      transition: "background 400ms",
+    }}>
       <button
         type="button"
         onClick={() => 펼치기((v) => !v)}
@@ -291,22 +309,34 @@ function 한줄({ x }: { x: 오간것 }) {
  * localStorage 에 담지 않는다. 이 앱은 저장을 안 한다고 화면에서 약속했고,
  * 그 약속을 확인하려고 만든 화면이 먼저 어기면 앞뒤가 안 맞는다.
  */
-export default function BackendLog({ onClose }: { onClose?: () => void }) {
+export default function BackendLog({ onClose, 나란히 = false }: { onClose?: () => void; 나란히?: boolean }) {
   const [, 다시그리기] = useState(0);
+  // 나란히 볼 때는 오간 것이 주인공이라 설명표를 접어 둔다. 겹으로 볼 때는 펼친다.
+  const [설명펼침, 설명펼치기] = useState(!나란히);
   useEffect(() => 연동기록.구독(() => 다시그리기((n) => n + 1)), []);
   const 목록 = 연동기록.읽기();
   const 성공 = 목록.filter((x) => typeof x.상태 === "number" && x.상태 < 400).length;
+  // 방금 들어온 줄을 잠깐 밝게 둔다. 눌렀을 때 무언가 나갔다는 걸 눈으로 잡으라고.
+  const 최신 = 목록[0]?.시각;
 
   return (
-    <div style={{
+    <div style={나란히 ? {
+      // 앱 옆에 세워 둔다. 겹치지 않으므로 앱을 쓰면서 그대로 볼 수 있다.
+      width: "min(460px, 40vw)", alignSelf: "stretch", maxHeight: "calc(100vh - 48px)",
+      overflowY: "auto", borderRadius: 12,
+      background: 색.바탕, color: 색.글,
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontSize: 12, lineHeight: 1.6, padding: "16px 14px 28px",
+      boxShadow: "0 8px 28px rgba(0,0,0,.35)",
+    } : {
       position: "fixed", inset: 0, zIndex: 90, overflowY: "auto",
       background: 색.바탕, color: 색.글,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       fontSize: 13, lineHeight: 1.6, padding: "24px 20px 60px",
     }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ maxWidth: 나란히 ? undefined : 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
-          <h1 style={{ fontSize: 20, margin: 0 }}>백엔드에서 온 것</h1>
+          <h1 style={{ fontSize: 나란히 ? 15 : 20, margin: 0 }}>백엔드에서 온 것</h1>
           {onClose && (
             <button
               type="button"
@@ -316,13 +346,14 @@ export default function BackendLog({ onClose }: { onClose?: () => void }) {
                 borderRadius: 6, color: 색.글, font: "inherit", padding: "4px 12px", cursor: "pointer",
               }}
             >
-              앱으로 돌아가기
+              {나란히 ? "닫기" : "앱으로 돌아가기"}
             </button>
           )}
         </div>
-        <p style={{ color: 색.흐림, margin: "0 0 20px" }}>
-          화면의 문장이 서버에서 온 것인지 확인하는 자리입니다. 아무것도 지어내지 않고,
-          오간 요청과 응답을 그대로 보여 줍니다.
+        <p style={{ color: 색.흐림, margin: `0 0 ${나란히 ? 12 : 20}px` }}>
+          {나란히
+            ? "앱을 누를 때마다 여기에 한 줄씩 쌓입니다. 줄을 누르면 보낸 것·받은 것이 그대로 펼쳐집니다."
+            : "화면의 문장이 서버에서 온 것인지 확인하는 자리입니다. 아무것도 지어내지 않고, 오간 요청과 응답을 그대로 보여 줍니다."}
         </p>
 
         <div style={{
@@ -354,7 +385,20 @@ export default function BackendLog({ onClose }: { onClose?: () => void }) {
           )}
         </div>
 
-        <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>어느 API 가 무엇을 하는지</h2>
+        <button
+          type="button"
+          onClick={() => 설명펼치기((v) => !v)}
+          aria-expanded={설명펼침}
+          style={{
+            display: "block", width: "100%", textAlign: "left", background: "none",
+            border: "none", color: "inherit", font: "inherit", padding: 0, cursor: "pointer",
+            fontSize: 15, fontWeight: 700, margin: "0 0 8px",
+          }}
+        >
+          어느 API 가 무엇을 하는지 {설명펼침 ? "▾" : "▸"}
+        </button>
+        {설명펼침 && (
+        <>
         <p style={{ color: 색.흐림, margin: "0 0 10px" }}>
           담당은 팀 저장소의 커밋 기록에서 가져왔습니다(<code>git log -- 컨트롤러 파일</code>).
         </p>
@@ -385,6 +429,8 @@ export default function BackendLog({ onClose }: { onClose?: () => void }) {
             </div>
           </div>
         </div>
+        </>
+        )}
 
         <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>오간 것 {목록.length}건</h2>
         {목록.length === 0 ? (
@@ -395,10 +441,12 @@ export default function BackendLog({ onClose }: { onClose?: () => void }) {
           </p>
         ) : (
           <>
-            <p style={{ color: 색.흐림, margin: "0 0 4px" }}>
-              줄을 누르면 담당·역할과 함께 보낸 것·받은 것이 그대로 펼쳐집니다.
-            </p>
-            {목록.map((x) => <한줄 key={`${x.시각}-${x.경로}`} x={x} />)}
+            {!나란히 && (
+              <p style={{ color: 색.흐림, margin: "0 0 4px" }}>
+                줄을 누르면 담당·역할과 함께 보낸 것·받은 것이 그대로 펼쳐집니다.
+              </p>
+            )}
+            {목록.map((x) => <한줄 key={`${x.시각}-${x.경로}`} x={x} 방금={x.시각 === 최신} />)}
           </>
         )}
       </div>

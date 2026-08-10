@@ -2743,7 +2743,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
  * npm run dev:team 일 때만 나온다. 기본 빌드에서는 팀백엔드모드가 상수 false 라
  * 이 컴포넌트를 부르는 자리가 통째로 빠진다.
  */
-function 연동표시({ onOpenLog }: { onOpenLog: () => void }) {
+function 연동표시({ onOpenLog, onOpenSide }: { onOpenLog: () => void; onOpenSide: () => void }) {
   const [, 다시그리기] = useState(0);
   // 화면이 좁으면 접어 둔다. 펼친 채로 두면 휴대폰 틀의 아래 버튼을 덮어
   // 터치를 가로챈다. 200% 확대처럼 CSS 뷰포트가 작아질 때 실제로 그렇다.
@@ -2784,16 +2784,28 @@ function 연동표시({ onOpenLog }: { onOpenLog: () => void }) {
         목이 아니라 팀 백엔드로 보냅니다 · /api/bff → KIOBRIDGE_API_BASE
       </div>
       {/* 본문까지 펼쳐 보는 화면. 이 패널은 좁아서 한 줄 요약까지만 담는다. */}
-      <button
-        type="button"
-        onClick={onOpenLog}
-        style={{
-          width: "100%", marginBottom: 8, background: "none", border: "1px solid #232326",
-          borderRadius: 6, color: "#e8e8ea", font: "inherit", padding: "5px 0", cursor: "pointer",
-        }}
-      >
-        전체 보기 — 보낸 것·받은 것·담당
-      </button>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={onOpenSide}
+          style={{
+            flex: 1, background: "none", border: "1px solid #232326",
+            borderRadius: 6, color: "#e8e8ea", font: "inherit", padding: "5px 0", cursor: "pointer",
+          }}
+        >
+          앱 옆에 띄우기
+        </button>
+        <button
+          type="button"
+          onClick={onOpenLog}
+          style={{
+            flex: 1, background: "none", border: "1px solid #232326",
+            borderRadius: 6, color: "#e8e8ea", font: "inherit", padding: "5px 0", cursor: "pointer",
+          }}
+        >
+          크게 보기
+        </button>
+      </div>
       {목록.length === 0 ? (
         <div style={{ color: "#9a9aa2" }}>아직 오간 게 없습니다. QR 을 찍어 보세요.</div>
       ) : (
@@ -2842,8 +2854,11 @@ const 시연패널보임 =
  * 없다(휴대폰 틀 안이라 좁고, 겹치면 아래 버튼을 덮는다). 확인하려고 만든
  * 화면이 확인을 방해하면 안 된다.
  */
-const 로그화면보임 =
-  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("log") === "1";
+const 로그값 =
+  typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("log");
+/** ?log=1 겹으로 · ?log=side 앱 옆에 나란히 */
+const 처음로그모드: "닫힘" | "겹" | "나란히" =
+  로그값 === "side" ? "나란히" : 로그값 === "1" ? "겹" : "닫힘";
 
 function ScenarioPanel() {
   const [current, setCurrent] = useState<Scenario>(getScenario());
@@ -2924,9 +2939,9 @@ function ScenarioPanel() {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  // ?log=1 이면 열린 채로 시작한다. 그 뒤로는 패널의 '전체 보기' 로 여닫는다 —
+  // 주소로 정해진 값으로 시작하고, 그 뒤로는 패널 버튼으로 바꾼다 —
   // 주소를 바꾸면 페이지가 새로 떠서 기록이 사라지기 때문이다.
-  const [로그보임, set로그보임] = useState(로그화면보임);
+  const [로그모드, set로그모드] = useState(처음로그모드);
   const [screen, setScreen] = useState<Screen>("welcome");
   const [tab, setTab] = useState<MainTab>("menu");
   const [name, setName] = useState("");
@@ -3212,12 +3227,15 @@ export default function App() {
     >
       <style>{FOCUS_STYLES}</style>
       {시연패널보임 && <ScenarioPanel />}
-      {팀백엔드모드 && <연동표시 onOpenLog={() => set로그보임(true)} />}
+      {/* 나란히 보는 중에는 구석 패널을 감춘다. 같은 것을 두 번 띄울 이유가 없다. */}
+      {팀백엔드모드 && 로그모드 !== "나란히" && (
+        <연동표시 onOpenLog={() => set로그모드("겹")} onOpenSide={() => set로그모드("나란히")} />
+      )}
       {/*
         앱을 덮는 겹으로 띄운다. 다른 주소로 옮기면 페이지가 새로 뜨고 기록은
         메모리에만 있어서 그때 다 사라진다 — 주문을 마치고 보러 가면 늘 0건이 된다.
       */}
-      {로그보임 && <BackendLog onClose={() => set로그보임(false)} />}
+      {로그모드 === "겹" && <BackendLog onClose={() => set로그모드("닫힘")} />}
       {/*
         큰 글씨 모드. 화면 크기(휴대폰 틀)는 그대로 두고 안쪽 내용만 키운다.
         바깥 틀은 실제 크기(FRAME_W × FRAME_H)를 잡고, 안쪽은 그 크기를 배율로 나눠 잡는다.
@@ -3397,6 +3415,13 @@ export default function App() {
         )}
         </div>
       </div>
+
+      {/*
+        앱 옆에 세워 둔다. 겹치지 않으므로 앱을 쓰면서 오간 것이 쌓이는 걸
+        그대로 볼 수 있다 — 눌러서 열어 봐야 하는 것과 달리, 누를 때마다
+        무엇이 나가는지가 눈에 보인다.
+      */}
+      {로그모드 === "나란히" && <BackendLog 나란히 onClose={() => set로그모드("닫힘")} />}
     </div>
   );
 }
