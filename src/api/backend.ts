@@ -127,6 +127,14 @@ export interface EvidenceSummary {
    * 없으면 화면이 그 줄을 아예 그리지 않는다 — 지어내지 않는다.
    */
   note?: string;
+  /**
+   * 서버가 매긴 상태 문장(#48 의 summary.status). 그대로 인용해서 보여 준다.
+   *
+   * 앱 문구로 옮기지 않는다. 이 줄의 쓸모가 "이 값이 서버에서 왔다" 를 보이는
+   * 것이라, 우리 말로 바꾸는 순간 서버가 준 것인지 앱이 지어낸 것인지 다시
+   * 구분할 수 없어진다. 문체가 다른 것은 인용이라고 밝혀서 푼다.
+   */
+  serverStatus?: string;
 }
 
 // ─── 확신도 경계 ─────────────────────────────────────────────────────────────
@@ -426,6 +434,9 @@ export function createApi(
       // 화면이 주문에 쓰라고 등록해 둔 주문표 사본. 여기 남으면 '모두 지워요' 가
       // 사실이 아니다. 목(mockApi)은 이미 지우고 있었고 이 경로만 빠져 있었다.
       clearSheets();
+      // 오간 기록에는 요청.응답 본문이 통째로 들어 있다 — 고른 조건도 거기 있다.
+      // 화면에서 지웠다고 말해 놓고 구석 패널에 그대로 남으면 그 말이 거짓이 된다.
+      연동기록.비우기();
       if (backend.forgetSession) {
         await Promise.all((ids.length > 0 ? ids : [""]).map((id) => backend.forgetSession!(id)));
       }
@@ -445,10 +456,17 @@ export function createApi(
         return {
           state: "aborted", steps,
           abort: { ...(e.abort ?? { code: "UNKNOWN", title: "안전을 위해 중단되었습니다", message: "예상하지 못한 화면이 감지되어 작동을 멈췄어요.", userAction: "직원 초기화를 기다려 주세요" }), recoverable: false },
+          // 중단됐을 때야말로 "이게 키오스크가 한 말이다" 를 보여 줄 자리다.
+          // 잘 된 경우에만 싣고 여기서 빠뜨리면, 정작 확인이 필요한 쪽이 비어 있다.
+          ...(e.serverStatus ? { serverStatus: e.serverStatus } : {}),
         };
       }
       if (e.state === "cart_ready") {
-        return { state: "cart_ready", steps, cart: e.cart, ...(e.note ? { note: e.note } : {}) };
+        return {
+          state: "cart_ready", steps, cart: e.cart,
+          ...(e.note ? { note: e.note } : {}),
+          ...(e.serverStatus ? { serverStatus: e.serverStatus } : {}),
+        };
       }
       return { state: "running", steps };
     },
@@ -655,9 +673,22 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const 방법 = body === undefined ? "GET" : "POST";
     // 개발 중에 어디로 무엇이 나갔는지 눈으로 보기 위해서만 잰다.
     const 시작 = 팀백엔드모드 ? performance.now() : 0;
-    const 적기 = (상태: number | "실패") => {
+    /*
+     * 본문까지 남긴다.
+     *
+     * 경로와 상태만 남기면 "요청이 나갔다" 는 알 수 있어도 "화면의 이 문장이
+     * 서버에서 온 것이다" 는 알 수 없다. ?log=1 화면이 그걸 보여 주려면 응답
+     * 본문이 있어야 한다. 여기 경로에는 비밀이 실리지 않는다 — 계정 계열은
+     * account.ts 가 따로 부르고 거기서는 본문을 안 남긴다(devlog 의 본문을남길까).
+     */
+    const 적기 = (상태: number | "실패", 응답본문?: string) => {
       if (!팀백엔드모드) return;
-      연동기록.남기기({ 방법, 경로: path, 상태, 걸린시간: Math.round(performance.now() - 시작), 시각: Date.now() });
+      연동기록.남기기({
+        방법, 경로: path, 상태,
+        걸린시간: Math.round(performance.now() - 시작), 시각: Date.now(),
+        ...(body === undefined ? {} : { 요청: JSON.stringify(body) }),
+        ...(응답본문 === undefined ? {} : { 응답: 응답본문 }),
+      });
     };
 
     let res: Response;
@@ -672,13 +703,34 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       적기("실패");
       throw e;
     }
-    적기(res.status);
+
+    /*
+     * 본문은 한 번만 읽을 수 있다. 먼저 문자열로 받아 두고 성공.실패 양쪽에서 쓴다.
+     * 예전에는 실패 쪽에서 res.json() 을 따로 불러서, 기록에 남길 본문이 없었다.
+     *
+     * 읽는 것 자체도 실패할 수 있다(스트림이 중간에 끊기는 경우). 막아 두지 않으면
+     * !res.ok 분기에 닿기도 전에 TypeError 가 올라가서, 호출자는 HTTP 상태가 담긴
+     * KioBridgeError 대신 개발자 문장을 받는다. account.ts 는 이미 막아 두었는데
+     * 이쪽만 빠져 있었다.
+     */
+    const t = await res.text().catch(() => null);
+    적기(res.status, t ?? undefined);
+
     if (!res.ok) {
-      const b = await res.json().catch(() => ({}));
+      // 본문을 못 읽었어도 상태 코드는 안다. 그것만으로도 할 말이 있다.
+      const b = (() => { try { return JSON.parse(t ?? "") as { code?: string; message?: string }; } catch { return {}; } })();
       throw new KioBridgeError(b.code ?? `HTTP_${res.status}`, b.message ?? "요청을 처리하지 못했어요", res.status >= 500);
     }
-    const t = await res.text();
-    return (t ? JSON.parse(t) : undefined) as T;
+    if (t === null) throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
+    if (!t) return undefined as T;
+    try {
+      return JSON.parse(t) as T;
+    } catch {
+      // 200 인데 JSON 이 아닌 것(프록시가 끼워 넣은 HTML 같은 것)이 올 수 있다.
+      // 막아 두지 않으면 SyntaxError 가 그대로 올라가 "Unexpected token '<'" 가
+      // 어르신 화면에 뜬다. account.ts 는 이미 막아 두었고 여기만 빠져 있었다.
+      throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
+    }
   };
 
   // 승인이 조립·제출·검증·실행을 한 번에 하므로 3단계로 나눌 수 없다. 응답을
@@ -1065,6 +1117,18 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         // 또 쓰면 같은 말이 두 번 나온다. 그래서 성공했을 때는 왜 이 메뉴였는지를
         // 말해 주는 recommendation 만 한 줄로 올린다.
         ...(state === "cart_ready" && 요약?.recommendation ? { note: 요약.recommendation } : {}),
+        /*
+         * 서버 문장을 그대로 싣되, 아는 문장만 싣는다.
+         *
+         * 화면은 이 값을 따옴표로 감싸 그대로 보여 준다. 서버가 언젠가 결제 완료
+         * 같은 문장을 담아 보내면 그게 곧바로 화면에 뜬다 — 결제 표현은 있기만 해도
+         * 실격이라, 서버를 믿고 통과시킬 수 있는 값이 아니다.
+         *
+         * 앱말투 표에 있는 넷만 인용한다. 모르는 문장은 아예 안 보여 준다 —
+         * 그 경우 화면은 원래 우리 문구로 말한다. 서버가 문구를 바꾸면 이 줄이
+         * 조용히 사라지는데, 잘못된 말을 띄우는 것보다 안 띄우는 편이 낫다.
+         */
+        ...(요약?.status && 앱말투[요약.status] ? { serverStatus: 요약.status } : {}),
         ...(state === "cart_ready" ? { cart: 장바구니(e.reviewSnapshot) } : {}),
         ...(state === "aborted"
           ? {
