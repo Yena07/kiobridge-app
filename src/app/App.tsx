@@ -2046,6 +2046,13 @@ function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; 
         <Pictogram name={첫줄.kind === "used" ? "checkCircle" : "warning"} size={16} color={첫줄.kind === "used" ? SUCCESS : WARN} />
       </span>
       <span style={{ flex: 1, fontSize: 13, lineHeight: 1.6, color: TEXT_1 }}>
+        {/*
+          말머리를 글자로 붙인다. Pictogram 은 aria-hidden 이라 스크린리더가 못 읽고,
+          reasons[].text 도 '반영' 인지 '제외' 인지를 문장 안에 담는다고 보장하지 않는다.
+          쓴 것이 하나도 없으면 여기 뜨는 줄이 제외 사유인데, 표시가 없으면 그게
+          이 메뉴를 고른 근거처럼 읽힌다. ReasonList 는 이미 이렇게 하고 있었다.
+        */}
+        <b style={{ fontWeight: 700 }}>{첫줄.kind === "used" ? "반영: " : "제외: "}</b>
         {첫줄.text}
         {남은 > 0 && (
           <span style={{ color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3 }}>
