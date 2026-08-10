@@ -20,6 +20,7 @@ import {
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
+import BackendLog from "@/app/BackendLog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
 const FRAME_W = 384;
@@ -2726,7 +2727,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
  * npm run dev:team 일 때만 나온다. 기본 빌드에서는 팀백엔드모드가 상수 false 라
  * 이 컴포넌트를 부르는 자리가 통째로 빠진다.
  */
-function 연동표시() {
+function 연동표시({ onOpenLog }: { onOpenLog: () => void }) {
   const [, 다시그리기] = useState(0);
   // 화면이 좁으면 접어 둔다. 펼친 채로 두면 휴대폰 틀의 아래 버튼을 덮어
   // 터치를 가로챈다. 200% 확대처럼 CSS 뷰포트가 작아질 때 실제로 그렇다.
@@ -2766,6 +2767,17 @@ function 연동표시() {
       <div style={{ color: "#9a9aa2", marginBottom: 8 }}>
         목이 아니라 팀 백엔드로 보냅니다 · /api/bff → KIOBRIDGE_API_BASE
       </div>
+      {/* 본문까지 펼쳐 보는 화면. 이 패널은 좁아서 한 줄 요약까지만 담는다. */}
+      <button
+        type="button"
+        onClick={onOpenLog}
+        style={{
+          width: "100%", marginBottom: 8, background: "none", border: "1px solid #232326",
+          borderRadius: 6, color: "#e8e8ea", font: "inherit", padding: "5px 0", cursor: "pointer",
+        }}
+      >
+        전체 보기 — 보낸 것·받은 것·담당
+      </button>
       {목록.length === 0 ? (
         <div style={{ color: "#9a9aa2" }}>아직 오간 게 없습니다. QR 을 찍어 보세요.</div>
       ) : (
@@ -2806,6 +2818,16 @@ function 연동표시() {
  */
 const 시연패널보임 =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "1";
+
+/*
+ * ?log=1 — 백엔드가 준 것을 그대로 보는 화면.
+ *
+ * 앱 화면 대신 이걸 그린다. 앱 안의 패널로 두면 오간 것을 다 펼쳐 볼 자리가
+ * 없다(휴대폰 틀 안이라 좁고, 겹치면 아래 버튼을 덮는다). 확인하려고 만든
+ * 화면이 확인을 방해하면 안 된다.
+ */
+const 로그화면보임 =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("log") === "1";
 
 function ScenarioPanel() {
   const [current, setCurrent] = useState<Scenario>(getScenario());
@@ -2886,6 +2908,9 @@ function ScenarioPanel() {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  // ?log=1 이면 열린 채로 시작한다. 그 뒤로는 패널의 '전체 보기' 로 여닫는다 —
+  // 주소를 바꾸면 페이지가 새로 떠서 기록이 사라지기 때문이다.
+  const [로그보임, set로그보임] = useState(로그화면보임);
   const [screen, setScreen] = useState<Screen>("welcome");
   const [tab, setTab] = useState<MainTab>("menu");
   const [name, setName] = useState("");
@@ -3171,7 +3196,12 @@ export default function App() {
     >
       <style>{FOCUS_STYLES}</style>
       {시연패널보임 && <ScenarioPanel />}
-      {팀백엔드모드 && <연동표시 />}
+      {팀백엔드모드 && <연동표시 onOpenLog={() => set로그보임(true)} />}
+      {/*
+        앱을 덮는 겹으로 띄운다. 다른 주소로 옮기면 페이지가 새로 뜨고 기록은
+        메모리에만 있어서 그때 다 사라진다 — 주문을 마치고 보러 가면 늘 0건이 된다.
+      */}
+      {로그보임 && <BackendLog onClose={() => set로그보임(false)} />}
       {/*
         큰 글씨 모드. 화면 크기(휴대폰 틀)는 그대로 두고 안쪽 내용만 키운다.
         바깥 틀은 실제 크기(FRAME_W × FRAME_H)를 잡고, 안쪽은 그 크기를 배율로 나눠 잡는다.

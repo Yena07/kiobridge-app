@@ -655,9 +655,22 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const 방법 = body === undefined ? "GET" : "POST";
     // 개발 중에 어디로 무엇이 나갔는지 눈으로 보기 위해서만 잰다.
     const 시작 = 팀백엔드모드 ? performance.now() : 0;
-    const 적기 = (상태: number | "실패") => {
+    /*
+     * 본문까지 남긴다.
+     *
+     * 경로와 상태만 남기면 "요청이 나갔다" 는 알 수 있어도 "화면의 이 문장이
+     * 서버에서 온 것이다" 는 알 수 없다. ?log=1 화면이 그걸 보여 주려면 응답
+     * 본문이 있어야 한다. 여기 경로에는 비밀이 실리지 않는다 — 계정 계열은
+     * account.ts 가 따로 부르고 거기서는 본문을 안 남긴다(devlog 의 본문을남길까).
+     */
+    const 적기 = (상태: number | "실패", 응답본문?: string) => {
       if (!팀백엔드모드) return;
-      연동기록.남기기({ 방법, 경로: path, 상태, 걸린시간: Math.round(performance.now() - 시작), 시각: Date.now() });
+      연동기록.남기기({
+        방법, 경로: path, 상태,
+        걸린시간: Math.round(performance.now() - 시작), 시각: Date.now(),
+        ...(body === undefined ? {} : { 요청: JSON.stringify(body) }),
+        ...(응답본문 === undefined ? {} : { 응답: 응답본문 }),
+      });
     };
 
     let res: Response;
@@ -672,12 +685,16 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       적기("실패");
       throw e;
     }
-    적기(res.status);
+
+    // 본문은 한 번만 읽을 수 있다. 먼저 문자열로 받아 두고 성공.실패 양쪽에서 쓴다.
+    // 예전에는 실패 쪽에서 res.json() 을 따로 불러서, 기록에 남길 본문이 없었다.
+    const t = await res.text();
+    적기(res.status, t);
+
     if (!res.ok) {
-      const b = await res.json().catch(() => ({}));
+      const b = (() => { try { return JSON.parse(t) as { code?: string; message?: string }; } catch { return {}; } })();
       throw new KioBridgeError(b.code ?? `HTTP_${res.status}`, b.message ?? "요청을 처리하지 못했어요", res.status >= 500);
     }
-    const t = await res.text();
     return (t ? JSON.parse(t) : undefined) as T;
   };
 

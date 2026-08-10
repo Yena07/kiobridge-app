@@ -2,7 +2,7 @@ import type { PlaceType, OrderSheet } from "@/domain/types";
 // client.ts 의 KioBridgeError 를 그대로 쓴다. 화면은 이미 그 타입 하나로 오류를 다루고 있어서
 // 계정 오류만 다른 타입이면 화면에 분기가 하나 더 생긴다. backend.ts 도 같은 방식이다.
 import { KioBridgeError } from "@/api/client";
-import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
+import { 연동기록, 팀백엔드모드, 본문을남길까 } from "@/api/devlog";
 
 /**
  * 계정과 그 계정에 딸린 주문표.
@@ -327,10 +327,27 @@ const 문구 = (code: string, 서버문구: string | undefined, status: number):
 export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
   const 부르기 = async <T>(방법: "GET" | "POST", path: string, body?: unknown): Promise<T> => {
     const 시작 = 팀백엔드모드 ? performance.now() : 0;
-    const 적기 = (상태: number | "실패") => {
+    /*
+     * 가입.로그인 경로는 본문을 남기지 않는다 — 비밀번호가 화면 구석 패널과
+     * ?log=1 화면에 그대로 뜬다. 안 남겼다는 사실은 '가림' 으로 표시해서,
+     * 보는 사람이 '비어 있는 것' 과 '일부러 안 남긴 것' 을 헷갈리지 않게 한다.
+     *
+     * 주문표 경로(users/{id}/profiles)는 남긴다. 실리는 것이 주문 조건뿐이고,
+     * 그게 서버에서 온 값이라는 걸 확인하려고 만든 화면이라 안 남기면 쓸모가 없다.
+     */
+    const 남길까 = 본문을남길까(path);
+    const 적기 = (상태: number | "실패", 응답본문?: string) => {
       if (!팀백엔드모드) return;
-      // 경로와 상태만 남긴다. 본문은 남기지 않는다 — 비밀번호가 화면 구석 패널에 뜬다.
-      연동기록.남기기({ 방법, 경로: path, 상태, 걸린시간: Math.round(performance.now() - 시작), 시각: Date.now() });
+      연동기록.남기기({
+        방법, 경로: path, 상태,
+        걸린시간: Math.round(performance.now() - 시작), 시각: Date.now(),
+        ...(남길까
+          ? {
+              ...(body === undefined ? {} : { 요청: JSON.stringify(body) }),
+              ...(응답본문 === undefined ? {} : { 응답: 응답본문 }),
+            }
+          : { 가림: true as const }),
+      });
     };
 
     /*
@@ -364,10 +381,16 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
     } finally {
       clearTimeout(시계);
     }
-    적기(res.status);
+    // 본문은 한 번만 읽을 수 있다. 성공.실패 양쪽에서 쓰므로 먼저 문자열로 받아 둔다.
+    // 스트림이 중간에 끊기면 여기서 null 이 된다 — res.json() 과 달리 막혀 있지 않아서
+    // 예전에는 TypeError 가 그대로 화면까지 올라갔다.
+    const t = await res.text().catch(() => null);
+    적기(res.status, t ?? undefined);
 
     if (!res.ok) {
-      const b = await res.json().catch(() => ({} as { code?: string; message?: string }));
+      const b = (() => {
+        try { return JSON.parse(t ?? "") as { code?: string; message?: string }; } catch { return {}; }
+      })();
       const code = b.code ?? `HTTP_${res.status}`;
       // 계정 쪽 오류는 전부 recoverable 이다. 아이디가 겹쳤으면 다른 아이디로, 비밀번호가
       // 틀렸으면 다시 적으면 되고, 서버가 죽었으면 잠시 뒤 다시 하면 된다. 화면이
@@ -375,9 +398,6 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
       throw new KioBridgeError(code, 문구(code, b.message, res.status), true);
     }
 
-    // 본문을 읽는 것도 실패할 수 있다. 스트림이 중간에 끊기면 res.json() 과 달리
-    // 여기는 막혀 있지 않아서 TypeError 가 그대로 화면까지 올라갔다.
-    const t = await res.text().catch(() => null);
     if (t === null) throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
     if (!t) return undefined as T;
     try {
