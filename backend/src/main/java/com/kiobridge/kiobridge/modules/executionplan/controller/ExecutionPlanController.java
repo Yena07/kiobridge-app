@@ -1,6 +1,5 @@
 package com.kiobridge.kiobridge.modules.executionplan.controller;
 
-import com.kiobridge.kiobridge.contracts.ExecutionPlan;
 import com.kiobridge.kiobridge.contracts.client.dto.ExecuteResult;
 import com.kiobridge.kiobridge.contracts.client.dto.SessionCreateResponse;
 import com.kiobridge.kiobridge.modules.executionplan.controller.dto.BuildExecutionPlanRequest;
@@ -8,6 +7,7 @@ import com.kiobridge.kiobridge.modules.executionplan.controller.dto.BuildExecuti
 import com.kiobridge.kiobridge.modules.executionplan.controller.dto.CreateSessionRequest;
 import com.kiobridge.kiobridge.modules.executionplan.controller.dto.CreateSessionResponse;
 import com.kiobridge.kiobridge.modules.executionplan.controller.dto.SubmitAndRunRequest;
+import com.kiobridge.kiobridge.modules.executionplan.service.ExecutionPlanResult;
 import com.kiobridge.kiobridge.modules.executionplan.service.ExecutionPlanService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,10 +32,10 @@ public class ExecutionPlanController {
     /** POST /internal/plan/build — STEP 9 실행계획 생성. */
     @PostMapping("/plan/build")
     public BuildExecutionPlanResponse buildPlan(@RequestBody BuildExecutionPlanRequest request) {
-        ExecutionPlan executionPlan = executionPlanService.buildExecutionPlan(
+        ExecutionPlanResult result = executionPlanService.buildExecutionPlan(
             request.sessionId(), request.recommendation(), request.userDecision(), request.sessionContext()
         );
-        return new BuildExecutionPlanResponse(executionPlan);
+        return new BuildExecutionPlanResponse(result.executionPlan());
     }
 
     /** POST /internal/simulation/session — Simulation API 세션 생성. */

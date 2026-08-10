@@ -15,6 +15,7 @@ import com.kiobridge.kiobridge.contracts.input.context.ChickenStorePreferences;
 import com.kiobridge.kiobridge.contracts.input.context.ChickenStoreSessionContext;
 import com.kiobridge.kiobridge.contracts.input.context.SessionIntent;
 import com.kiobridge.kiobridge.contracts.input.context.SessionTask;
+import com.kiobridge.kiobridge.modules.executionplan.service.ExecutionPlanResult;
 import com.kiobridge.kiobridge.modules.executionplan.service.ExecutionPlanService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,10 +68,10 @@ class SubmissionOrchestratorTest {
         Map<String, Object> profile = Map.of("profileId", "TEST-PROFILE-001");
         ExecuteResult expectedResult = new ExecuteResult(true, null, null, new ValidationResult(true, List.of()));
 
+        // approved=true 경로에서는 buildExecutionPlan이 이미 environmentId를 조회해서 돌려주므로,
+        // runApprovalFlow는 simulationApiClient.getSession()을 다시 호출하지 않아야 한다(중복 제거 대상).
         when(executionPlanService.buildExecutionPlan(SESSION_ID, recommendation, userDecision, sessionContext))
-            .thenReturn(plan);
-        when(simulationApiClient.getSession(SESSION_ID))
-            .thenReturn(new SessionStatusResponse(SESSION_ID, ENVIRONMENT_ID, "SUBMITTED", "NOT_STARTED", "NOT_STARTED"));
+            .thenReturn(new ExecutionPlanResult(plan, ENVIRONMENT_ID));
         when(executionPlanService.submitAndRun(eq(SESSION_ID), any(ParticipantSubmission.class)))
             .thenReturn(expectedResult);
 
@@ -79,6 +80,7 @@ class SubmissionOrchestratorTest {
         );
 
         assertThat(result).isEqualTo(expectedResult);
+        verify(simulationApiClient, never()).getSession(any());
 
         ArgumentCaptor<ParticipantSubmission> captor = ArgumentCaptor.forClass(ParticipantSubmission.class);
         verify(executionPlanService).submitAndRun(eq(SESSION_ID), captor.capture());
@@ -97,12 +99,14 @@ class SubmissionOrchestratorTest {
 
     @Test
     void 세션의_environmentId를_못_찾으면_예외를_던지고_submitAndRun을_호출하지_않는다() {
+        // approved=false 경로: buildExecutionPlan이 environmentId 조회를 생략하므로(ExecutionPlanResult.environmentId()=null),
+        // runApprovalFlow가 직접 Simulation API에 조회해야 하는 fallback 분기를 검증한다.
         Recommendation recommendation = recommendation();
-        UserDecision userDecision = UserDecision.approve();
+        UserDecision userDecision = UserDecision.reject("사용자가 거절함");
         ChickenStoreSessionContext sessionContext = sessionContext();
 
         when(executionPlanService.buildExecutionPlan(SESSION_ID, recommendation, userDecision, sessionContext))
-            .thenReturn(ExecutionPlan.empty());
+            .thenReturn(new ExecutionPlanResult(ExecutionPlan.empty(), null));
         when(simulationApiClient.getSession(SESSION_ID))
             .thenReturn(new SessionStatusResponse(SESSION_ID, null, "WAITING", "NOT_STARTED", "NOT_STARTED"));
 

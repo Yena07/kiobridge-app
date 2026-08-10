@@ -64,8 +64,14 @@ public class ExecutionPlanService {
      * GET /api/v1/sessions/:sessionId를 조회해서 세션 생성 시점에 실제로 쓰인 값을 가져온다.
      * (createSession(environmentId) 때 정해진 값과 buildExecutionPlan 때 쓰는 값이 어긋나는 걸
      * 로컬에 별도 상태를 두지 않고 Kit 서버를 단일 진실 공급원으로 삼아 막는다.)
+     *
+     * 반환값이 ExecutionPlan이 아니라 ExecutionPlanResult인 이유: 여기서 이미 조회한 environmentId를
+     * SubmissionOrchestrator.runApprovalFlow()가 ParticipantSubmission 조립에도 써야 하는데,
+     * 예전엔 그 값을 돌려줄 방법이 없어서 runApprovalFlow가 같은 세션을 Simulation API에 한 번 더
+     * 중복 조회했다. approved()==false면 environmentId 조회 자체를 생략하므로(불필요한 Kit 호출
+     * 회피) 그 경우 ExecutionPlanResult.environmentId()는 null이다.
      */
-    public ExecutionPlan buildExecutionPlan(
+    public ExecutionPlanResult buildExecutionPlan(
         String sessionId,
         Recommendation recommendation,
         UserDecision userDecision,
@@ -73,7 +79,7 @@ public class ExecutionPlanService {
     ) {
         Objects.requireNonNull(userDecision, "userDecision은 null일 수 없습니다.");
         if (!userDecision.approved()) {
-            return ExecutionPlan.empty();
+            return new ExecutionPlanResult(ExecutionPlan.empty(), null);
         }
         Objects.requireNonNull(sessionId, "sessionId는 null일 수 없습니다.");
         Objects.requireNonNull(recommendation, "recommendation은 null일 수 없습니다.");
@@ -109,7 +115,7 @@ public class ExecutionPlanService {
         }
 
         List<Action> actions = assembleActions(fixture.optionGroups(), candidate, candidateId, preferences);
-        return ExecutionPlan.of(UUID.randomUUID().toString(), actions);
+        return new ExecutionPlanResult(ExecutionPlan.of(UUID.randomUUID().toString(), actions), environmentId);
     }
 
     private static List<Action> assembleActions(

@@ -4,8 +4,8 @@
 로컬에서 프론트와 붙여 보려고 그대로 복사해 둔 것입니다.
 
 ```
-원본   watTHEBUG/kioBridge  dev  04b17d0  [FIX] recommendation PASS, SKIP 점수 수정 (#59)
-복사   2026-08-10
+원본   watTHEBUG/kioBridge  dev  2ebe647  [TEST] EvidenceSummaryService/EvidenceParsingService/ValidationErrorMessageService 유닛 테스트 추가 (#69)
+복사   2026-08-11
 ```
 
 빌드 산출물(`build/`, `.gradle/`)은 복사하지 않습니다. 만들어지는 것이라
@@ -19,6 +19,10 @@
 백엔드는 **`member` 모듈 자체가 없어서 로그인 API 가 없었고**, 승인 응답도
 `#48` 이전 모양(`{ valid, run, evidence, validation }`)이라 `summary` 가
 아예 오지 않았습니다.
+
+2026-08-11 에 또 겪었습니다. 사본이 `#59` 에 멈춰 있는 동안 팀이 `#66` 을
+머지해서 승인 응답에 `validationMessages`(검증 실패 이유를 사람 문장으로 옮긴 것)가
+생겼는데, 이 사본으로는 아무리 실패시켜도 그 필드가 오지 않았습니다.
 
 프론트는 멀쩡한데 화면에서만 안 되는 것처럼 보입니다. **연동이 안 되는 것 같으면
 이 사본이 언제 것인지부터 보세요.** 위의 커밋 해시와 팀 `dev` 를 비교하면 됩니다.
