@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearAccountMock, createTeamAccount, mockAccount, setAccountMockDelay,
-  아이디검사, 비밀번호검사, 올릴수있나,
-  LOGIN_ID_MAX, PASSWORD_MIN,
+  아이디검사, 비밀번호검사, 못올리는이유,
+  LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, PROFILE_ID_MAX,
 } from "./account";
 import { KioBridgeError } from "./client";
 import type { OrderSheet } from "@/domain/types";
@@ -71,22 +71,32 @@ describe("비밀번호검사 — 길이는 글자로, 상한은 바이트로", (
   });
 });
 
-describe("올릴수있나 — 서버가 받아 주지 않을 주문표를 미리 가린다", () => {
+describe("못올리는이유 — 서버가 받아 주지 않을 주문표를 미리 가린다", () => {
   it("장소가 없으면 못 올린다", () => {
     // 서버의 place 가 @NotBlank 다. 올려 봐야 code 없는 400 이라 이유를 전할 수 없다.
-    expect(올릴수있나(주문표({ place: null }))).toBe("장소를 정해 두시면 다음에도 불러올 수 있어요");
+    expect(못올리는이유(주문표({ place: null }))).toBe("장소를 정해 두시면 다음에도 불러올 수 있어요");
   });
 
   it("장소가 있으면 올릴 수 있다", () => {
-    expect(올릴수있나(주문표())).toBeNull();
+    expect(못올리는이유(주문표())).toBeNull();
   });
 
-  it("메뉴 이름이 100자를 넘으면 못 올린다", () => {
-    expect(올릴수있나(주문표({ menuName: "가".repeat(101) }))).not.toBeNull();
+  // 상한은 양쪽을 본다. 넘는 쪽만 보면 `>` 가 `>=` 로 바뀌어도 이 테스트는 통과하고,
+  // 그러면 딱 100자인 메뉴 이름이 조용히 저장되지 않는데 아무도 모른다.
+  it(`메뉴 이름은 ${MENU_NAME_MAX}자까지 올라가고 그 다음부터 막힌다`, () => {
+    expect(못올리는이유(주문표({ menuName: "가".repeat(MENU_NAME_MAX) }))).toBeNull();
+    expect(못올리는이유(주문표({ menuName: "가".repeat(MENU_NAME_MAX + 1) }))).not.toBeNull();
   });
 
-  it("메모가 500자를 넘으면 못 올린다", () => {
-    expect(올릴수있나(주문표({ memo: "가".repeat(501) }))).not.toBeNull();
+  it(`메모는 ${MEMO_MAX}자까지 올라가고 그 다음부터 막힌다`, () => {
+    expect(못올리는이유(주문표({ memo: "가".repeat(MEMO_MAX) }))).toBeNull();
+    expect(못올리는이유(주문표({ memo: "가".repeat(MEMO_MAX + 1) }))).not.toBeNull();
+  });
+
+  it(`주문표 id 는 ${PROFILE_ID_MAX}자까지 올라간다`, () => {
+    // 지금 만드는 id 는 17자쯤이라 넘을 일이 없지만, 검사가 있으니 함께 잠가 둔다.
+    expect(못올리는이유(주문표({ id: "a".repeat(PROFILE_ID_MAX) }))).toBeNull();
+    expect(못올리는이유(주문표({ id: "a".repeat(PROFILE_ID_MAX + 1) }))).not.toBeNull();
   });
 });
 
@@ -183,6 +193,32 @@ describe("목 — 주문표", () => {
     await mockAccount.saveSheet(a.userId, p);
     p.menuName = "몰래 고침";
     expect((await mockAccount.listSheets(a.userId))[0].menuName).toBe("닭강정");
+  });
+
+  it("올린 뒤 selections 안을 제자리에서 고쳐도 저장된 것은 그대로다", async () => {
+    /*
+     * 위 검사는 menuName 이라는 원시값만 봐서 이 결함을 놓쳤다.
+     * `{ ...주문표 }` 는 한 겹만 복사하므로 selections 의 배열은 목 저장소와 화면이
+     * 같은 것을 가리킨다. 화면에서 칩 하나를 더 고르면 올리지도 않았는데
+     * '서버에 저장된 값' 이 같이 바뀐다. 실서버는 JSON 을 오가니 그럴 일이 없다.
+     */
+    const a = await mockAccount.signup("할머니1", "1234");
+    const p = 주문표();
+    await mockAccount.saveSheet(a.userId, p);
+    p.selections["맵기"].push("순한맛");
+    expect((await mockAccount.listSheets(a.userId))[0].selections["맵기"]).toEqual(["매운맛"]);
+  });
+
+  it("불러온 것을 고쳐도 저장소는 그대로다", async () => {
+    // 나가는 쪽도 막아야 한다. 화면은 받은 객체를 그대로 React 상태에 넣는다.
+    const a = await mockAccount.signup("할머니1", "1234");
+    await mockAccount.saveSheet(a.userId, 주문표());
+    const 받은것 = await mockAccount.listSheets(a.userId);
+    받은것[0].selections["맵기"].push("순한맛");
+    받은것[0].menuName = "몰래 고침";
+    const 다시 = await mockAccount.listSheets(a.userId);
+    expect(다시[0].selections["맵기"]).toEqual(["매운맛"]);
+    expect(다시[0].menuName).toBe("닭강정");
   });
 });
 
@@ -325,5 +361,63 @@ describe("팀 백엔드 — 서버가 준 값을 화면 타입으로 좁힌다",
   it("빈 목록이어도 터지지 않는다", async () => {
     globalThis.fetch = vi.fn(async () => 응답([])) as unknown as typeof fetch;
     expect(await createTeamAccount().listSheets(7)).toEqual([]);
+  });
+
+  it("selections 모양이 어긋나면 그 축을 버린다", async () => {
+    /*
+     * 이 값은 확인 카드가 "이렇게 고르셨어요" 라고 읽어 주는 값이다. 배열이 아닌 것이
+     * 섞여 들어오면 사용자가 고른 적 없는 조건이 화면에 뜨거나 그리다가 터진다.
+     * 빠진 조건은 안 보이면 그만이지만, 틀린 조건은 그걸 보고 승인하게 된다.
+     */
+    globalThis.fetch = vi.fn(async () => 응답([{
+      profileId: "p1", menuName: "닭강정", place: "음식점", memo: null,
+      selections: { "맵기": "매운맛", "형태": ["순살"], "컵": [1, "종이컵"], "수량": [] },
+    }])) as unknown as typeof fetch;
+
+    const 것 = (await createTeamAccount().listSheets(7))[0];
+    expect(것.selections).toEqual({ "형태": ["순살"], "컵": ["종이컵"] });
+  });
+
+  it("selections 가 아예 배열이나 null 이어도 빈 값으로 받는다", async () => {
+    globalThis.fetch = vi.fn(async () => 응답([
+      { profileId: "p1", menuName: "가", place: "음식점", memo: null, selections: null },
+      { profileId: "p2", menuName: "나", place: "음식점", memo: null, selections: ["맵기"] },
+    ])) as unknown as typeof fetch;
+
+    const 것들 = await createTeamAccount().listSheets(7);
+    expect(것들[0].selections).toEqual({});
+    expect(것들[1].selections).toEqual({});
+  });
+
+  it("200 인데 JSON 이 아니면 개발자 문장을 화면에 올리지 않는다", async () => {
+    // 프록시가 끼워 넣은 HTML 같은 것. 예전에는 SyntaxError 가 그대로 올라가서
+    // 어르신 화면에 "Unexpected token '<'" 가 떴다.
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true, status: 200, json: async () => ({}), text: async () => "<html>...</html>",
+    }) as Response) as unknown as typeof fetch;
+
+    const e = await createTeamAccount().login("할머니1", "1234").catch((x: KioBridgeError) => x);
+    expect((e as KioBridgeError).code).toBe("BAD_RESPONSE");
+    expect((e as KioBridgeError).recoverable).toBe(true);
+  });
+
+  it("응답이 오지 않으면 끊고 사용자에게 말한다", async () => {
+    // 시간 제한이 없으면 이 프로미스가 영영 안 끝나고, 화면은 "가입하는 중" 에서
+    // 버튼이 잠긴 채로 멈춘다. 나갈 길이 없다.
+    globalThis.fetch = vi.fn(async (_u: unknown, init?: RequestInit) => {
+      await new Promise((_, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+      });
+      return 응답({});
+    }) as unknown as typeof fetch;
+
+    vi.useFakeTimers();
+    const 기다림 = createTeamAccount().login("할머니1", "1234").catch((x: KioBridgeError) => x);
+    await vi.advanceTimersByTimeAsync(20_000);
+    const e = await 기다림;
+    vi.useRealTimers();
+
+    expect((e as KioBridgeError).code).toBe("TIMEOUT");
+    expect((e as KioBridgeError).recoverable).toBe(true);
   });
 });

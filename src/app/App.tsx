@@ -16,7 +16,7 @@ import type {
 import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_SHEETS, STEPS } from "@/domain/catalog";
 import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerSheet, unregisterSheet, type Scenario } from "@/api/client";
 import {
-  account, 아이디검사, 비밀번호검사, 올릴수있나,
+  account, 아이디검사, 비밀번호검사, 못올리는이유,
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
@@ -497,7 +497,7 @@ function SignupScreen({ onDone, onBack, onGoLogin, onPrivacy }: {
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={1} total={3} />
+          <ProgressBar step={1} total={2} />
         </div>
       </div>
 
@@ -583,7 +583,7 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={2} total={3} />
+          <ProgressBar step={2} total={2} />
         </div>
       </div>
 
@@ -761,10 +761,9 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 let 주문표일련번호 = 0;
 const newSheetId = () => `p${Date.now()}_${++주문표일련번호}`;
 
-function OrderSheetScreen({ onNext, onBack, showProgress = true, 로그인함 = false }: {
+function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
   onNext: (p: OrderSheet) => void;
   onBack: () => void;
-  showProgress?: boolean;
   /**
    * 로그인한 사람인가. 저장한 주문표가 서버에도 올라가는지가 달라지므로 화면이 말해 준다.
    * 로그인하지 않았으면 서버 이야기를 꺼내지 않는다 — 하지 않는 일을 설명할 이유가 없다.
@@ -815,17 +814,16 @@ function OrderSheetScreen({ onNext, onBack, showProgress = true, 로그인함 = 
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
-        <div className="flex items-center">
-          <BackButton onClick={onBack} />
-          <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-            {/*
-             * 진행 표시는 가입 흐름(가입 1 → 호칭 2 → 주문표 3)을 전제한다.
-             * 주 경로인 게스트는 앞의 둘을 건너뛰므로, 처음 주문표를 만드는 사람에게
-             * "3단계 중 3단계" 라고 읽히는 건 사실이 아니다. 게스트에게는 숨긴다.
-             */}
-            {showProgress && <ProgressBar step={3} total={3} />}
-          </div>
-        </div>
+        {/*
+         * 진행 표시를 두지 않는다.
+         *
+         * 예전에는 게스트가 아니면 "3단계 중 3단계" 를 보여 줬다. 그런데 이 화면은 가입
+         * 흐름의 끝이 아니라 홈에서 '+ 새 주문표 추가' 로 들어오는 자리다. 로그인한 사람이
+         * 다섯 번째 주문표를 만들 때도 "3단계 중 3단계" 가 떴고, role="progressbar" 라
+         * 스크린리더는 그 틀린 단계를 그대로 읽었다.
+         * 가입 흐름은 가입(1) → 호칭(2) 둘로 끝난다.
+         */}
+        <BackButton onClick={onBack} />
         <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 주문표</h1>
         <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 24 }}>자주 주문하는 메뉴를 저장해두세요</p>
       </div>
@@ -2831,6 +2829,14 @@ export default function App() {
    * 사라지고, 남겨 두면 다음 사람이 이 기기를 열었을 때 앞사람 주문표가 그대로 보인다.
    */
   const 서버에서온것 = useRef<Set<string>>(new Set());
+  /**
+   * 계정이 몇 번 바뀌었는지. 로그인·로그아웃·정보 지우기가 이 값을 올린다.
+   *
+   * 서버 요청을 보낼 때 이 값을 적어 두고, 답이 왔을 때 아직 같은지 본다. 다르면 버린다.
+   * 없으면 늦게 도착한 답이 이미 지운 주문표를 되살린다 — 화면이 "모두 지웠어요" 라고
+   * 말한 뒤에 목록이 되돌아오는 것이라, 지킬 수 없는 약속을 한 셈이 된다.
+   */
+  const 계정세대 = useRef(0);
   /** 큰 글씨 모드. 휴대폰 틀 안 전체에 적용된다. */
   const [largeText, setLargeText] = useState(false);
   const [sheets, setSheets] = useState<OrderSheet[]>(MOCK_SHEETS);
@@ -2890,7 +2896,11 @@ export default function App() {
    * 없어진 것을 보고서야 알게 된다. 재시도도 자기 자신을 부른다.
    */
   const 주문표올리기 = (userId: number, p: OrderSheet): void => {
+    const 내세대 = 계정세대.current;
     account.saveSheet(userId, p).catch((e: KioBridgeError) => {
+      // 기다리는 사이 로그아웃했거나 정보를 지웠으면 묻지 않는다. 나간 사람에게
+      // 남의 계정으로 다시 올리겠냐고 묻는 셈이 된다.
+      if (내세대 !== 계정세대.current) return;
       set확인대기({
         title: "이 기기에는 저장했어요",
         body: `${e?.message ?? "서버에 올리지 못했어요"} 지금은 이 기기에만 있어서, 다음에 로그인하면 안 보일 수 있어요.`,
@@ -2911,7 +2921,8 @@ export default function App() {
     addSheet(p);
     setScreen("saved");
     setTab("menu");
-    if (계정 && !올릴수있나(p)) 주문표올리기(계정.userId, p);
+    // 못올리는이유() 는 이유 문자열이거나 null 이다. null 일 때만 올린다.
+    if (계정 && 못올리는이유(p) === null) 주문표올리기(계정.userId, p);
   };
 
   /**
@@ -2925,6 +2936,8 @@ export default function App() {
    * 빈 목록을 보여 주면 사용자는 저장해 둔 게 사라진 줄 안다.
    */
   const 계정으로들어가기 = (a: Account, 다음화면: Screen): void => {
+    계정세대.current += 1;
+    const 내세대 = 계정세대.current;
     set계정(a);
     setScreen(다음화면);
     if (다음화면 === "saved") setTab("menu");
@@ -2932,6 +2945,16 @@ export default function App() {
     const 불러오기 = (): void => {
       account.listSheets(a.userId)
         .then((서버것) => {
+          /*
+           * 늦게 온 답을 그대로 넣으면 이미 지운 것이 되살아난다. 두 경우가 있었다.
+           *
+           *   ① 기다리는 동안 로그아웃한다 → 게스트 화면에 앞사람 주문표가 남는다.
+           *   ② 기다리는 동안 '이 기기에서 정보 지우기' 를 누른다 → 비운 목록이 되돌아온다.
+           *
+           * 둘째가 특히 나쁘다. 화면이 지웠다고 말해 놓고 실제로는 안 지운 것이 된다.
+           * 계정이 바뀌는 모든 자리에서 세대를 올리고, 답이 오면 내 세대인지 먼저 본다.
+           */
+          if (내세대 !== 계정세대.current) return;
           if (서버것.length === 0) return;
           for (const p of 서버것) 서버에서온것.current.add(p.id);
           setSheets((prev) => {
@@ -2940,6 +2963,8 @@ export default function App() {
           });
         })
         .catch((e: KioBridgeError) => {
+          // 이미 나간 사람에게 다시 시도하겠냐고 묻지 않는다.
+          if (내세대 !== 계정세대.current) return;
           set확인대기({
             title: "저장해 두신 주문표를 못 불러왔어요",
             body: `${e?.message ?? "서버에 연결하지 못했어요"} 로그인은 됐어요. 이 기기에 있는 주문표는 그대로 쓸 수 있어요.`,
@@ -2959,6 +2984,9 @@ export default function App() {
    * 게스트로 만든 주문표는 이 기기 것이므로 건드리지 않는다.
    */
   const 로그아웃 = (): void => {
+    // 아직 오는 중인 답을 무효로 만든다. 안 그러면 로그아웃한 뒤에 도착한 목록이
+    // 방금 뺀 주문표를 그대로 돌려놓는다.
+    계정세대.current += 1;
     const 뺄것 = 서버에서온것.current;
     setSheets((prev) => prev.filter((p) => !뺄것.has(p.id)));
     for (const id of 뺄것) unregisterSheet(id);
@@ -3107,7 +3135,6 @@ export default function App() {
           )}
           {screen === "sheet" && (
             <OrderSheetScreen
-              showProgress={!guest}
               로그인함={!guest}
               onNext={주문표저장}
               onBack={() => setScreen("saved")}
@@ -3179,6 +3206,9 @@ export default function App() {
                   setSheets([]); setName("");
                   // 계정도 함께 푼다. 안 풀면 주문표를 다 지운 화면에 회원으로 남아
                   // '저장된 주문표 관리' 가 빈 목록을 회원 것처럼 보여 준다.
+                  // 세대를 올려 아직 오는 중인 불러오기 답도 무효로 만든다 — 안 그러면
+                  // 방금 비운 목록이 그 답으로 되돌아온다.
+                  계정세대.current += 1;
                   set계정(null); 서버에서온것.current = new Set();
                   setOrderSheet(null); setPlanId(null);
                   // 연결 정보도 지운다. 안 지우면 정리한 뒤 몇 분 지나 만료 타이머가

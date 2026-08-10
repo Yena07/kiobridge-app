@@ -96,12 +96,17 @@ export const 비밀번호검사 = (v: string): string | null => {
 };
 
 /**
- * 이 주문표를 서버에 올릴 수 있는가. 올릴 수 있으면 null, 아니면 못 올리는 이유.
+ * 이 주문표를 서버에 못 올리는 이유. 올릴 수 있으면 null.
  *
  * 지어내지 않는다 — 장소가 비어 있으면 서버가 받아 주지 않으므로, 올린 척하지 않고
  * 무엇을 하면 올라가는지 말한다.
+ *
+ * 이름이 '올릴수있나' 였는데 반환값은 boolean 이 아니라 이유 문자열이다. 그래서
+ * `!올릴수있나(p)` 가 "올릴 수 없나" 로 읽혔고, 부호를 반대로 고치기 쉬웠다.
+ * 뒤집히면 장소가 빈 주문표가 서버로 가서 이유 없는 실패 안내를 받는다.
+ * 이름을 반환값에 맞춘다 — `!못올리는이유(p)` 는 "못 올릴 이유가 없으면" 으로 읽힌다.
  */
-export const 올릴수있나 = (p: OrderSheet): string | null => {
+export const 못올리는이유 = (p: OrderSheet): string | null => {
   if (!p.place) return "장소를 정해 두시면 다음에도 불러올 수 있어요";
   if (!p.menuName.trim()) return "메뉴 이름이 있어야 저장할 수 있어요";
   if (p.menuName.length > MENU_NAME_MAX) return `메뉴 이름은 ${MENU_NAME_MAX}자까지 저장돼요`;
@@ -112,12 +117,17 @@ export const 올릴수있나 = (p: OrderSheet): string | null => {
 
 // ─── 서버 응답 ↔ 화면 타입 ────────────────────────────────────────────────────
 
-/** UserProfileResponse. place 가 문자열이라 화면 타입으로 좁혀서 받는다. */
+/**
+ * UserProfileResponse.
+ *
+ * 필드를 전부 unknown 으로 받는다. 서버가 준 값이 선언한 모양이라고 단정하면
+ * 그 단정이 틀렸을 때 화면이 대신 깨진다. 아래에서 하나씩 좁혀서 읽는다.
+ */
 interface UserProfileResponse {
   profileId: string;
   menuName: string;
   place: string;
-  selections: Record<string, string[]>;
+  selections: unknown;
   memo: string | null;
 }
 
@@ -132,12 +142,47 @@ const 장소목록: NonNullable<PlaceType>[] = ["카페", "음식점", "병원",
 const 장소읽기 = (v: string): PlaceType =>
   (장소목록 as string[]).includes(v) ? (v as PlaceType) : null;
 
+/**
+ * 서버가 준 선택 항목을 화면이 아는 모양으로 좁힌다.
+ *
+ * place 는 좁히면서 selections 는 `?? {}` 만 하고 넘겼었다. 서버가
+ * `{"맵기": "매운맛"}` 처럼 배열이 아닌 값을 주면 그게 그대로 화면까지 간다.
+ * 이 값은 확인 카드가 "이렇게 고르셨어요" 라고 읽어 주는 값이라, 모양이
+ * 어긋나면 사용자가 고른 적 없는 조건이 섞이거나 그리다가 터진다.
+ *
+ * 모르는 모양은 버린다. 지어내지 않는다 — 빠진 조건은 화면이 안 보여 주면 그만이지만,
+ * 틀린 조건을 보여 주면 그걸 보고 승인한다.
+ */
+const 선택읽기 = (v: unknown): Record<string, string[]> => {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const 결과: Record<string, string[]> = {};
+  for (const [축, 값] of Object.entries(v as Record<string, unknown>)) {
+    if (!Array.isArray(값)) continue;
+    const 고른것 = 값.filter((x): x is string => typeof x === "string");
+    if (고른것.length > 0) 결과[축] = 고른것;
+  }
+  return 결과;
+};
+
 const 주문표읽기 = (r: UserProfileResponse): OrderSheet => ({
   id: r.profileId,
   menuName: r.menuName,
   place: 장소읽기(r.place),
-  selections: r.selections ?? {},
+  selections: 선택읽기(r.selections),
   memo: r.memo ?? "",
+});
+
+/**
+ * 주문표를 한 겹 더 깊이 복사한다.
+ *
+ * `{ ...주문표 }` 는 한 겹만 복사해서 selections 의 배열이 그대로 공유된다. 목 저장소와
+ * React 상태가 같은 객체를 가리키게 되고, 어느 쪽에서 제자리 수정이 일어나도 반대쪽이
+ * 같이 바뀐다 — 올리지도 않은 변경이 '서버에 저장된 값' 으로 보인다.
+ * 실서버는 JSON 을 오가므로 그런 일이 없다. 목도 같아야 목에서만 나는 버그가 안 생긴다.
+ */
+const 주문표복사 = (p: OrderSheet): OrderSheet => ({
+  ...p,
+  selections: Object.fromEntries(Object.entries(p.selections ?? {}).map(([축, 값]) => [축, [...값]])),
 });
 
 // ─── 목 구현 ──────────────────────────────────────────────────────────────────
@@ -191,16 +236,18 @@ export const mockAccount: AccountApi = {
 
   async listSheets(userId) {
     await delay(목지연);
-    return [...(서버주문표.get(userId)?.values() ?? [])];
+    // 저장된 객체를 그대로 돌려주면 화면이 그걸 React 상태에 넣고, 이후 화면에서
+    // 고치는 순간 목 저장소도 같이 바뀐다. 나갈 때도 복사한다.
+    return [...(서버주문표.get(userId)?.values() ?? [])].map(주문표복사);
   },
 
   async saveSheet(userId, sheet) {
     await delay(목지연);
-    const 문제 = 올릴수있나(sheet);
+    const 문제 = 못올리는이유(sheet);
     if (문제) throw new KioBridgeError("INVALID_REQUEST", 문제, true);
     const 것들 = 서버주문표.get(userId) ?? new Map<string, OrderSheet>();
     // 서버가 (userId, profileId) 유일 제약으로 upsert 한다. 목도 같게 둔다.
-    것들.set(sheet.id, { ...sheet });
+    것들.set(sheet.id, 주문표복사(sheet));
     서버주문표.set(userId, 것들);
   },
 };
@@ -247,16 +294,36 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
       연동기록.남기기({ 방법, 경로: path, 상태, 걸린시간: Math.round(performance.now() - 시작), 시각: Date.now() });
     };
 
+    /*
+     * 브라우저 ↔ BFF 구간도 끊는다.
+     *
+     * api/bff.ts 가 15초에 끊는 것은 BFF ↔ 백엔드 구간이다. 브라우저에서 BFF 까지
+     * 가는 길이 매달리면 이 프로미스는 영영 끝나지 않는다. 그러면 SignupScreen 과
+     * LoginScreen 은 보내는중 을 .catch 에서만 되돌리므로 버튼이 잠긴 채로 남고,
+     * 사용자는 나갈 길 없이 "가입하는 중" 앞에 갇힌다.
+     * BFF 상한보다 넉넉히 두어, 백엔드가 늦은 경우에는 BFF 의 504 가 먼저 오게 한다.
+     */
+    const ac = new AbortController();
+    const 시계 = setTimeout(() => ac.abort(), 20_000);
+
     let res: Response;
     try {
       res = await fetch(baseUrl + path, {
         method: 방법,
+        signal: ac.signal,
         headers: { "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
-    } catch {
+    } catch (e) {
       적기("실패");
-      throw new KioBridgeError("NETWORK_ERROR", "연결하지 못했어요", true);
+      const 시간초과 = (e as Error)?.name === "AbortError";
+      throw new KioBridgeError(
+        시간초과 ? "TIMEOUT" : "NETWORK_ERROR",
+        시간초과 ? "응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요" : "연결하지 못했어요",
+        true,
+      );
+    } finally {
+      clearTimeout(시계);
     }
     적기(res.status);
 
@@ -268,8 +335,20 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
       // 되돌아갈 길 없는 막다른 곳으로 사용자를 보내지 않게 하는 값이라 여기서는 늘 참이다.
       throw new KioBridgeError(code, 문구(code, b.message, res.status), true);
     }
+
     const t = await res.text();
-    return (t ? JSON.parse(t) : undefined) as T;
+    if (!t) return undefined as T;
+    try {
+      return JSON.parse(t) as T;
+    } catch {
+      /*
+       * 이 함수는 "모든 실패를 KioBridgeError 로 바꾼다" 가 계약이다. 여기가 뚫려 있었다.
+       * 백엔드가 200 으로 JSON 이 아닌 것(프록시가 끼워 넣은 HTML 같은 것)을 주면
+       * SyntaxError 가 그대로 올라가고, 화면은 e.message 를 그대로 보여 준다 —
+       * 어르신 화면에 "Unexpected token '<'" 가 뜬다. recoverable 도 undefined 가 된다.
+       */
+      throw new KioBridgeError("BAD_RESPONSE", "서버 응답을 읽지 못했어요", true);
+    }
   };
 
   return {
@@ -287,7 +366,7 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
     async saveSheet(userId, sheet) {
       // 서버가 400 으로 막을 것을 미리 거른다. 400 은 code 없는 스프링 기본 응답이라
       // 사용자에게 무엇이 문제인지 말해 줄 수 없다.
-      const 문제 = 올릴수있나(sheet);
+      const 문제 = 못올리는이유(sheet);
       if (문제) throw new KioBridgeError("PROFILE_NOT_UPLOADABLE", 문제, true);
       await 부르기<UserProfileResponse>("POST", `/api/v1/users/${encodeURIComponent(userId)}/profiles`, {
         profileId: sheet.id,
