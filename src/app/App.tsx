@@ -2710,6 +2710,64 @@ function StepCard({ statuses }: { statuses: StepStatus[] }) {
   );
 }
 
+/**
+ * 키오스크가 실제로 한 일을 순서대로 보여 준다.
+ *
+ * 위의 StepCard 는 우리가 정해 둔 다섯 단계이고, 이건 서버가 정말 한 동작이다.
+ * 둘은 개수가 다르다 - 다섯 칸에 열 동작이 들어간다. 그래서 다섯 단계를
+ * 이걸로 바꾸지 않고 아래에 접어 둔다. 열 줄을 펼쳐 두면 화면이 길어지고,
+ * 대개 사람이 알고 싶은 건 '담겼나' 한 가지다.
+ *
+ * 접어 두되 없애지는 않는다. 결과가 미심쩍을 때 무엇을 골랐는지 한 줄씩
+ * 확인할 수 있어야 하고, 그게 대신 눌러 주는 앱이 갚아야 할 몫이다.
+ *
+ * 서버가 안 주면(#71 이전 백엔드, 목) 이 부품을 아예 그리지 않는다.
+ */
+function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
+  const [펼침, set펼침] = useState(false);
+  const 실패 = done.filter((d) => !d.ok).length;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => set펼침((v) => !v)}
+        aria-expanded={펼침}
+        style={{
+          width: "100%", minHeight: 44, textAlign: "left", background: "none", border: "none",
+          padding: "6px 2px", display: "flex", alignItems: "center", gap: 8,
+        }}
+      >
+        {/* 키오스크가 대신 눌러 준 일이라 handPointing 을 쓴다. 새 아이콘은 두지 않는다. */}
+        <Pictogram name="handPointing" size={17} color={TEXT_2} />
+        <span style={{ ...TYPE.caption, color: TEXT_2 }}>
+          키오스크가 한 일 {done.length}가지
+          {실패 > 0 && <b style={{ fontWeight: 700, color: WARN }}> · {실패}가지 실패</b>}
+          <span style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>{" "}{펼침 ? "접기" : "보기"}</span>
+        </span>
+      </button>
+
+      {펼침 && (
+        <ol style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: "10px 16px", marginTop: 4 }}>
+          {done.map((d, i) => (
+            <li
+              key={`${i}-${d.text}`}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 9, padding: "8px 0",
+                borderBottom: i < done.length - 1 ? `1px solid ${BORDER}` : "none",
+              }}
+            >
+              <span style={{ ...TYPE.caption, color: TEXT_3, ...NUM, minWidth: 18 }}>{i + 1}</span>
+              <Pictogram name={d.ok ? "checkCircle" : "xCircle"} size={16} color={d.ok ? P : FAIL} style={{ marginTop: 2 }} />
+              <span style={{ ...TYPE.caption, color: TEXT_1, flex: 1 }}>{d.text}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function ExecInProgress({ statuses }: { statuses: StepStatus[] }) {
   return (
     <div className="flex flex-col gap-6">
@@ -2722,8 +2780,10 @@ function ExecInProgress({ statuses }: { statuses: StepStatus[] }) {
   );
 }
 
-function ExecSuccess({ cart, steps, note, serverStatus, onHome }: {
+function ExecSuccess({ cart, steps, done, note, serverStatus, onHome }: {
   cart: CartResult; steps: StepStatus[];
+  /** 키오스크가 실제로 한 일. 서버가 안 주면 없다. */
+  done?: { text: string; ok: boolean }[];
   /** 서버가 증거를 읽어 만든 한 문장. 없으면 이 줄을 그리지 않는다. */
   note?: string;
   /** 서버가 매긴 상태 문장. 그대로 인용한다. */
@@ -2780,6 +2840,8 @@ function ExecSuccess({ cart, steps, note, serverStatus, onHome }: {
 
       <StepCard statuses={steps} />
 
+      {done && <DoneSteps done={done} />}
+
       <div style={{ display: "flex", gap: 11, alignItems: "flex-start", paddingLeft: 2 }}>
         <Pictogram name="shoppingCartSimple" size={20} color={TEXT_2} style={{ marginTop: 1 }} />
         <p style={{ fontSize: 14, color: TEXT_2, lineHeight: 1.6 }}>{cart.handoff}</p>
@@ -2790,8 +2852,10 @@ function ExecSuccess({ cart, steps, note, serverStatus, onHome }: {
   );
 }
 
-function ExecFailed({ abort, steps, serverStatus, onHome }: {
+function ExecFailed({ abort, steps, done, serverStatus, onHome }: {
   abort: AbortInfo; steps: StepStatus[];
+  /** 키오스크가 실제로 한 일. 어디까지 갔는지가 중단됐을 때 더 궁금하다. */
+  done?: { text: string; ok: boolean }[];
   /** 서버가 매긴 상태 문장. 성공 화면과 같은 방식으로 인용한다. */
   serverStatus?: string;
   onHome: () => void;
@@ -2822,6 +2886,8 @@ function ExecFailed({ abort, steps, serverStatus, onHome }: {
       )}
 
       <StepCard statuses={steps} />
+
+      {done && <DoneSteps done={done} />}
 
       <OutlineBtn onClick={onHome}>처음으로</OutlineBtn>
       <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2 }}>이 화면을 직원에게 보여주시면 빨라요</p>
@@ -2920,7 +2986,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
         )}
         {status.state === "running" && !pollError && <ExecInProgress statuses={status.steps} />}
         {status.state === "cart_ready" && status.cart && (
-          <ExecSuccess cart={status.cart} steps={status.steps} note={status.note} serverStatus={status.serverStatus} onHome={onHome} />
+          <ExecSuccess cart={status.cart} steps={status.steps} done={status.done} note={status.note} serverStatus={status.serverStatus} onHome={onHome} />
         )}
         {/*
          * 담기는 끝났는데 내역이 안 온 경우. cart 는 옵셔널이라 서버가 빠뜨릴 수 있다.
@@ -2964,7 +3030,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
           </div>
         )}
         {status.state === "aborted" && status.abort && (
-          <ExecFailed abort={status.abort} steps={status.steps} serverStatus={status.serverStatus} onHome={onHome} />
+          <ExecFailed abort={status.abort} steps={status.steps} done={status.done} serverStatus={status.serverStatus} onHome={onHome} />
         )}
       </div>
     </div>

@@ -566,6 +566,103 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(e.cart).toBeUndefined();
   });
 
+  it("실행 단계를 사람이 읽는 줄로 옮긴다 (#71)", async () => {
+    // 서버가 준 순서 그대로, 고른 값은 값 그대로, 화면 코드는 동작으로 옮긴다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      raw: 실행성공,
+      runSteps: [
+        { actionIndex: 0, action: "select_service", label: "포장하기", success: true },
+        { actionIndex: 1, action: "select_menu", label: "매운 뼈 닭강정", success: true },
+        { actionIndex: 2, action: "select_option", label: "종이컵", success: true },
+        { actionIndex: 3, action: "confirm_option", label: "OPTION_CONFIRM", success: true },
+        { actionIndex: 4, action: "open_cart_review", label: "CART_REVIEW", success: true },
+        { actionIndex: 5, action: "verify_cart", label: "CART_REVIEW", success: true },
+      ],
+    });
+    const e = await b.getEvidence("s1");
+    expect(e.한일?.map((x) => x.text)).toEqual([
+      "포장하기 골랐어요",
+      "매운 뼈 닭강정 골랐어요",
+      "종이컵 골랐어요",
+      "옵션을 확정했어요",
+      "장바구니를 열었어요",
+      "장바구니를 확인했어요",
+    ]);
+    // 화면 코드가 그대로 새면 안 된다. 사용자에게는 뜻 없는 대문자다.
+    expect(JSON.stringify(e.한일)).not.toContain("OPTION_CONFIRM");
+    expect(JSON.stringify(e.한일)).not.toContain("CART_REVIEW");
+  });
+
+  it("confirm_option 두 번을 같은 문장으로 두지 않는다", async () => {
+    // 옵션 확정과 장바구니로 넘기기가 같은 action 으로 온다. action 만 보면
+    // 같은 줄이 나란히 서서 앱이 헛돈 것처럼 읽힌다. 킷이 label 로 구분해 준다.
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true, raw: 실행성공,
+      runSteps: [
+        { actionIndex: 0, action: "confirm_option", label: "OPTION_CONFIRM", success: true },
+        { actionIndex: 1, action: "confirm_option", label: "MENU_SELECTION_WITH_CART", success: true },
+      ],
+    });
+    expect((await b.getEvidence("s1")).한일?.map((x) => x.text)).toEqual([
+      "옵션을 확정했어요",
+      "메뉴를 장바구니로 넘겼어요",
+    ]);
+  });
+
+  it("순서가 뒤섞여 와도 actionIndex 대로 세운다", async () => {
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      raw: 실행성공,
+      runSteps: [
+        { actionIndex: 2, action: "verify_cart", label: "CART_REVIEW", success: false },
+        { actionIndex: 0, action: "select_option", label: "1개", success: true },
+        { actionIndex: 1, action: "confirm_option", label: "OPTION_CONFIRM", success: true },
+      ],
+    });
+    const e = await b.getEvidence("s1");
+    expect(e.한일).toEqual([
+      { text: "1개 골랐어요", ok: true },
+      { text: "옵션을 확정했어요", ok: true },
+      { text: "장바구니를 확인했어요", ok: false },
+    ]);
+  });
+
+  it("모르는 동작이면 지어내지 않는다", async () => {
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true,
+      raw: 실행성공,
+      runSteps: [
+        { actionIndex: 0, action: "scroll_menu", label: "SOME_SCREEN", success: true },
+        { actionIndex: 1, action: "scroll_menu", label: "매운맛", success: true },
+      ],
+    });
+    const e = await b.getEvidence("s1");
+    // 코드 label 이면 무슨 일이 있었는지 말하지 않는다. 사람 말이면 그것만 보여 준다.
+    expect(e.한일?.map((x) => x.text)).toEqual(["한 단계 진행했어요", "매운맛"]);
+  });
+
+  it("#71 이전 응답이면 이 줄을 아예 만들지 않는다", async () => {
+    const b = 붙이기();
+    await 승인(b, { valid: true, raw: 실행성공 });
+    expect((await b.getEvidence("s1")).한일).toBeUndefined();
+  });
+
+  it("두 번째 승인에 앞 승인의 단계가 남지 않는다", async () => {
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true, raw: 실행성공,
+      runSteps: [{ actionIndex: 0, action: "select_option", label: "종이컵", success: true }],
+    });
+    expect((await b.getEvidence("s1")).한일).toHaveLength(1);
+    await 승인(b, { valid: true, raw: 실행성공 });
+    expect((await b.getEvidence("s1")).한일).toBeUndefined();
+  });
+
   it("서버가 옮겨 준 문장이 있으면 그것만 쓴다 (#66)", async () => {
     // 예전 경로(validation.errors)는 킷이 개발자에게 하는 말이다. 둘 다 오면
     // 옮긴 문장 옆에 원문이 그대로 붙어 버린다. 옮긴 쪽만 남긴다.
