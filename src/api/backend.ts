@@ -1018,6 +1018,17 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
    * 우리가 다시 계산할 이유가 없고, 다시 하면 언젠가 갈라진다.
    */
   const 규칙판정들 = new Map<string, {
+    /*
+     * 응답에 판정 필드가 **있었는가**. 후보별 배열이 있었는가와 다르다.
+     *
+     * 이 둘을 구분하지 않으면, 서버가 판정을 보냈는데 그 후보에 대한 항목만
+     * 없는 경우(전부 SKIPPED)에 우리가 다시 계산하는 쪽으로 물러난다. 그러면
+     * 서버가 '비교한 적 없다' 고 한 축을 우리가 맞다.틀리다로 말하게 된다 -
+     * 이 변경이 없애려던 바로 그 문제다.
+     *
+     * 필드 자체가 없을 때(옛 백엔드)만 물러난다.
+     */
+    서버판정있음: boolean;
     warn: Record<string, 규칙판정[]>;
     pass: Record<string, 규칙판정[]>;
   }>();
@@ -1033,9 +1044,11 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
    */
   const 축맞춤 = (profileId: string, candidateId: string, c: KitCandidate | undefined, p: OrderSheet): MappedOption[] => {
     const 판정 = 규칙판정들.get(profileId);
-    const warn = 판정?.warn[candidateId];
-    const pass = 판정?.pass[candidateId];
-    if (!warn && !pass) return 확인표(c, p);
+    // 필드 자체가 없을 때만 우리가 맞춰 본다. 후보별 항목이 없는 것은
+    // '이 후보는 비교한 축이 하나도 없다' 는 뜻이라 빈 것이 맞는 답이다.
+    if (!판정?.서버판정있음) return 확인표(c, p);
+    const warn = 판정.warn[candidateId];
+    const pass = 판정.pass[candidateId];
 
     const 고른값 = p.selections ?? {};
     const 한줄 = (축: string, matched: boolean): MappedOption | null => {
@@ -1270,6 +1283,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       }
       후보.set(profile.id, new Map(담을수있는.map((c) => [c.candidateId, c])));
       규칙판정들.set(profile.id, {
+        서버판정있음: Boolean(r.warningsByCandidateId || r.passesByCandidateId),
         warn: r.warningsByCandidateId ?? {},
         pass: r.passesByCandidateId ?? {},
       });
