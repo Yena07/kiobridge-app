@@ -1829,6 +1829,23 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
     <div className="flex flex-col h-full bg-white">
       <SubScreenHeader title="접근성 설정" onBack={onBack} />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
+        {/*
+          설명은 전부 맨 위에 모아 둔다.
+          예전에는 스위치 사이사이와 맨 아래에 문단이 흩어져 있었다. 스위치를 켜러
+          온 사람이 글에 걸려 넘어지고, 어디까지가 설명이고 어디부터 켤 것인지
+          한눈에 안 들어왔다. 읽을 것은 먼저 끝내고, 그다음부터는 켜기만 한다.
+
+          다섯 문단이던 것을 둘로 줄였다. 지운 것이 아니라 합쳤다 -
+          없어지면 안 되는 말들이다(저장 안 함 · 새로고침하면 초기화 · 직원 도움).
+        */}
+        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 10, lineHeight: 1.7 }}>
+          필요하신 것만 켜 주세요. 켠 것은 이 기기에만 남고, 새로고침하면 처음으로 돌아가요.
+        </p>
+        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 20, lineHeight: 1.7 }}>
+          이 앱은 원래 큰 버튼과 또렷한 대비로 만들었고, 소리로만 알리는 것은 하나도 없어요.
+          어려우면 이 화면을 직원에게 보여 주세요.
+        </p>
+
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 8 }}>이 앱이 바로 바꿔요</h2>
         <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
           {바로바꾸는것.map((r) => (
@@ -1842,10 +1859,24 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
           ))}
         </div>
 
-        <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24, marginBottom: 8 }}>키오스크에 전해 드려요</h2>
-        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 8, lineHeight: 1.7 }}>
-          아래 둘은 이 앱 화면을 바꾸지 않아요. 주문할 때 키오스크에 함께 전해 드립니다.
-          다만 지금은 전달까지만 하고, 키오스크가 이 값을 쓰기 시작하면 그때부터 반영돼요.
+        {/*
+          이 한 줄은 문단이 아니라 제목의 일부다. 스위치와 제목 사이에 본문이
+          끼면 다시 '글 중간에 스위치' 가 된다. 그렇다고 지울 수는 없다 -
+          이 둘은 켜도 앱 화면이 안 바뀌는데, 그 말을 안 하면 화면이 거짓이 된다.
+          (ProfileMapper 는 값을 옮기기만 하고 RecommendationEngineService 는
+          profile 을 읽지 않는다. 지금은 정말로 전해 주기만 한다.)
+        */}
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24 }}>키오스크에 전해 드려요</h2>
+        {/*
+          TEXT_3 를 쓸 뻔했다. 제목보다 낮춰 보이려고 골랐는데 tokens.ts 에
+          "글자 금지" 라고 적어 둔 값이다 - 흰 배경에서 1.74:1 이라 읽으라고
+          둔 문장이 사실상 안 보인다. 하필 접근성 화면에서 그럴 뻔했다.
+
+          낮춰 보이는 것은 색이 아니라 자리와 크기로 만든다. 색은 본문용
+          TEXT_2(흰 배경 5.30:1)를 쓴다.
+        */}
+        <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
+          앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
         <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
           {전해드릴것.map((r) => (
@@ -1859,17 +1890,6 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
           ))}
         </div>
 
-        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 20, lineHeight: 1.7 }}>
-          이 앱은 처음부터 큰 버튼과 또렷한 대비로 만들었어요.
-          단계마다 한 가지만 물어보고, 상태는 색뿐 아니라 그림과 글씨로도 함께 알려드려요.
-          소리로만 알리는 것은 원래 하나도 없어요.
-        </p>
-        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
-          여기서 켠 것은 이 기기에만 있어요. 새로고침하면 처음 상태로 돌아가요.
-        </p>
-        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 12, lineHeight: 1.7 }}>
-          화면이 어려우면 이 화면을 매장 직원에게 보여주세요. 직원이 이어서 도와드릴 수 있어요.
-        </p>
       </div>
     </div>
   );
