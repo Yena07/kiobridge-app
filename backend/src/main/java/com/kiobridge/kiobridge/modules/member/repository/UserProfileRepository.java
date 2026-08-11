@@ -9,9 +9,16 @@ import java.util.Optional;
 public interface UserProfileRepository
         extends JpaRepository<UserProfile, Long> {
 
-    List<UserProfile> findAllByUser_IdOrderByIdAsc(Long userId);
+    List<UserProfile> findAllByUser_IdOrderByIdAsc(
+            Long userId
+    );
 
     Optional<UserProfile> findByUser_IdAndProfileId(
+            Long userId,
+            String profileId
+    );
+
+    long deleteByUser_IdAndProfileId(
             Long userId,
             String profileId
     );

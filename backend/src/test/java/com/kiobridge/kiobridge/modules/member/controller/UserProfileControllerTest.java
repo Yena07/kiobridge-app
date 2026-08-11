@@ -15,7 +15,9 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,12 +34,18 @@ class UserProfileControllerTest {
 
     @Test
     void 프로필을_저장한다() throws Exception {
-        when(userProfileService.save(eq(1L), any()))
-                .thenReturn(response());
+        when(userProfileService.save(
+                eq(1L),
+                any()
+        )).thenReturn(response());
 
         mockMvc.perform(
-                        post("/api/v1/users/1/profiles")
-                                .contentType(MediaType.APPLICATION_JSON)
+                        post(
+                                "/api/v1/users/1/profiles"
+                        )
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
                                 .content("""
                                         {
                                           "profileId": "profile-001",
@@ -59,21 +67,29 @@ class UserProfileControllerTest {
     }
 
     @Test
-    void 프로필_목록을_조회한다() throws Exception {
+    void 프로필_목록을_조회한다()
+            throws Exception {
+
         when(userProfileService.findAll(1L))
-                .thenReturn(List.of(response()));
+                .thenReturn(
+                        List.of(response())
+                );
 
         mockMvc.perform(
-                        get("/api/v1/users/1/profiles")
+                        get(
+                                "/api/v1/users/1/profiles"
+                        )
                 )
                 .andExpect(status().isOk())
                 .andExpect(
-                        jsonPath("$[0].profileId")
-                                .value("profile-001")
+                        jsonPath(
+                                "$[0].profileId"
+                        ).value("profile-001")
                 )
                 .andExpect(
-                        jsonPath("$[0].selections['맵기'][0]")
-                                .value("매운맛")
+                        jsonPath(
+                                "$[0].selections['맵기'][0]"
+                        ).value("매운맛")
                 );
     }
 
@@ -82,8 +98,12 @@ class UserProfileControllerTest {
             throws Exception {
 
         mockMvc.perform(
-                        post("/api/v1/users/1/profiles")
-                                .contentType(MediaType.APPLICATION_JSON)
+                        post(
+                                "/api/v1/users/1/profiles"
+                        )
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
                                 .content("""
                                         {
                                           "profileId": "",
@@ -93,7 +113,37 @@ class UserProfileControllerTest {
                                         }
                                         """)
                 )
-                .andExpect(status().isBadRequest());
+                .andExpect(
+                        status().isBadRequest()
+                );
+    }
+
+    @Test
+    void 선택값_배열이_비어있으면_저장을_거절한다()
+            throws Exception {
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/users/1/profiles"
+                        )
+                                .contentType(
+                                        MediaType.APPLICATION_JSON
+                                )
+                                .content("""
+                                        {
+                                          "profileId": "profile-001",
+                                          "menuName": "닭강정",
+                                          "place": "음식점",
+                                          "selections": {
+                                            "맵기": []
+                                          },
+                                          "memo": ""
+                                        }
+                                        """)
+                )
+                .andExpect(
+                        status().isBadRequest()
+                );
     }
 
     @Test
@@ -101,15 +151,39 @@ class UserProfileControllerTest {
             throws Exception {
 
         when(userProfileService.findAll(999L))
-                .thenThrow(new UserNotFoundException());
+                .thenThrow(
+                        new UserNotFoundException()
+                );
 
         mockMvc.perform(
-                        get("/api/v1/users/999/profiles")
+                        get(
+                                "/api/v1/users/999/profiles"
+                        )
                 )
                 .andExpect(status().isNotFound())
                 .andExpect(
                         jsonPath("$.code")
                                 .value("USER_NOT_FOUND")
+                );
+    }
+
+    @Test
+    void 프로필을_삭제한다()
+            throws Exception {
+
+        mockMvc.perform(
+                        delete(
+                                "/api/v1/users/1/profiles/profile-001"
+                        )
+                )
+                .andExpect(
+                        status().isNoContent()
+                );
+
+        verify(userProfileService)
+                .delete(
+                        1L,
+                        "profile-001"
                 );
     }
 
@@ -121,6 +195,7 @@ class UserProfileControllerTest {
                 Map.of(
                         "맵기",
                         List.of("매운맛"),
+
                         "형태",
                         List.of("순살")
                 ),

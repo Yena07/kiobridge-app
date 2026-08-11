@@ -537,6 +537,87 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     await b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 주문표 });
   };
 
+  it("서버가 준 규칙 판정을 그대로 쓴다", async () => {
+    /*
+     * 예전에는 이 셋을 버리고 attributes.supportedOptions 로 같은 판단을 다시 했다.
+     * 같은 판단을 두 곳에서 하면 언젠가 갈라진다.
+     */
+    const b = 붙이기({
+      "candidate-filters": {
+        eligibleCandidates: [{ candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true }],
+        excludedCandidates: [],
+        warningsByCandidateId: {
+          "candidate-alpha": [{ ruleId: "CHICKEN_BONE_TYPE_PREFERENCE", result: "FAIL", severity: "WARN", errorCode: "BONE_TYPE_MISMATCH" }],
+        },
+        passesByCandidateId: {
+          "candidate-alpha": [{ ruleId: "CHICKEN_SPICY_LEVEL_PREFERENCE", result: "PASS", errorCode: "SPICY_LEVEL_MISMATCH" }],
+        },
+      },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-alpha", alternativeCandidateIds: [] },
+    });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+
+    const 표 = Object.fromEntries(rec.matchedOptions.map((o) => [o.label, o.matched]));
+    expect(표["형태"]).toBe(false);   // WARN 이 왔다
+    expect(표["맵기"]).toBe(true);    // PASS 가 왔다
+    /*
+     * 이용 방식은 어느 쪽에도 안 왔다. WARN 이 없다는 사실만으로는 '일치한다' 를
+     * 뜻하지 않는다 - SKIPPED 면 '비교한 적이 없다' 다. 아무 말도 하지 않는다.
+     */
+    expect(표["이용 방식"]).toBeUndefined();
+  });
+
+  it("규칙 판정이 아예 안 오면 예전처럼 우리가 맞춰 본다", async () => {
+    // 옛 백엔드에서도 확인 카드가 비지 않아야 한다.
+    const b = 붙이기({
+      "candidate-filters": {
+        eligibleCandidates: [{
+          candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true,
+          attributes: { spicyLevel: "HOT", boneType: "BONELESS" },
+          supportedOptions: { SERVICE_TYPE: ["TAKE_OUT"], CUP: ["PAPER"] },
+        }],
+        excludedCandidates: [],
+      },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-alpha", alternativeCandidateIds: [] },
+    });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+    /*
+     * length 만 보면 안 된다. 확인표() 는 수량을 늘 matched: true 로 넣어서,
+     * 이용 방식.맵기.형태.컵 비교가 전부 깨져도 length 는 1 이상이 된다.
+     */
+    expect(rec.matchedOptions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "맵기", matched: true }),
+      expect.objectContaining({ label: "형태", matched: true }),
+    ]));
+  });
+
+  it("판정 필드가 있는데 그 후보 항목만 없으면 우리가 다시 계산하지 않는다", async () => {
+    /*
+     * 후보별 항목이 없는 것은 '이 후보는 비교한 축이 하나도 없다' 는 뜻이다.
+     * 여기서 확인표() 로 물러나면 서버가 비교한 적 없다고 한 축을 우리가
+     * 맞다.틀리다로 말하게 된다 - 이 변경이 없애려던 바로 그 문제다.
+     */
+    const b = 붙이기({
+      "candidate-filters": {
+        eligibleCandidates: [{
+          candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true,
+          attributes: { spicyLevel: "HOT", boneType: "BONELESS" },
+          supportedOptions: { SERVICE_TYPE: ["TAKE_OUT"], CUP: ["PAPER"] },
+        }],
+        excludedCandidates: [],
+        // 필드는 왔는데 이 후보에 대한 항목은 없다.
+        warningsByCandidateId: {},
+        passesByCandidateId: {},
+      },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-alpha", alternativeCandidateIds: [] },
+    });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+    expect(rec.matchedOptions).toEqual([]);
+  });
+
   it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
     const b = 붙이기();
     await 승인(b, 실행성공);
