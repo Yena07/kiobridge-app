@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { DetailOption, PlaceType, OrderSheet } from "@/domain/types";
+import type { DetailOption, PlaceType } from "@/domain/types";
 import { Pictogram } from "@/design/Pictogram";
 
 // 키를 PlaceType 으로 좁혀 둔다. string 이면 장소를 새로 넣을 때 한쪽만 채워도
@@ -77,37 +77,16 @@ export const PLACE_ICONS: Record<NonNullable<PlaceType>, ReactNode> = {
 // 메뉴 사진은 여기 두지 않는다. 저장된 주문표는 의미값(텍스트)만 갖고,
 // 사진은 키오스크 카탈로그가 매핑 응답으로 내려 준 것만 쓴다. (src/api/mock.ts)
 
-export const MOCK_SHEETS: OrderSheet[] = [
-  {
-    id: "1",
-    menuName: "닭강정",
-    place: "음식점",
-    selections: {
-      "이용 방식": ["포장하기"], "맵기": ["매운맛"], "형태": ["순살"],
-      "컵": ["종이컵"], "수량": ["1개"],
-      "알레르기 (꼭 빼주세요)": ["땅콩"],
-    },
-    memo: "",
-  },
-  {
-    id: "2",
-    menuName: "아이스 아메리카노 둘",
-    place: "카페",
-    selections: { "이용 방식": ["테이크아웃"], "음료": ["아메리카노"], "온도": ["ICE"], "사이즈": ["Tall"], "시럽": ["바닐라"] },
-    memo: "얼음 적게 부탁드려요",
-  },
-  {
-    id: "3",
-    menuName: "닭강정",
-    place: "음식점",
-    // 같은 가게, 다른 사람의 조건. 첫 번째 주문표와 모든 축이 반대라
-    // 저장한 조건이 결과를 실제로 바꾼다는 걸 목록에서 바로 보여 준다.
-    selections: {
-      "이용 방식": ["먹고 가기"], "맵기": ["순한맛"], "형태": ["뼈"],
-      "컵": ["일반컵"], "수량": ["2개"],
-    },
-    memo: "매운 건 못 드세요",
-  },
-];
+/*
+ * 미리 넣어 두던 주문표 세 장(MOCK_SHEETS)은 없앴다.
+ *
+ * 처음 연 사람에게 자기가 만든 적 없는 주문표가 세 장 놓여 있었다. 화면은
+ * '저장된 주문표' 라고 부르는데 저장한 적이 없으니, 이걸 지워도 되는지 남의
+ * 것인지 알 수가 없다. 개인정보 화면이 "적어 두신 내용만 저장해요" 라고
+ * 말하는 것과도 어긋난다 — 적은 적이 없는데 있다.
+ *
+ * 이제 빈 목록으로 시작한다. 그 화면은 이미 있다(SavedScreen 의 '저장된
+ * 주문표가 없어요'). 시연에서 주문표를 만드는 것부터 보여 주면 된다.
+ */
 
 export const STEPS = ["포장/매장 선택", "메뉴 선택", "옵션 선택", "옵션 확정·담기", "장바구니 확인"] as const;

@@ -13,7 +13,7 @@ import type {
   MappingResponse, MappedItem, MappedOption, MappingCandidate, ApproveInput, RecommendationReason,
   PlanStatus, CartResult, AbortInfo,
 } from "@/domain/types";
-import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, MOCK_SHEETS, STEPS } from "@/domain/catalog";
+import { DETAIL_OPTIONS, PLACE_LIST, PLACE_ICONS, STEPS } from "@/domain/catalog";
 import { api, POLL_MS, KioBridgeError, getScenario, setScenario, registerSheet, unregisterSheet, type Scenario } from "@/api/client";
 import {
   account, 아이디검사, 비밀번호검사, 못올리는이유, 개인정보같은메모,
@@ -21,6 +21,7 @@ import {
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, type 접근성 } from "@/api/a11y";
+import { 이어쓰기 } from "@/api/session";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
 
@@ -1992,10 +1993,15 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
           한눈에 안 들어왔다. 읽을 것은 먼저 끝내고, 그다음부터는 켜기만 한다.
 
           다섯 문단이던 것을 둘로 줄였다. 지운 것이 아니라 합쳤다 -
-          없어지면 안 되는 말들이다(저장 안 함 · 새로고침하면 초기화 · 직원 도움).
+          없어지면 안 되는 말들이다(어디까지 남는지 · 직원 도움).
+        */}
+        {/*
+          예전에는 "새로고침하면 처음으로 돌아가요" 라고 적혀 있었다. 이제는 안 돌아간다.
+          도움이 필요해서 켠 설정이 새로고침 한 번에 꺼지던 것을 고쳤으니, 문장도 같이
+          고친다 - 안 고치면 켜 놓고도 꺼진 줄 알고 다시 들어와 확인하게 된다.
         */}
         <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 10, lineHeight: 1.7 }}>
-          필요하신 것만 켜 주세요. 켠 것은 이 기기에만 남고, 새로고침하면 처음으로 돌아가요.
+          필요하신 것만 켜 주세요. 켠 것은 이 기기에만 남고, 이 창을 닫으면 처음으로 돌아가요.
         </p>
         <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 20, lineHeight: 1.7 }}>
           이 앱은 원래 큰 버튼과 또렷한 대비로 만들었고, 소리로만 알리는 것은 하나도 없어요.
@@ -2063,7 +2069,7 @@ const 개인정보항목 = (guest: boolean): { title: string; body: string }[] =
     {
       title: "저장하는 것",
       body: guest
-        ? "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요."
+        ? "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요. 실수로 새로고침해도 다시 적지 않으셔도 되게 이 창 안에 남겨 두고, 창을 닫으면 지워요."
         // 전부 올라간다고 적으면 사실이 아니다. 장소를 안 고른 주문표는 서버가
         // 받아 주지 않아서(place 가 필수) 이 기기에만 남는다.
         : "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 로그인하고 계셔서, 장소를 정해 두신 주문표는 서버에도 올라가요 — 다음에 로그인하면 다시 불러오기 위해서예요. 장소를 안 고르신 주문표는 이 기기에만 있어요.",
@@ -2074,7 +2080,9 @@ const 개인정보항목 = (guest: boolean): { title: string; body: string }[] =
     },
     {
       title: "로그인은 어떻게 하나요",
-      body: "직접 지으신 아이디와 비밀번호만 받아요. 실제 이름이나 전화번호는 묻지 않아요. 비밀번호는 서버에서 알아볼 수 없는 형태로 바꿔 저장하고, 이 앱은 적으신 비밀번호를 어디에도 남기지 않아요. 로그인 상태는 이 기기 메모리에만 있어서 새로고침하면 풀립니다.",
+      // 예전에는 "새로고침하면 풀립니다" 라고 적혀 있었다. 이제는 안 풀린다 —
+      // 문장을 같이 안 고치면 화면이 거짓말을 하게 된다.
+      body: "직접 지으신 아이디와 비밀번호만 받아요. 실제 이름이나 전화번호는 묻지 않아요. 비밀번호는 서버에서 알아볼 수 없는 형태로 바꿔 저장하고, 이 앱은 적으신 비밀번호를 어디에도 남기지 않아요. 로그인 상태는 새로고침해도 그대로지만, 이 창을 닫으면 풀립니다.",
     },
     {
       title: "키오스크에 넘기는 것",
@@ -2085,7 +2093,7 @@ const 개인정보항목 = (guest: boolean): { title: string; body: string }[] =
       // 서버에 지우기 경로가 아직 없다. 지운다고 적어 두면 그 문장이 거짓이 된다.
       // 주문표만이 아니라 키오스크에 보낸 승인·거절 기록도 서버에 남는다.
       body: guest
-        ? "지금은 로그인 없이 쓰고 계셔서 이 기기에는 이번 이용이 끝나면 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요. 다만 키오스크에 보낸 주문 기록은 서버에 남아요 — 아직 지우는 길이 없어서요."
+        ? "지금은 로그인 없이 쓰고 계셔서 이 창을 닫으면 이 기기에 남지 않아요. 바로 지우시려면 계정 화면의 ‘이 기기에서 정보 지우기’를 눌러 주세요. 다만 키오스크에 보낸 주문 기록은 서버에 남아요 — 아직 지우는 길이 없어서요."
         // 둘을 뭉뚱그려 "다 지워져요" 라고 쓰면 그게 거짓말이 된다.
         // 주문표는 지워지고(팀 #79 의 DELETE), 주문 기록은 여전히 남는다.
         : "계정 화면의 ‘이 기기에서 정보 지우기’를 누르면 이 기기에 있는 내용이 모두 사라지고, 서버에 올라간 주문표도 함께 지워요. 서버 쪽이 잘 안 되면 그때 화면으로 알려 드리고 다시 시도하실 수 있어요. 다만 키오스크에 보낸 주문 기록은 서버에 남아요 — 그건 아직 지우는 길이 없어서요.",
@@ -3529,20 +3537,43 @@ export default function App() {
   // 주소로 정해진 값으로 시작하고, 그 뒤로는 패널 버튼으로 바꾼다 —
   // 주소를 바꾸면 페이지가 새로 떠서 기록이 사라지기 때문이다.
   const [로그모드, set로그모드] = useState(처음로그모드);
-  const [screen, setScreen] = useState<Screen>("welcome");
-  const [tab, setTab] = useState<MainTab>("menu");
-  const [name, setName] = useState("");
+  /**
+   * 새로고침 전에 하던 것. 없으면 null 이다.
+   *
+   * 한 번만 읽는다. 아래 useState 들이 이 값을 초기값으로 쓰므로 순서가 중요하다 —
+   * 이 훅이 먼저 와야 한다.
+   *
+   * 접근성 설정은 여기서 바로 되돌린다. useEffect 로 미루면 첫 그림이 한 번 그려진
+   * 뒤에 바뀌어서, 큰 글씨를 켜 둔 사람에게 작은 글씨가 번쩍하고 지나간다.
+   * 도움이 필요해서 켠 설정이라 그 한 번이 그냥 깜빡임으로 끝나지 않는다.
+   *
+   * 바꾸기 가 아니라 되살리기 를 쓴다. 바꾸기 는 듣는이에게 알리는데, 여기는
+   * 그리는 도중이라 그러면 React 가 경고한다. 바로 아래 접근성값 이 같은 값으로
+   * 시작하므로 알릴 것도 없다.
+   */
+  const [이어받은] = useState(() => {
+    const v = 이어쓰기.읽기();
+    if (v) 접근성설정.되살리기(v.a11y);
+    return v;
+  });
+  const [screen, setScreen] = useState<Screen>(이어받은?.screen ?? "welcome");
+  const [tab, setTab] = useState<MainTab>(이어받은?.tab ?? "menu");
+  const [name, setName] = useState(이어받은?.name ?? "");
   /**
    * 로그인한 계정. null 이면 게스트다.
    *
-   * 메모리에만 둔다. localStorage 를 쓰지 않아 새로고침하면 로그아웃되는데, 개인정보
-   * 안내 화면이 "이번 이용이 끝나면 남지 않아요" 라고 약속하고 있어서 그대로 둔다.
+   * 이 탭이 살아 있는 동안만 남는다(api/session.ts 의 sessionStorage). 새로고침해도
+   * 풀리지 않고, 탭을 닫으면 사라진다 — 개인정보 안내 화면이 약속한 "이번 이용이
+   * 끝나면 남지 않아요" 가 그 말이다. localStorage 로 옮기면 다음에 이 기기를 켠
+   * 사람이 앞사람 계정으로 들어가 있게 되므로 옮기지 말 것.
+   *
+   * 비밀번호는 어디에도 남기지 않는다. 여기 있는 것은 { userId, loginId } 뿐이다.
    *
    * 서버가 토큰을 주지 않는다 — 응답이 { userId, loginId } 뿐이다. 그래서 여기 있는 것은
    * 인증 증명이 아니라 식별자다. 이 값으로 할 수 있는 일은 주문표를 불러오고 올리는 것뿐이고,
    * 화면 어디에도 "안전하게 보관됩니다" 같은 말을 쓰지 않는다.
    */
-  const [계정, set계정] = useState<Account | null>(null);
+  const [계정, set계정] = useState<Account | null>(이어받은?.account ?? null);
   /*
    * 게스트인지는 계정에서 나오는 값이다. 따로 useState 로 두면 둘이 어긋난다 —
    * 예전에는 로그인 화면으로 '들어갈 때' guest 를 false 로 만들어서, 로그인하지 않고
@@ -3554,8 +3585,11 @@ export default function App() {
    *
    * 로그아웃할 때 이것만 목록에서 뺀다. 전부 지우면 로그인 전에 게스트로 만들어 둔 주문표까지
    * 사라지고, 남겨 두면 다음 사람이 이 기기를 열었을 때 앞사람 주문표가 그대로 보인다.
+   *
+   * 새로고침해도 이어진다. 안 이어 주면 되살아난 목록에서 어느 것이 서버 것인지 알 수
+   * 없어져서, 로그아웃해도 앞사람 주문표가 그대로 남는다.
    */
-  const 서버에서온것 = useRef<Set<string>>(new Set());
+  const 서버에서온것 = useRef<Set<string>>(new Set(이어받은?.fromServer ?? []));
   /**
    * 계정이 몇 번 바뀌었는지. 로그인·로그아웃·정보 지우기가 이 값을 올린다.
    *
@@ -3574,7 +3608,14 @@ export default function App() {
   const [접근성값, set접근성값] = useState<접근성>(() => 접근성설정.읽기());
   useEffect(() => 접근성설정.구독(() => set접근성값({ ...접근성설정.읽기() })), []);
   const largeText = 접근성값.largeText;
-  const [sheets, setSheets] = useState<OrderSheet[]>(MOCK_SHEETS);
+  /*
+   * 되살릴 때 서버에서 다시 불러오지 않는다.
+   *
+   * 마지막으로 보고 있던 목록을 그대로 돌려주는 편이 낫다. 다시 불러오면 새로고침할
+   * 때마다 기다리는 화면이 끼어들고, 서버가 느리거나 안 되는 날에는 있던 주문표가
+   * 잠깐 사라졌다 나타난다. 목록을 맞추는 일은 다음 로그인 때 이미 하고 있다.
+   */
+  const [sheets, setSheets] = useState<OrderSheet[]>(이어받은?.sheets ?? []);
   const [fromQr, setFromQr] = useState(false);
   const [qrKey, setQrKey] = useState(0);
   // 되돌릴 수 없는 동작은 물어보고 실행한다. null 이면 물어볼 게 없다는 뜻이다.
@@ -3589,7 +3630,33 @@ export default function App() {
   // 만료 때문에 QR 화면으로 되돌아왔는지. 되돌아왔으면 안내부터 띄운다.
   const [qrExpired, setQrExpired] = useState(false);
   const [orderSheet, setOrderSheet] = useState<OrderSheet | null>(null);
-  const [planId, setPlanId] = useState<string | null>(null);
+  /*
+   * 연결(pairingId)은 안 이어 받는데 이것만 이어 받는다. 되살린 값으로 하는 일이
+   * 읽기뿐이라서다 — 진행 상황을 물어보는 GET 하나다. 계획을 새로 만들거나 실행하는
+   * 것은 승인 버튼에서만 일어나고(P0-4), 그 버튼은 살아 있는 연결을 필요로 한다.
+   *
+   * 안 이어 받으면 키오스크는 계속 움직이는데 앱만 목록으로 돌아간다. 대신 봐 주는
+   * 앱에서 지켜볼 수 없게 되는 것이 가장 나쁘다.
+   */
+  const [planId, setPlanId] = useState<string | null>(이어받은?.planId ?? null);
+
+  /**
+   * 이번 이용을 새로고침 너머로 넘긴다.
+   *
+   * 연결·확인 카드·비밀번호는 담기지 않는다. 무엇을 담고 무엇을 안 담는지는
+   * api/session.ts 에 적어 두었다.
+   *
+   * 서버에서온것 은 ref 라 이 목록에 넣어도 다시 그려지지 않는다. 그래도 새는 곳이
+   * 없다 — 이 값이 바뀌는 자리(로그인·로그아웃·정보 지우기)는 전부 계정이나 sheets 도
+   * 같이 바꾼다. 그때 이 효과가 함께 돈다.
+   */
+  useEffect(() => {
+    이어쓰기.쓰기({
+      screen, tab, name, account: 계정, sheets,
+      fromServer: [...서버에서온것.current],
+      a11y: 접근성값, planId,
+    });
+  }, [screen, tab, name, 계정, sheets, 접근성값, planId]);
 
   const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
@@ -3777,6 +3844,10 @@ export default function App() {
     setFromQr(false);
     setTab("menu");
     setScreen("welcome");
+    // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
+    // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
+    // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
+    이어쓰기.비우기();
   };
 
   // 연결이 끝나면 어느 화면에 있든 되돌린다.
@@ -4045,6 +4116,9 @@ export default function App() {
                   // 터지면서 QR 만료 화면으로 튕겨 나간다. 방금 다 지웠는데 왜 그러는지
                   // 사용자는 알 수 없다.
                   setPairingId(null); setPairingExpiresAt(null); setPairingKiosk(null); setFromQr(false);
+                  // 새로고침 너머로 넘기려고 적어 둔 것까지 지운다. 이걸 빼면
+                  // "모두 지워요" 라고 말한 뒤 새로고침 한 번에 전부 되돌아온다.
+                  이어쓰기.비우기();
                 },
               })}
               // 연결이 살아 있으면 주문 경로를 끊지 않는다. 하단 탭과 같은 판단이다.

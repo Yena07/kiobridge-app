@@ -248,7 +248,12 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  *
  * 비밀번호를 평문으로 들고 있는데, 이 Map 은 탭이 살아 있는 동안 그 탭 안에만 존재하고
  * 네트워크로 나가지도 디스크에 남지도 않는다. 실제 저장은 서버가 bcrypt 로 한다.
- * localStorage 로 옮기지 말 것 — 옮기는 순간 평문 비밀번호가 디스크에 남는다.
+ * 어느 저장소로도 옮기지 말 것 — 옮기는 순간 평문 비밀번호가 디스크에 남는다.
+ * 화면이 이어 쓰는 이용 기록(api/session.ts)에도 비밀번호는 담지 않는다.
+ *
+ * 그래서 목으로 돌릴 때는 새로고침 뒤에 화면만 로그인 상태로 남고 여기는 비어 있다.
+ * 터지지는 않는다 — saveSheet 도 listSheets 도 계정이 있는지 따로 묻지 않고 userId
+ * 로만 찾는다. 목은 붙이기 전에 화면을 굴려 보려고 두는 것이라 여기까지 맞추지 않는다.
  */
 const 계정들 = new Map<string, { userId: number; password: string }>();
 const 서버주문표 = new Map<number, Map<string, OrderSheet>>();

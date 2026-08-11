@@ -84,7 +84,8 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
   });
 
   it("보관 정책이 화면의 실제 동작과 같다", () => {
-    // 주문표는 메모리에만 있고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
+    // 주문표는 이 탭이 살아 있는 동안만 남고 창을 닫으면 사라진다. SESSION_ONLY 가 사실이다.
+    // 새로고침을 넘겨 이어 쓰는 것은 세션이 끝나는 것이 아니라 이 값과 어긋나지 않는다.
     expect(toCanonicalProfile(주문표({})).consent.retentionPolicy).toBe("SESSION_ONLY");
   });
 

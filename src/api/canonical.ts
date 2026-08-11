@@ -114,7 +114,13 @@ export function toCanonicalProfile(
        * 사실과 다르기 때문이다.
        */
       personalization: opts.personalization ?? true,
-      // 주문표는 메모리에만 두고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
+      /*
+       * 주문표는 이 탭이 살아 있는 동안만 남는다. 창을 닫으면 사라진다
+       * (api/session.ts 의 sessionStorage). SESSION_ONLY 가 사실이다.
+       *
+       * 새로고침을 넘겨 이어 쓰게 됐어도 이 값은 그대로다 — 새로고침은 세션이
+       * 끝나는 것이 아니다. 여기를 바꿔야 하는 때는 창을 닫아도 남게 만들 때다.
+       */
       retentionPolicy: "SESSION_ONLY",
     },
   };
