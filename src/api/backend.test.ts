@@ -63,11 +63,16 @@ describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
       .not.toContain("선호하신 뼈/순살과 다릅니다.");
   });
 
-  it("맞추지 못한 조건에도 결제 표현 거르기를 건다", async () => {
-    // 서버가 준 문장이라 validationMessages 와 같은 종류다. 한쪽만 막으면 안 된다.
-    const 돈내기 = "결" + "제";
+  it("맞추지 못한 조건에도 거르기가 걸린다", async () => {
+    /*
+     * 서버가 준 문장이라 validationMessages 와 같은 종류다. 한쪽만 막으면 안 된다.
+     *
+     * 금지 문자열을 여기서 만들지 않는다. 조각내는 것도 생성 경로가 남는다.
+     * 거르기가 실제로 걸리는지는 금지어 목록에 이미 있는 '결재' 로도 똑같이
+     * 확인된다 - 오타로 들어온 경우까지 막으려고 목록에 넣어 둔 값이다.
+     */
     const r = await 매핑(가짜백엔드({}, 기본추천({
-      unmetConditions: [`${돈내기} 수단이 맞지 않습니다.`, "선호하신 맵기와 다릅니다."],
+      unmetConditions: ["결재 수단이 맞지 않습니다.", "선호하신 맵기와 다릅니다."],
     })));
     expect((r.reasons ?? []).filter((x) => x.kind === "unmet").map((x) => x.text))
       .toEqual(["선호하신 맵기와 다릅니다."]);
@@ -707,15 +712,20 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     await 승인(b, {
       valid: true, raw: 실행성공,
       runSteps: [
-        { actionIndex: 0, action: "select_menu", label: "CHICKEN-001", success: true },
-        { actionIndex: 1, action: "select_option", label: "x=120,y=340", success: true },
-        { actionIndex: 2, action: "select_option", label: "서버가 보낸 모르는 값", success: true },
-        { actionIndex: 3, action: "unexpected_action", label: "서버가 보낸 모르는 값", success: true },
+        { actionIndex: 0, action: "select_menu", label: "서버가 보낸 모르는 값 1", success: true },
+        { actionIndex: 1, action: "select_option", label: "서버가 보낸 모르는 값 2", success: true },
+        { actionIndex: 2, action: "select_option", label: "서버가 보낸 모르는 값 3", success: true },
+        { actionIndex: 3, action: "unexpected_action", label: "서버가 보낸 모르는 값 4", success: true },
       ],
     });
     const e = await b.getEvidence("s1");
+    /*
+     * 상품 ID 나 좌표 모양을 값으로 쓰지 않는다. 테스트 데이터여도 그 형식이
+     * frontend/src 아래 남는다. 거르는 기준이 값의 모양이 아니라 '아는 값인지'
+     * 라서, 중립적인 값으로도 똑같이 검증된다.
+     */
     const 통째로 = JSON.stringify(e.한일);
-    for (const 새면안되는것 of ["CHICKEN-001", "x=120", "340", "모르는 값"]) {
+    for (const 새면안되는것 of ["모르는 값 1", "모르는 값 2", "모르는 값 3", "모르는 값 4"]) {
       expect(통째로).not.toContain(새면안되는것);
     }
     // 무슨 일이 있었는지는 동작으로만 말한다. 지어내지 않는다.

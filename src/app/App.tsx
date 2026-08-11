@@ -95,7 +95,7 @@ function CenterHeadline({ title, desc, kicker, spot }: {
   return (
     <div style={{ textAlign: "center" }}>
       {spot && <div aria-hidden="true" className="flex justify-center" style={{ marginBottom: 8 }}>{spot}</div>}
-      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, display: "block", marginBottom: 2 }}>{kicker}</span>}
+      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_2, display: "block", marginBottom: 2 }}>{kicker}</span>}
       <h1 style={{ ...TYPE.display, color: TEXT_1 }}>{title}</h1>
       {desc && <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>{desc}</p>}
     </div>
@@ -224,7 +224,16 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
         <div
           aria-hidden="true"
           className="absolute inset-x-0 bottom-0"
-          style={{ height: "58%", background: "linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.85) 62%, #fff 100%)" }}
+          /*
+            그라데이션 끝색을 종이색으로 맞춘다.
+            사진 위에서 시작해 아래 배경으로 이어지는 띠라, 끝이 배경과 같아야
+            이음매가 안 보인다. #fff 로 박아 두면 다크에서 이 띠만 하얗게 남고
+            바로 아래 #0C0C0C 와 맞닿아 화면이 두 동강 난다.
+          */
+          style={{
+            height: "58%",
+            background: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, color-mix(in srgb, ${PAPER} 85%, transparent) 62%, ${PAPER} 100%)`,
+          }}
         />
       </div>
 
@@ -1194,7 +1203,7 @@ function SavedSheetsScreen({
     <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
         <AppLogo size={26} />
-        <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, marginTop: 20, display: "block" }}>saved orders</span>
+        <span aria-hidden="true" style={{ ...KICKER, color: TEXT_2, marginTop: 20, display: "block" }}>saved orders</span>
         <div className="flex items-end justify-between" style={{ gap: 12 }}>
           <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 2, flex: 1 }}>어떤 주문표로<br />주문할까요?</h1>
           <span aria-hidden="true" style={{ flexShrink: 0, marginBottom: 4 }}><ReceiptSpot /></span>
@@ -1334,7 +1343,7 @@ function StatusHero({ mark, kicker, title, desc }: {
   return (
     <div className="flex flex-col items-center text-center">
       <div aria-hidden="true" className="flex items-center justify-center" style={{ height: 72 }}>{mark}</div>
-      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, marginTop: 18, display: "block" }}>{kicker}</span>}
+      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_2, marginTop: 18, display: "block" }}>{kicker}</span>}
       <h2 style={{ ...TYPE.display, color: TEXT_1, marginTop: kicker ? 4 : 20 }}>{title}</h2>
       {desc && <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>{desc}</p>}
     </div>
@@ -1840,7 +1849,7 @@ function SubScreenHeader({ title, kicker, spot, onBack }: {
   return (
     <div className="shrink-0" style={{ padding: `14px ${GAP.screenX}px 0` }}>
       <BackButton onClick={onBack} />
-      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, marginTop: 22, display: "block" }}>{kicker}</span>}
+      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_2, marginTop: 22, display: "block" }}>{kicker}</span>}
       <div className="flex items-end justify-between" style={{ gap: 12 }}>
         <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: kicker ? 2 : 12, flex: 1 }}>{title}</h1>
         {/* 제목 오른쪽의 선 드로잉 한 점. 장식이라 스크린리더에서 뺀다. */}

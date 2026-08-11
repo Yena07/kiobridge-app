@@ -63,8 +63,15 @@ export const SERIF = "'Playfair Display', 'Instrument Serif', Georgia, 'Times Ne
  * 영어를 못 읽어도 잃는 정보가 없어야 해서, aria-hidden 으로 두어 스크린리더가
  * 읽지도 않는다. 눈으로 볼 때만 "화면이 바뀌었다" 는 표식이다.
  *
- * 색은 힌트색(#8a867d)을 쓴다. 종이 위 3.42:1 로 본문 기준에는 못 미치는데,
- * 이 줄은 정보가 없어서 못 읽어도 잃는 것이 없다. 읽어야 하는 글에는 안 쓴다.
+ * 색은 본문색(TEXT_2)을 쓴다.
+ *
+ * 처음에는 TEXT_3 를 썼는데 이 파일에 "글자 금지" 라고 적어 둔 값이다 -
+ * 종이 위 2.06:1 이라 읽으라고 둔 글자가 사실상 안 보인다. aria-hidden 이라
+ * 정보는 없지만 **화면에는 19px 글자로 보인다.** 안 읽히는 글자를 화면에
+ * 두는 것과 안 두는 것은 다르다.
+ *
+ * 낮춰 보이는 것은 색이 아니라 크기와 자리로 만든다 - 아래 제목이 34px/900 이라
+ * 같은 색이어도 위계는 충분히 갈린다.
  */
 export const KICKER = {
   fontFamily: "'Playfair Display', 'Instrument Serif', Georgia, serif",
