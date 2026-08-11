@@ -827,18 +827,35 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
     const 배타 = options.find((o) => o.label === sectionLabel)?.exclusive ?? [];
     setSelections((prev) => {
       const current = prev[sectionLabel] ?? [];
+      /*
+       * 다 끄면 축 자체를 뺀다. 빈 배열을 남기면 안 된다.
+       *
+       * 빈 배열과 '축이 없는 것' 은 같은 뜻인데 모양만 다르다. 그런데 서버는
+       * 그 둘을 다르게 본다 - selections 의 값에 @NotEmpty 가 걸려 있어서
+       * 빈 배열이 섞이면 저장이 400 으로 막힌다(팀 #79).
+       *
+       * 그 400 은 스프링 기본 응답이라 code 도 message 도 없다. 화면은
+       * "적어 주신 내용을 다시 확인해 주세요" 만 띄우고 **무엇이 문제인지
+       * 말해 주지 못한다.** 맵기를 눌렀다 다시 눌러 끈 것뿐인데 주문표가
+       * 통째로 안 올라가고, 사용자는 이유를 알 길이 없다.
+       */
+      const 넣기 = (값: string[]): Record<string, string[]> => {
+        if (값.length > 0) return { ...prev, [sectionLabel]: 값 };
+        const { [sectionLabel]: _버림, ...나머지 } = prev;
+        return 나머지;
+      };
       if (multi) {
         if (current.includes(choice)) {
-          return { ...prev, [sectionLabel]: current.filter((c) => c !== choice) };
+          return 넣기(current.filter((c) => c !== choice));
         }
         // '시럽 없음' 을 고르면 다른 시럽은 내린다. 반대로 시럽을 고르면 '없음'을 내린다.
         // 둘이 같이 켜져 있으면 앱도 사용자도 무엇을 시킨 건지 알 수 없다.
         const 남길 = 배타.includes(choice)
           ? []
           : current.filter((c) => !배타.includes(c));
-        return { ...prev, [sectionLabel]: [...남길, choice] };
+        return 넣기([...남길, choice]);
       } else {
-        return { ...prev, [sectionLabel]: current[0] === choice ? [] : [choice] };
+        return 넣기(current[0] === choice ? [] : [choice]);
       }
     });
   };
