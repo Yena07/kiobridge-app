@@ -862,11 +862,22 @@ const 점수축: Record<string, string> = {
   priceScore: "가격",
 };
 
+/**
+ * 표에서 축 이름을 찾는다. 우리가 적어 둔 칸일 때만 돌려준다.
+ *
+ * 객체 리터럴은 Object.prototype 을 물려받아서, 키가 "constructor" 면 생성자
+ * 함수가 나오고 그게 truthy 라 아래 Boolean 검사를 그냥 통과한다. 그러면
+ * label 자리에 함수가 들어간다. 키는 서버 응답에서 오므로 우리가 정하는 값이
+ * 아니다 — session.ts 의 대신갈곳 과 같은 이유로 막는다.
+ */
+const 축찾기 = (표: Record<string, string>, 키: string | undefined): string | undefined =>
+  키 !== undefined && Object.hasOwn(표, 키) ? 표[키] : undefined;
+
 /** 이 후보를 밀어 준 축들. 양수인 칸만 고른다 — 깎인 축은 다른 자리가 말한다. */
 const 도움된축 = (점수: Record<string, number> | undefined): string[] =>
   Object.entries(점수 ?? {})
     .filter(([, v]) => typeof v === "number" && v > 0)
-    .map(([k]) => 점수축[k])
+    .map(([k]) => 축찾기(점수축, k))
     .filter((x): x is string => Boolean(x));
 
 const 규칙축: Record<string, string> = {
@@ -1159,14 +1170,15 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const 행: MappedOption[] = [];
     const 본축 = new Set<string>();
     for (const r of warn ?? []) {
-      const 축 = 규칙축[r.errorCode ?? ""];
+      const 축 = 축찾기(규칙축, r.errorCode);
       if (!축 || 본축.has(축)) continue;
       본축.add(축);
       const x = 한줄(축, false, 우리말들(r.candidateValue));
       if (x) 행.push(x);
     }
     for (const r of pass ?? []) {
-      const 축 = 규칙축[r.errorCode ?? ""] ?? 규칙축[(r.ruleId ?? "").replace(/^CHICKEN_/, "").replace(/_PREFERENCE$/, "_MISMATCH")];
+      const 축 = 축찾기(규칙축, r.errorCode)
+        ?? 축찾기(규칙축, (r.ruleId ?? "").replace(/^CHICKEN_/, "").replace(/_PREFERENCE$/, "_MISMATCH"));
       if (!축 || 본축.has(축)) continue;
       본축.add(축);
       const x = 한줄(축, true);
@@ -1449,7 +1461,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         } else if (c?.candidateId && 막힌후보(c.candidateId) && c.name) {
           // 우리가 뺐으면 뺐다고 말한다. 어느 축 때문인지는 서버가 준 errorCode 로 짚는다.
           const 축 = (r.warningsByCandidateId?.[c.candidateId] ?? [])
-            .filter((x) => x.severity === "BLOCK").map((x) => 규칙축[x.errorCode ?? ""]).find(Boolean);
+            .filter((x) => x.severity === "BLOCK").map((x) => 축찾기(규칙축, x.errorCode)).find(Boolean);
           뺀것.push({
             candidateId: c.candidateId, reasonCode: "BLOCKED",
             explanation: 축

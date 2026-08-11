@@ -18,13 +18,21 @@ import { 이어쓰기, type 이어쓸것 } from "./session";
 class 가짜저장소 implements Storage {
   private 칸 = new Map<string, string>();
   터뜨릴까 = false;
+  /**
+   * 이 길이를 넘는 값만 던진다.
+   *
+   * 0 이면 probe 한 글자까지 같이 막혀서 저장소() 가 null 을 돌려주고, 쓰기() 는
+   * 첫 줄에서 반환한다 — 안쪽 try/catch 를 지나가지도 못한다. 실제 브라우저의
+   * QuotaExceededError 는 probe 는 통과시키고 본문에서 던지는 쪽이 흔하다.
+   */
+  터뜨릴길이 = 0;
   get length() { return this.칸.size; }
   clear() { this.칸.clear(); }
   key(i: number) { return [...this.칸.keys()][i] ?? null; }
   getItem(k: string) { return this.칸.get(k) ?? null; }
   removeItem(k: string) { this.칸.delete(k); }
   setItem(k: string, v: string) {
-    if (this.터뜨릴까) throw new Error("QuotaExceededError");
+    if (this.터뜨릴까 && v.length > this.터뜨릴길이) throw new Error("QuotaExceededError");
     this.칸.set(k, v);
   }
 }
@@ -199,8 +207,18 @@ describe("손댄 값을 믿지 않는다", () => {
   });
 
   it("모르는 화면 이름은 처음 화면으로 보낸다", () => {
-    망가진것({ screen: "관리자화면" });
-    expect(이어쓰기.읽기()!.screen).toBe("welcome");
+    /*
+     * 물려받은 키까지 넣어 본다. 대신갈곳 은 객체 리터럴이라
+     * 대신갈곳["constructor"] 가 Object 생성자 함수를 돌려주는데, 그게 truthy 라
+     * ?? 를 그냥 통과한다. screen 에 함수가 담기면 어느 화면 분기도 안 맞아
+     * 빈 화면이 뜨고, 그 값이 다시 저장돼서 새로고침해도 계속 빈 화면이다.
+     */
+    for (const 나쁜값 of ["관리자화면", "constructor", "toString", "hasOwnProperty", "valueOf"]) {
+      망가진것({ screen: 나쁜값 });
+      const v = 이어쓰기.읽기()!;
+      expect(v.screen).toBe("welcome");
+      expect(typeof v.screen).toBe("string");
+    }
   });
 
   it("모르는 탭 이름은 메뉴 탭으로 둔다", () => {
@@ -285,6 +303,8 @@ describe("저장소를 못 쓰는 곳에서도 앱이 멈추지 않는다", () =
     // 사생활 모드나 저장 공간이 꽉 찬 경우다. 이어 쓰기는 편의지
     // 이 앱이 하는 일이 아니라서, 안 되면 그냥 메모리로만 간다.
     저장소.터뜨릴까 = true;
+    // probe 는 통과시킨다. 안 그러면 위의 '저장소가 아예 없는' 시험과 같은 길을 간다.
+    저장소.터뜨릴길이 = 8;
     expect(() => 이어쓰기.쓰기(채운값())).not.toThrow();
     expect(이어쓰기.읽기()).toBeNull();
   });

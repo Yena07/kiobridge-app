@@ -692,12 +692,15 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
       "candidate-filters": {
         eligibleCandidates: [
           { candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true },
-          { candidateId: "candidate-beta", name: "땅콩 토핑 닭강정", price: 7000, available: true },
+          { candidateId: "candidate-beta", name: "순한 순살 닭강정", price: 7000, available: true },
         ],
         excludedCandidates: [],
         warningsByCandidateId: {
+          // ruleId 와 errorCode 가 같은 축을 가리켜야 한다. 예전에는 알레르기 규칙에
+          // 맵기 코드를 붙여 놓고 "맵기 때문에 뺐어요" 를 기대값으로 못 박았다 —
+          // 알레르기 코드를 규칙축 표에 넣는 날 이 시험이 틀린 기대를 지킨다.
           "candidate-beta": [{
-            ruleId: "CHICKEN_ALLERGEN_HARD_CONSTRAINT", result: "FAIL", severity: "BLOCK",
+            ruleId: "CHICKEN_SPICY_LEVEL_PREFERENCE", result: "FAIL", severity: "BLOCK",
             errorCode: "SPICY_LEVEL_MISMATCH",
           }],
         },
@@ -716,6 +719,28 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     // 추천 응답이 대안으로 올려보내도 다시 걸러진다.
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     expect(rec.alternativeCandidateIds).toEqual([]);
+  });
+
+  it("규칙축에 없는 errorCode 면 축을 짚지 않고 뭉뚱그린다", async () => {
+    // 알레르기(ALLERGEN_CONFLICT)는 규칙축 표에 없다. 없는 것을 억지로 짚느니
+    // "조건에 맞지 않아서" 라고만 말한다 — 틀린 축을 짚으면 그게 더 나쁘다.
+    const b = 붙이기({
+      "candidate-filters": {
+        eligibleCandidates: [{ candidateId: "candidate-beta", name: "땅콩 토핑 닭강정", price: 7000, available: true }],
+        excludedCandidates: [],
+        warningsByCandidateId: {
+          "candidate-beta": [{
+            ruleId: "CHICKEN_ALLERGEN_HARD_CONSTRAINT", result: "FAIL", severity: "BLOCK",
+            errorCode: "ALLERGEN_CONFLICT",
+          }],
+        },
+        passesByCandidateId: {},
+      },
+    });
+    const f = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    expect(f.survivingCandidateIds).toEqual([]);
+    expect(f.excluded.find((e) => e.candidateId === "candidate-beta")?.explanation)
+      .toBe("땅콩 토핑 닭강정은 조건에 맞지 않아서 뺐어요");
   });
 
   it("점수가 양수인 축만 이름으로 뽑고 숫자는 버린다", async () => {

@@ -213,9 +213,20 @@ export const 이어쓰기 = {
     const planId = 글자인가(o.planId) && o.planId !== "" ? o.planId : null;
     // 계획이 없으면 실행 화면을 되살릴 수 없다. 띄워 봐야 물어볼 곳이 없다.
     const 실행못함 = 적힌화면 === "execution" && !planId;
+    /*
+     * 대신갈곳 은 객체 리터럴이라 Object.prototype 을 물려받는다. 저장소에
+     * screen: "constructor" 가 적혀 있으면 대신갈곳["constructor"] 가 Object
+     * 생성자 함수를 돌려주고, 그 함수가 truthy 라 ?? 를 그냥 통과한다.
+     * screen 에 함수가 담기면 어느 화면 분기도 안 맞아 빈 화면이 뜨고,
+     * 그 값이 다시 저장돼서 새로고침해도 계속 빈 화면이다.
+     *
+     * 우리가 직접 적어 둔 칸일 때만 본다. 사용자가 개발자 도구로 고칠 수 있는
+     * 값을 키로 쓰는 조회라 이 검사가 필요하다.
+     */
+    const 대신 = Object.hasOwn(대신갈곳, 적힌화면) ? 대신갈곳[적힌화면] : undefined;
     const screen: Screen = !실행못함 && 이어볼수있는화면.has(적힌화면)
       ? 적힌화면
-      : (대신갈곳[적힌화면] ?? (실행못함 ? "saved" : "welcome"));
+      : (대신 ?? (실행못함 ? "saved" : "welcome"));
 
     return {
       screen,
