@@ -85,6 +85,7 @@ export interface MappingCandidate {
 // 어떤 사용자 정보를 썼는지, 무엇을 왜 뺐는지가 드러나야 한다.
 export type RecommendationReason =
   | { kind: "used"; text: string }      // 이 정보를 써서 골랐다
+  | { kind: "unmet"; text: string }     // 이 조건은 못 맞췄다 (담기는 담지만 한 축이 어긋남)
   | { kind: "excluded"; text: string }; // 이 조건 때문에 뺐다
 
 export interface MappingResponse {

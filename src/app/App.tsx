@@ -2030,6 +2030,18 @@ function ConfirmCard({ children, badge, badgeTone = "success", photo }: {
  * "쓴 정보"와 "뺀 이유"를 같이 보여 준다 — 무엇이 빠졌는지 모르면 확인이 아니다.
  * 색만으로 구분하지 않도록 두 종류에 서로 다른 픽토그램을 붙인다.
  */
+/*
+ * 이유 한 줄의 겉모습.
+ *
+ * 종류가 셋이라 삼항으로 가르면 어느 가지가 무엇인지 안 보인다. 표로 모은다.
+ * 색만으로 알리지 않으므로 말머리 글자가 본체이고 그림은 거든다.
+ */
+const 이유표시 = {
+  used:     { 말머리: "반영: ", 그림: "checkCircle" as const, 색: SUCCESS },
+  unmet:    { 말머리: "못 맞춤: ", 그림: "warning" as const, 색: WARN },
+  excluded: { 말머리: "제외: ", 그림: "warning" as const, 색: WARN },
+};
+
 function ReasonList({ reasons, 제목 = "이 메뉴를 고른 이유" }: { reasons?: RecommendationReason[]; 제목?: string }) {
   if (!reasons || reasons.length === 0) return null;
   return (
@@ -2045,14 +2057,14 @@ function ReasonList({ reasons, 제목 = "이 메뉴를 고른 이유" }: { reaso
           <li key={r.text} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
             <span style={{ flexShrink: 0, marginTop: 2, display: "flex" }}>
               <Pictogram
-                name={r.kind === "used" ? "checkCircle" : "warning"}
+                name={이유표시[r.kind].그림}
                 size={16}
-                color={r.kind === "used" ? SUCCESS : WARN}
+                color={이유표시[r.kind].색}
               />
             </span>
             <span style={{ fontSize: 14, lineHeight: 1.6, color: TEXT_1 }}>
               {/* 색을 못 보는 경우에도 종류를 알 수 있게 말머리를 글자로 붙인다. */}
-              <b style={{ fontWeight: 700 }}>{r.kind === "used" ? "반영: " : "제외: "}</b>
+              <b style={{ fontWeight: 700 }}>{이유표시[r.kind].말머리}</b>
               {r.text}
             </span>
           </li>
@@ -2080,7 +2092,8 @@ function ReasonStep({ reasons, onNext, 확인중 }: {
   확인중?: boolean;
 }) {
   const 쓴것 = reasons.filter((r) => r.kind === "used");
-  const 뺀것 = reasons.filter((r) => r.kind !== "used");
+  const 못맞춘것 = reasons.filter((r) => r.kind === "unmet");
+  const 뺀것 = reasons.filter((r) => r.kind === "excluded");
   return (
     <div className="flex flex-col gap-5">
       <CenterHeadline
@@ -2089,6 +2102,9 @@ function ReasonStep({ reasons, onNext, 확인중 }: {
       />
 
       {쓴것.length > 0 && <ReasonList reasons={쓴것} 제목="반영한 조건" />}
+      {/* 못 맞춘 것을 반영한 것 바로 아래 둔다. 이 둘을 나란히 읽어야 무엇이
+          되고 무엇이 안 됐는지가 한눈에 잡힌다. 빼 둔 메뉴는 그다음이다. */}
+      {못맞춘것.length > 0 && <ReasonList reasons={못맞춘것} 제목="맞추지 못한 조건" />}
       {뺀것.length > 0 && <ReasonList reasons={뺀것} 제목="빼 둔 메뉴와 그 이유" />}
 
       <PrimaryBtn onClick={onNext}>
@@ -2106,7 +2122,16 @@ function ReasonStep({ reasons, onNext, 확인중 }: {
  * 눌러서 앞 단계로 되돌아가면 전체를 다시 읽을 수 있다.
  */
 function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; onOpen: () => void }) {
-  const 첫줄 = reasons?.find((r) => r.kind === "used") ?? reasons?.[0];
+  /*
+   * 못 맞춘 조건이 있으면 그것을 먼저 보여 준다.
+   *
+   * 한 줄만 보이는 자리라 무엇을 올릴지가 중요하다. '반영했다' 는 안심시키는
+   * 말이고 '못 맞췄다' 는 확인이 필요한 말인데, 확인이 필요한 쪽을 접어 두면
+   * 사용자는 다 맞은 줄 알고 승인한다.
+   */
+  const 첫줄 = reasons?.find((r) => r.kind === "unmet")
+    ?? reasons?.find((r) => r.kind === "used")
+    ?? reasons?.[0];
   if (!첫줄) return null;
   const 남은 = (reasons?.length ?? 0) - 1;
   return (
@@ -2120,7 +2145,7 @@ function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; 
       }}
     >
       <span style={{ flexShrink: 0, marginTop: 2, display: "flex" }}>
-        <Pictogram name={첫줄.kind === "used" ? "checkCircle" : "warning"} size={16} color={첫줄.kind === "used" ? SUCCESS : WARN} />
+        <Pictogram name={이유표시[첫줄.kind].그림} size={16} color={이유표시[첫줄.kind].색} />
       </span>
       <span style={{ flex: 1, fontSize: 13, lineHeight: 1.6, color: TEXT_1 }}>
         {/*
@@ -2129,7 +2154,7 @@ function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; 
           쓴 것이 하나도 없으면 여기 뜨는 줄이 제외 사유인데, 표시가 없으면 그게
           이 메뉴를 고른 근거처럼 읽힌다. ReasonList 는 이미 이렇게 하고 있었다.
         */}
-        <b style={{ fontWeight: 700 }}>{첫줄.kind === "used" ? "반영: " : "제외: "}</b>
+        <b style={{ fontWeight: 700 }}>{이유표시[첫줄.kind].말머리}</b>
         {첫줄.text}
         {남은 > 0 && (
           <span style={{ color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3 }}>

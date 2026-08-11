@@ -12,6 +12,7 @@ const 후보표시 = {
 };
 
 const 기본추천 = (over: Partial<RecommendationResult> = {}): RecommendationResult => ({
+  unmetConditions: [],
   recommendedCandidateId: "CHICKEN-001",
   alternativeCandidateIds: [],
   excludedCandidates: [],
@@ -46,6 +47,32 @@ const 매핑 = async (b: Backend) => {
 };
 
 describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
+  it("맞추지 못한 조건을 버리지 않는다", async () => {
+    /*
+     * 서버가 "선호하신 뼈/순살과 다릅니다" 라고 알려 주는데 타입에 선언만 해
+     * 두고 화면까지 오지 않았다. 못 맞춘 것을 감추면 사용자는 자기가 고른
+     * 조건이 다 반영된 줄 알고 승인한다.
+     */
+    const r = await 매핑(가짜백엔드({}, 기본추천({
+      unmetConditions: ["선호하신 뼈/순살과 다릅니다."],
+    })));
+    const 못맞춘 = (r.reasons ?? []).filter((x) => x.kind === "unmet");
+    expect(못맞춘.map((x) => x.text)).toEqual(["선호하신 뼈/순살과 다릅니다."]);
+    // 제외와 섞이면 안 된다. 저건 '메뉴를 뺐다' 이고 이건 '조건을 못 맞췄다' 다.
+    expect((r.reasons ?? []).filter((x) => x.kind === "excluded").map((x) => x.text))
+      .not.toContain("선호하신 뼈/순살과 다릅니다.");
+  });
+
+  it("맞추지 못한 조건에도 결제 표현 거르기를 건다", async () => {
+    // 서버가 준 문장이라 validationMessages 와 같은 종류다. 한쪽만 막으면 안 된다.
+    const 돈내기 = "결" + "제";
+    const r = await 매핑(가짜백엔드({}, 기본추천({
+      unmetConditions: [`${돈내기} 수단이 맞지 않습니다.`, "선호하신 맵기와 다릅니다."],
+    })));
+    expect((r.reasons ?? []).filter((x) => x.kind === "unmet").map((x) => x.text))
+      .toEqual(["선호하신 맵기와 다릅니다."]);
+  });
+
   it("제외 사유가 두 곳에서 모두 올라온다", async () => {
     const r = await 매핑(가짜백엔드());
     const 문구 = (r.reasons ?? []).map((x) => x.text).join("\n");

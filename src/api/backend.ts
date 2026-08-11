@@ -98,6 +98,14 @@ export interface RecommendationResult {
   alternativeCandidateIds: string[];
   excludedCandidates: { candidateId: string; reasonCode: string; explanation: string }[];
   recommendationReasons: string[];
+  /**
+   * 서버가 맞추지 못한 조건.
+   *
+   * 제외 사유(excludedCandidates)와 다르다. 저건 "이 메뉴를 뺐다" 이고 이건
+   * "당신이 고른 조건 중 이건 못 맞췄다" 다. 담기는 담는데 한 축이 어긋난
+   * 경우가 여기 온다 - "선호하신 뼈/순살과 다릅니다".
+   */
+  unmetConditions: string[];
   confidence: number;
   requiresReconfirmation: boolean;
   /** 후보 표시 정보. 상품 ID 가 아니라 사람이 읽는 값이어야 한다. */
@@ -261,10 +269,37 @@ export function createApi(
         본후보.add(e.candidateId);
         제외.push(e);
       }
+      /*
+       * 세 종류를 한 목록에 담는다. 화면이 제목을 붙여 나눠 보여 준다.
+       *
+       *   used      이 조건을 써서 골랐다
+       *   unmet     이 조건은 못 맞췄다        <- 담기는 담는데 한 축이 어긋남
+       *   excluded  이 조건 때문에 메뉴를 뺐다
+       *
+       * unmet 을 버리고 있었다. 서버가 "선호하신 뼈/순살과 다릅니다" 라고 알려
+       * 주는데 타입에 선언만 해 두고 화면까지 오지 않았다. 못 맞춘 것을 감추면
+       * 사용자는 자기가 고른 조건이 다 반영된 줄 알고 승인한다.
+       */
+      /*
+       * 세 종류를 한 목록에 담는다. 화면이 제목을 붙여 나눠 보여 준다.
+       *
+       *   used      이 조건을 써서 골랐다
+       *   unmet     이 조건은 못 맞췄다        <- 담기는 담는데 한 축이 어긋남
+       *   excluded  이 조건 때문에 메뉴를 뺐다
+       *
+       * unmet 을 버리고 있었다. 서버가 "선호하신 뼈/순살과 다릅니다" 라고 알려
+       * 주는데 타입에 선언만 해 두고 화면까지 오지 않았다. 못 맞춘 것을 감추면
+       * 사용자는 자기가 고른 조건이 다 반영된 줄 알고 승인한다.
+       *
+       * 셋 다 서버가 준 문장이라 결제 표현 거르기를 여기서 한 번에 건다.
+       * 실서버 경로에만 걸면 목에서는 안 걸리는데, 화면으로 나가는 길은 여기
+       * 하나다. 막는 자리는 나가는 자리여야 한다.
+       */
       const reasons: MappingResponse["reasons"] = [
         ...rec.recommendationReasons.map((text) => ({ kind: "used" as const, text })),
+        ...rec.unmetConditions.map((text) => ({ kind: "unmet" as const, text })),
         ...제외.map((e) => ({ kind: "excluded" as const, text: e.explanation })),
-      ];
+      ].filter((r) => 보여도되나(r.text));
 
       // 서버가 display 를 빠뜨리면 이름 없는 후보가 화면에 뜬다.
       // 빈칸을 보여 주느니 그 후보를 빼는 게 낫다.
@@ -1180,6 +1215,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
           explanation: 사유문장(e),
         })).filter((e) => e.explanation),
         recommendationReasons: r.recommendationReasons ?? [],
+        unmetConditions: r.unmetConditions ?? [],
         confidence: r.confidence ?? 0,
         requiresReconfirmation: r.requiresReconfirmation ?? false,
         // 이름·가격은 candidate-filters 에서 온다. 추천 응답에는 없다.
