@@ -105,18 +105,36 @@ function ConsentCheck({ 동의함, on바꾸기, onDetail }: {
 }) {
   const id = "consent-check";
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, textAlign: "left" }}>
-      <input
-        id={id}
-        type="checkbox"
-        checked={동의함}
-        onChange={(e) => on바꾸기(e.target.checked)}
-        style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0, accentColor: RULE, cursor: "pointer" }}
-      />
-      <label htmlFor={id} style={{ fontSize: 14, color: TEXT_1, lineHeight: 1.6, cursor: "pointer", flex: 1 }}>
-        주문에 쓸 정보를 모으고 쓰는 데 동의합니다.
-        <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 2 }}>
-          메뉴 조건과 도움 설정이에요. 이름·전화번호는 받지 않아요.
+    <div style={{ display: "flex", alignItems: "center", gap: 4, textAlign: "left" }}>
+      {/*
+        네모 자체는 22px 라도 누르는 자리는 44px 이어야 한다(이 앱의 터치 기준).
+        label 이 네모를 품고 있어서 이 줄 어디를 눌러도 켜지고 꺼진다 — 손이
+        떨리는 분에게 22px 과녁을 맞히라고 하면 그게 가장 어려운 동작이다.
+      */}
+      <label
+        htmlFor={id}
+        style={{
+          flex: 1, minHeight: 44, display: "flex", alignItems: "center", gap: 10,
+          padding: "6px 0", cursor: "pointer",
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{ width: 44, height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <input
+            id={id}
+            type="checkbox"
+            checked={동의함}
+            onChange={(e) => on바꾸기(e.target.checked)}
+            style={{ width: 24, height: 24, accentColor: RULE, cursor: "pointer" }}
+          />
+        </span>
+        <span style={{ fontSize: 14, color: TEXT_1, lineHeight: 1.6, flex: 1 }}>
+          주문에 쓸 정보를 모으고 쓰는 데 동의합니다.
+          <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 2 }}>
+            메뉴 조건과 도움 설정이에요. 이름·전화번호는 받지 않아요.
+          </span>
         </span>
       </label>
       <button
@@ -3898,6 +3916,18 @@ export default function App() {
    * (consent.personalization 으로 서버에 나간다).
    */
   const [동의, set동의] = useState<boolean>(() => 개인정보동의.읽기());
+  /*
+   * 동의 칸 옆 '자세히' 로 여는 개인정보 안내. 화면을 바꾸지 않고 겹으로 띄운다.
+   *
+   * setScreen("privacy") 로 옮기면 그 아래 화면이 언마운트된다 — 로그인.가입
+   * 화면에서 열었다면 적어 둔 아이디와 비밀번호가 통째로 날아가고, 읽고 돌아온
+   * 사람은 처음부터 다시 적어야 한다. 무엇에 동의하는지 읽어 보라고 둔 링크가
+   * 읽으면 벌을 주는 셈이 된다.
+   *
+   * 계정 화면의 '개인정보 안내' 는 그대로 screen 을 쓴다. 거기는 잃을 입력이 없고
+   * 하단 탭으로 오가는 자리라 겹으로 띄우면 오히려 어색하다.
+   */
+  const [개인정보겹, set개인정보겹] = useState(false);
   useEffect(() => 개인정보동의.구독(() => set동의(개인정보동의.읽기())), []);
   useEffect(() => 가격한도.구독(() => set예산(가격한도.읽기())), []);
   const largeText = 접근성값.largeText;
@@ -4241,7 +4271,9 @@ export default function App() {
   // 적을 게 없는 화면에서는 첫 제목으로 보내 "여기가 어디인지" 부터 들려준다.
   const 화면영역 = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const 뿌리 = 화면영역.current;
+    // 겹이 떠 있으면 겹 안에서 찾는다. 아래 화면이 DOM 앞쪽이라 그냥 찾으면
+    // 덮인 화면의 제목으로 포커스가 가고, 읽는 사람은 겹이 열린 줄도 모른다.
+    const 뿌리 = (개인정보겹 && 화면영역.current?.querySelector<HTMLElement>("[data-겹]")) || 화면영역.current;
     if (!뿌리) return;
     // data-autofocus 로 표시한다. React 는 autoFocus prop 을 DOM 속성으로 남기지 않고
     // 커밋 때 focus() 를 직접 부르므로, [autofocus] 로는 찾을 수 없다.
@@ -4267,7 +4299,7 @@ export default function App() {
      * 알려 주고 나머지는 화면에 그대로 있다.
      */
     if (접근성값.voiceGuide) 읽어주기(대상.innerText || 대상.textContent || "");
-  }, [screen, tab, 접근성값.voiceGuide]);
+  }, [screen, tab, 개인정보겹, 접근성값.voiceGuide]);
 
   /*
    * 스위치를 끄거나 화면을 떠나면 읽던 것을 멈춘다.
@@ -4363,11 +4395,13 @@ export default function App() {
           }}
         >
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
+          {/* 겹이 떠 있으면 아래 화면은 잠근다. inert 는 포커스와 읽기를 함께 막는다. */}
+          <div className="absolute inset-0 overflow-hidden" {...(개인정보겹 ? { inert: "" } : {})}>
           {screen === "welcome" && (
             <WelcomeScreen
               동의함={동의}
               on동의={(v) => 개인정보동의.바꾸기(v)}
-              onPrivacy={() => setScreen("privacy")}
+              onPrivacy={() => set개인정보겹(true)}
               // 익명 시작: 계정 화면을 거치지 않고 바로 본 화면으로 간다.
               onStart={() => { setName(""); setScreen("saved"); setTab("menu"); }}
               // 선택적 로그인: 고른 사람만 계정 경로로 간다. 여기서 뒤로 가면
@@ -4379,7 +4413,7 @@ export default function App() {
             <LoginScreen
               동의함={동의}
               on동의={(v) => 개인정보동의.바꾸기(v)}
-              onPrivacy={() => setScreen("privacy")}
+              onPrivacy={() => set개인정보겹(true)}
               // 이미 계정이 있는 사람이다. 호칭은 서버가 갖고 있지 않지만 다시 묻지 않는다 —
               // 로그인할 때마다 호칭을 적게 하면 로그인이 가입보다 번거로워진다.
               // 계정 화면은 호칭이 없으면 아이디를 부른다.
@@ -4392,7 +4426,7 @@ export default function App() {
             <SignupScreen
               동의함={동의}
               on동의={(v) => 개인정보동의.바꾸기(v)}
-              onPrivacy={() => setScreen("privacy")}
+              onPrivacy={() => set개인정보겹(true)}
               // 가입 직후에는 서버에 주문표가 없다. 그래도 같은 경로를 탄다 —
               // 갈래를 둘로 두면 한쪽만 고치는 날이 온다. 빈 목록이면 아무 일도 안 한다.
               onDone={(a) => 계정으로들어가기(a, "name")}
@@ -4540,7 +4574,7 @@ export default function App() {
               // 끊으면 QR 을 다시 찍는 것 말고 되돌릴 방법이 없다.
               onSheets={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
               onA11y={() => setScreen("a11y")}
-              onPrivacy={() => setScreen("privacy")}
+              onPrivacy={() => set개인정보겹(true)}
             />
           )}
           {screen === "a11y" && (
@@ -4551,15 +4585,22 @@ export default function App() {
             />
           )}
           {screen === "privacy" && (
-            <PrivacyScreen
-              guest={guest}
-              // 동의 전에 '자세히' 로 들어온 사람은 첫 화면으로 돌아간다. 계정 화면으로
-              // 보내면 위의 가드가 곧바로 되돌려서 화면이 한 번 번쩍인다.
-              onBack={() => {
-                if (!동의) { setScreen("welcome"); return; }
-                setScreen("saved"); setTab("account");
-              }}
-            />
+            <PrivacyScreen guest={guest} onBack={() => { setScreen("saved"); setTab("account"); }} />
+          )}
+          </div>
+          {/*
+            '자세히' 로 연 개인정보 안내. 아래 화면을 덮되 언마운트하지는 않으므로
+            로그인.가입 화면에 적어 둔 것이 그대로 남는다. 닫으면 있던 자리로 돌아온다.
+          */}
+          {개인정보겹 && (
+            /*
+              inert 로 덮인 쪽을 통째로 잠근다. 없으면 키보드 Tab 이 겹 아래
+              로그인 칸으로 들어가고, 스크린리더도 안 보이는 화면을 읽는다.
+              읽으라고 띄운 겹이 정작 읽는 사람에게 가장 헷갈리는 자리가 된다.
+            */
+            <div className="absolute inset-0" style={{ zIndex: 20 }} data-겹>
+              <PrivacyScreen guest={guest} onBack={() => set개인정보겹(false)} />
+            </div>
           )}
         </div>
 
