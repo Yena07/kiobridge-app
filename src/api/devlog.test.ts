@@ -94,14 +94,15 @@ describe("연동기록 — 자유 입력은 본문에서도 가린다", () => {
       응답: JSON.stringify({
         valid: true,
         runSteps: [
-          { actionIndex: 0, action: "select_menu", label: "CHICKEN-001", success: true },
-          { actionIndex: 1, action: "select_option", label: "x=120,y=340", success: true },
+          { actionIndex: 0, action: "select_menu", label: "서버가 보낸 값 1", success: true },
+          { actionIndex: 1, action: "select_option", label: "서버가 보낸 값 2", success: true },
         ],
       }),
     });
     const 응답 = 연동기록.읽기()[0].응답 ?? "";
-    expect(응답).not.toContain("CHICKEN-001");
-    expect(응답).not.toContain("x=120");
+    // 가리기는 값의 모양이 아니라 label 키를 보고 건다. 중립적인 값으로도 똑같다.
+    expect(응답).not.toContain("서버가 보낸 값 1");
+    expect(응답).not.toContain("서버가 보낸 값 2");
     // 무엇을 했는지는 남는다. 흐름을 보는 데는 지장이 없다.
     expect(응답).toContain("select_menu");
     expect(응답).toContain('"label":"***"');
