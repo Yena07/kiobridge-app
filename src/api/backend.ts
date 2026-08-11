@@ -113,7 +113,7 @@ export interface RecommendationResult {
   /** 사용자가 고른 조건이 반영됐는지 항목별로. 1순위 추천 기준이다. */
   matchedOptions: { label: string; value: string; matched: boolean; note?: string }[];
   /**
-   * 후보별로 어긋나는 축의 이름. 예: { "CHICKEN-003": ["형태"] }
+   * 후보별로 어긋나는 축의 이름. 예: { "candidate-beta": ["형태"] }
    *
    * matchedOptions 는 1순위 하나에 대한 답이라, 대안 후보를 고른 사용자에게는
    * 쓸 수 없다. 그걸 그대로 쓰면 '매운 뼈' 를 고른 사람에게
@@ -673,7 +673,7 @@ const 고른값을담는동작 = new Set(["select_service", "select_menu", "sele
  * 서버가 준 label 을 화면에 올려도 되는지.
  *
  * label 은 검증되지 않은 서버 입력이다. 여기를 그대로 통과시키면 서버가 무엇을
- * 담아 보내든 결과 화면에 뜬다 - 상품 ID(CHICKEN-001) · 화면 좌표 · 결제 문구
+ * 담아 보내든 결과 화면에 뜬다 - 상품 ID(candidate-alpha) · 화면 좌표 · 결제 문구
  * 전부. 우리 실격 요건 둘을 정면으로 건드린다.
  *
  * 그런데 우리는 **사용자가 무엇을 골랐는지 이미 안다.** 주문표의 선택값과
@@ -725,7 +725,7 @@ const 아는화면: Record<string, string> = {
 };
 const 동작말 = (action: string, label: string, 아는값: Set<string>): string => {
   // 고른 값 자리라도 우리가 아는 값일 때만 그대로 쓴다. ICE 는 주문표에 있으니
-  // "ICE 골랐어요" 가 되고, CHICKEN-001 은 없으니 "하나 골랐어요" 가 된다.
+  // "ICE 골랐어요" 가 되고, candidate-alpha 은 없으니 "하나 골랐어요" 가 된다.
   if (고른값을담는동작.has(action)) {
     return 아는값인가(label, 아는값) ? `${label} 골랐어요` : "하나 골랐어요";
   }
@@ -778,10 +778,46 @@ interface KitExcluded {
 }
 
 /** POST /api/v1/candidate-filters 응답 (CandidateFilterResult). */
+/** 규칙 하나에 대한 서버 판정. 후보별로 묶여서 온다. */
+interface 규칙판정 {
+  ruleId?: string;
+  result?: "PASS" | "FAIL" | "RECONFIRM" | "SKIPPED";
+  severity?: string;
+  errorCode?: string;
+}
+
 interface CandidateFilterResponse {
   eligibleCandidates?: KitCandidate[];
   excludedCandidates?: KitExcluded[];
+  /*
+   * 후보별 규칙 판정. 서버가 이미 계산해서 보내 준다.
+   *
+   * 예전에는 이 셋을 버리고 확인표() 에서 attributes.supportedOptions 로 같은
+   * 판단을 다시 했다. 같은 판단을 두 곳에서 하면 언젠가 갈라진다.
+   *
+   * 그리고 다시 하는 쪽이 알 수 없는 것이 있다 - **WARN 이 없다는 사실만으로는
+   * "일치한다" 를 뜻하지 않는다.** 값이 없거나, NO_PREFERENCE 같은 중립값이거나,
+   * unknownPolicy 가 IGNORE 거나, 후보가 그 항목을 아예 선언 안 했으면 SKIPPED 라
+   * 경고에 아무것도 안 남지만 실제로는 "비교한 적이 없다" 일 뿐이다.
+   * passes 를 함께 봐야 '맞음' 과 '비교 안 함' 이 갈린다.
+   */
+  warningsByCandidateId?: Record<string, 규칙판정[]>;
+  reconfirmationsByCandidateId?: Record<string, 규칙판정[]>;
+  passesByCandidateId?: Record<string, 규칙판정[]>;
 }
+
+/*
+ * 규칙 이름을 화면의 축 이름으로 옮긴다.
+ *
+ * errorCode 로 잇는다 - ruleId 는 환경마다 접두어가 붙지만(CHICKEN_...) errorCode 는
+ * 무엇이 어긋났는지를 가리키는 이름이라 더 안정적이다. 모르는 코드는 넘긴다.
+ */
+const 규칙축: Record<string, string> = {
+  SERVICE_TYPE_MISMATCH: "이용 방식",
+  SPICY_LEVEL_MISMATCH: "맵기",
+  BONE_TYPE_MISMATCH: "형태",
+  CUP_OPTION_MISMATCH: "컵",
+};
 
 /** 사람이 읽을 문장만 고른다. 없으면 비운다 — 규칙 추적 문자열을 보여 주지 않는다. */
 const 사유문장 = (e: KitExcluded): string => e.reasonText ?? "";
@@ -793,6 +829,16 @@ interface RecommendationResponse {
   excludedCandidates?: { candidateId: string; reasonCode?: string; explanation?: string }[];
   recommendationReasons?: string[];
   unmetConditions?: string[];
+  /**
+   * 축별 점수. 서버가 무엇을 보고 이 후보를 1순위로 골랐는지 남긴 것이다.
+   *
+   * 지금 화면에는 안 쓴다. 숫자를 그대로 띄우면 이 앱을 쓰는 분들에게는
+   * 읽을 수 없는 값이 하나 더 느는 것이라, 어떻게 보여 줄지를 먼저 정해야 한다.
+   *
+   * 다만 받아서 개발 기록에는 남긴다. 예전에는 타입에 선언조차 없어서 '왜 이게
+   * 1순위인지' 를 확인할 방법이 아예 없었다. 심사 축에 설명 가능성이 있다.
+   */
+  scoreBreakdown?: Record<string, number>;
   confidence?: number;
   requiresReconfirmation?: boolean;
 }
@@ -984,6 +1030,73 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 실행단계 = new Map<string, { text: string; ok: boolean }[]>();
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
+  /*
+   * candidate-filters 가 준 후보별 규칙 판정. 주문표 id 로 묶어 둔다.
+   *
+   * 여기 있으면 확인표() 대신 이것을 쓴다. 서버가 이미 내린 판단이라
+   * 우리가 다시 계산할 이유가 없고, 다시 하면 언젠가 갈라진다.
+   */
+  const 규칙판정들 = new Map<string, {
+    /*
+     * 응답에 판정 필드가 **있었는가**. 후보별 배열이 있었는가와 다르다.
+     *
+     * 이 둘을 구분하지 않으면, 서버가 판정을 보냈는데 그 후보에 대한 항목만
+     * 없는 경우(전부 SKIPPED)에 우리가 다시 계산하는 쪽으로 물러난다. 그러면
+     * 서버가 '비교한 적 없다' 고 한 축을 우리가 맞다.틀리다로 말하게 된다 -
+     * 이 변경이 없애려던 바로 그 문제다.
+     *
+     * 필드 자체가 없을 때(옛 백엔드)만 물러난다.
+     */
+    서버판정있음: boolean;
+    warn: Record<string, 규칙판정[]>;
+    pass: Record<string, 규칙판정[]>;
+  }>();
+
+  /*
+   * 축별 일치 여부를 만든다.
+   *
+   * 서버가 후보별 규칙 판정을 줬으면 그것을 쓴다. FAIL 이면 어긋난 것,
+   * PASS 면 맞은 것이다. 둘 중 어느 쪽에도 없으면 **아무 말도 하지 않는다** -
+   * SKIPPED 라는 뜻이고, 그건 '맞았다' 가 아니라 '비교한 적이 없다' 이다.
+   *
+   * 판정이 아예 안 오면(옛 백엔드) 예전처럼 우리가 맞춰 본다.
+   */
+  const 축맞춤 = (profileId: string, candidateId: string, c: KitCandidate | undefined, p: OrderSheet): MappedOption[] => {
+    const 판정 = 규칙판정들.get(profileId);
+    // 필드 자체가 없을 때만 우리가 맞춰 본다. 후보별 항목이 없는 것은
+    // '이 후보는 비교한 축이 하나도 없다' 는 뜻이라 빈 것이 맞는 답이다.
+    if (!판정?.서버판정있음) return 확인표(c, p);
+    const warn = 판정.warn[candidateId];
+    const pass = 판정.pass[candidateId];
+
+    const 고른값 = p.selections ?? {};
+    const 한줄 = (축: string, matched: boolean): MappedOption | null => {
+      const 값 = 고른값[축]?.[0];
+      if (!값) return null;   // 사용자가 안 고른 축은 보여 줄 것이 없다
+      return matched
+        ? { label: 축, value: 값, matched: true }
+        : { label: 축, value: 값, matched: false, note: "오늘은 이 조합이 없어요" };
+    };
+
+    const 행: MappedOption[] = [];
+    const 본축 = new Set<string>();
+    for (const r of warn ?? []) {
+      const 축 = 규칙축[r.errorCode ?? ""];
+      if (!축 || 본축.has(축)) continue;
+      본축.add(축);
+      const x = 한줄(축, false);
+      if (x) 행.push(x);
+    }
+    for (const r of pass ?? []) {
+      const 축 = 규칙축[r.errorCode ?? ""] ?? 규칙축[(r.ruleId ?? "").replace(/^CHICKEN_/, "").replace(/_PREFERENCE$/, "_MISMATCH")];
+      if (!축 || 본축.has(축)) continue;
+      본축.add(축);
+      const x = 한줄(축, true);
+      if (x) 행.push(x);
+    }
+    return 행;
+  };
+
   // 정규화를 거친 주문표·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
   // 키는 환경 + 정규화에 넣은 입력 전체다. 주문표 id 만 쓰면 주문표를 고치거나
   // 다른 키오스크에 붙었을 때 낡은 값을 그대로 쓰게 된다.
@@ -1202,6 +1315,11 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         if (c.name) display[c.candidateId] = { displayName: c.name, priceText: 원(c.price) };
       }
       후보.set(profile.id, new Map(담을수있는.map((c) => [c.candidateId, c])));
+      규칙판정들.set(profile.id, {
+        서버판정있음: Boolean(r.warningsByCandidateId || r.passesByCandidateId),
+        warn: r.warningsByCandidateId ?? {},
+        pass: r.passesByCandidateId ?? {},
+      });
 
       const 뺀것 = (r.excludedCandidates ?? []).map((e) => ({
         candidateId: e.candidateId,
@@ -1253,14 +1371,16 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         requiresReconfirmation: r.requiresReconfirmation ?? false,
         // 이름·가격은 candidate-filters 에서 온다. 추천 응답에는 없다.
         display: {},
-        // 후보가 들고 있는 값과 사용자가 고른 값을 축별로 맞춰 본다.
-        // 서버가 matchedOptions 를 주면 그때는 이걸 걷어내고 그대로 쓴다.
-        matchedOptions: 고름 ? 확인표(알려진후보?.get(고름), profile) : [],
+        // 축별 일치 여부. 서버 판정이 있으면 그것을 쓰고, 없으면 우리가 맞춰 본다.
+        matchedOptions: 고름 ? 축맞춤(profile.id, 고름, 알려진후보?.get(고름), profile) : [],
         // 후보를 고르는 화면에서도 어느 축이 어긋나는지 보여 준다.
         unmatchedLabelsByCandidate: Object.fromEntries(
           [고름, ...(r.alternativeCandidateIds ?? [])]
             .filter((id): id is string => id !== null && 담을수있나(id))
-            .map((id) => [id, 확인표(알려진후보?.get(id), profile).filter((o) => !o.matched).map((o) => o.label)]),
+            .map((id) => [
+              id,
+              축맞춤(profile.id, id, 알려진후보?.get(id), profile).filter((o) => !o.matched).map((o) => o.label),
+            ]),
         ),
       };
     },

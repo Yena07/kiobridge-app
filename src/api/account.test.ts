@@ -511,3 +511,35 @@ describe("팀 백엔드 — 서버가 준 값을 화면 타입으로 좁힌다",
     expect((e as KioBridgeError).recoverable).toBe(true);
   });
 });
+
+describe("주문표 삭제 (팀 #79)", () => {
+  it("서버에 저장된 주문표를 지운다", async () => {
+    const a = await mockAccount.signup("지우미", "비밀번호12");
+    await mockAccount.saveSheet(a.userId, 주문표());
+    expect(await mockAccount.listSheets(a.userId)).toHaveLength(1);
+
+    await mockAccount.deleteSheet(a.userId, 주문표().id);
+    expect(await mockAccount.listSheets(a.userId)).toHaveLength(0);
+  });
+
+  it("없는 것을 지워도 오류로 두지 않는다", async () => {
+    /*
+     * '이 기기에서 정보 지우기' 는 화면에 있는 것을 전부 지우려 드는데,
+     * 그중 서버에 안 올라간 것도 섞여 있다. 거기서 오류가 나면 지우는
+     * 도중에 멈춘다. 서버가 204 라 목도 같게 둔다.
+     */
+    const a = await mockAccount.signup("없는거", "비밀번호12");
+    await expect(mockAccount.deleteSheet(a.userId, "없는-주문표")).resolves.toBeUndefined();
+  });
+
+  it("남의 주문표는 건드리지 않는다", async () => {
+    const 갑 = await mockAccount.signup("갑", "비밀번호12");
+    const 을 = await mockAccount.signup("을", "비밀번호12");
+    await mockAccount.saveSheet(갑.userId, 주문표());
+    await mockAccount.saveSheet(을.userId, 주문표());
+
+    await mockAccount.deleteSheet(갑.userId, 주문표().id);
+    expect(await mockAccount.listSheets(갑.userId)).toHaveLength(0);
+    expect(await mockAccount.listSheets(을.userId)).toHaveLength(1);
+  });
+});

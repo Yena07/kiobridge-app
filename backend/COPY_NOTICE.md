@@ -4,7 +4,7 @@
 로컬에서 프론트와 붙여 보려고 그대로 복사해 둔 것입니다.
 
 ```
-원본   watTHEBUG/kioBridge  dev  2eb44d9  feat: 검증에 막힌 이유를 서버가 옮겨 준 문장 그대로, 빠짐없이 보여준다 (#74)
+원본   watTHEBUG/kioBridge  dev  8f68656  [FEAT] 주문 프로필 저장 계약 및 삭제 API 정비 (#79)
 복사   2026-08-11
 ```
 

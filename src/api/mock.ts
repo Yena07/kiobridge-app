@@ -25,7 +25,7 @@ const KIOSK_MENU_PHOTOS: Record<string, string> = {
 export const MOCK_MENU_NAME = "닭강정";
 
 // 오늘 이 키오스크에 걸린 후보. 공식 시뮬레이션 킷의 chicken-store fixture
-// (CHICKEN-001~008)와 같은 값이다. 심사에서 실제로 돌아가는 환경이 그것이라,
+// (candidate-alpha · beta · gamma · delta)와 같은 값이다. 심사에서 실제로 돌아가는 환경이 그것이라,
 // 화면에만 있는 가짜 메뉴를 보여 주면 시연과 제출물이 서로 다른 이야기를 하게 된다.
 interface 후보 {
   name: string;
@@ -42,7 +42,7 @@ interface 후보 {
 // 장소마다 키오스크가 다르다. 한 카탈로그만 두면 아이스 아메리카노를 저장한
 // 사람이 '간장 순살 닭강정' 을 승인하라는 화면을 받는다. 실제로 그랬다.
 //
-// chicken-store 는 공식 fixture(CHICKEN-001~008)와 같은 값이다.
+// chicken-store 는 공식 fixture(candidate-alpha · beta · gamma · delta)와 같은 값이다.
 // 카페는 대응하는 공식 fixture 가 없다. 백엔드의 input-options 가 카페를
 // 다루게 되면 이 블록은 그 응답으로 교체된다. 그때까지 화면을 보여 주기 위한
 // 시연용 값이며, 제출물에는 들어가지 않는다.
