@@ -815,6 +815,33 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(rec.matchedOptions).toEqual([]);
   });
 
+  it("재확인 판정만 와도 우리가 다시 계산하지 않는다", async () => {
+    /*
+     * 예전에는 warnings·passes 둘만 보고 '서버가 판정했나' 를 정했다. 재확인
+     * 판정만 실려 오면 그 검사가 거짓이 되어 확인표() 로 물러났고, 서버가
+     * "비교하지 못했다" 고 한 축을 우리가 맞다고 말하게 된다.
+     */
+    const b = 붙이기({
+      "candidate-filters": {
+        eligibleCandidates: [{
+          candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true,
+          attributes: { spicyLevel: "HOT", boneType: "BONELESS" },
+          supportedOptions: { SERVICE_TYPE: ["TAKE_OUT"], CUP: ["PAPER"] },
+        }],
+        excludedCandidates: [],
+        // 앞의 둘은 아예 없고 이것만 온다.
+        reconfirmationsByCandidateId: {
+          "candidate-alpha": [{ ruleId: "CHICKEN_ALLERGEN_HARD_CONSTRAINT", result: "RECONFIRM", errorCode: "ALLERGEN_CONFLICT" }],
+        },
+      },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-alpha", alternativeCandidateIds: [] },
+    });
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+    const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
+    // 후보에 attributes·supportedOptions 를 채워 뒀다. 물러났다면 값이 들어찬다.
+    expect(rec.matchedOptions).toEqual([]);
+  });
+
   it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
     const b = 붙이기();
     await 승인(b, 실행성공);
