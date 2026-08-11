@@ -2757,7 +2757,13 @@ function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
                 borderBottom: i < done.length - 1 ? `1px solid ${BORDER}` : "none",
               }}
             >
-              <span style={{ ...TYPE.caption, color: TEXT_3, ...NUM, minWidth: 18 }}>{i + 1}</span>
+              {/*
+                번호에 TEXT_3 를 썼었다. tokens.ts 에 "글자 금지" 라고 적어 둔
+                값이라 흰 배경 1.74:1 이고, 이 목록의 면(SURFACE) 위에서는 더
+                낮다. 몇 번째 줄인지 세라고 붙여 둔 숫자가 안 보이면 없느니만
+                못하다. 낮춰 보이는 것은 색이 아니라 크기로 만든다.
+              */}
+              <span style={{ ...TYPE.caption, color: TEXT_2, ...NUM, minWidth: 18 }}>{i + 1}</span>
               <Pictogram name={d.ok ? "checkCircle" : "xCircle"} size={16} color={d.ok ? P : FAIL} style={{ marginTop: 2 }} />
               {/*
                 Pictogram 은 aria-hidden 이라 이 줄이 됐는지 안 됐는지가 색과
