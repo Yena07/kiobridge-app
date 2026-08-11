@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrderSheet } from "@/domain/types";
-import { toCanonicalProfile, toChickenStoreContext, 백엔드가아는장소, 수량숫자 } from "./canonical";
+import { toCanonicalProfile, toChickenStoreContext, toContextNormalizationInput, 백엔드가아는장소, 수량숫자 } from "./canonical";
 
 // 이 파일이 지키는 것: 화면의 한글 선택지가 백엔드 enum 으로 정확히 옮겨진다.
 // 여기가 어긋나면 사용자가 '매운맛'을 골랐는데 서버는 '순한맛'으로 읽는다.
@@ -133,5 +133,34 @@ describe("백엔드가 다룰 수 있는 장소인지 본다", () => {
       expect(백엔드가아는장소({ ...주문표({}), place })).toBe(false);
     }
     expect(백엔드가아는장소({ ...주문표({}), place: null })).toBe(false);
+  });
+});
+
+/*
+ * 가격 한도.
+ *
+ * 지금까지 늘 null 로 나가서 서버의 가격 점수가 죽어 있었다. 같은 주문표로 재 본 것:
+ *
+ *   한도 없음     priceScore 0.0      confidence 0.5   대안 2개
+ *   한도 5,800원  priceScore 0.0259   confidence 0.8   대안 0개
+ */
+describe("가격 한도", () => {
+  const 주문표하나 = 주문표({ "이용 방식": ["포장하기"] });
+
+  it("정한 값을 hardConstraints 에 실어 보낸다", () => {
+    expect(toChickenStoreContext(주문표하나, { 예산: 8000 }).hardConstraints.maxPriceKrw).toBe(8000);
+  });
+
+  it("안 정했으면 정규화 입력에서 칸 자체를 뺀다", () => {
+    // 킷 스키마가 { "type": "number", "minimum": 0 } 이라 null 을 안 받는다.
+    // 지금 null 이 통하는 것은 백엔드의 @JsonInclude(NON_NULL) 이 킷으로 나가기
+    // 전에 지워 주기 때문이다. 그쪽 애노테이션 하나에 기대지 않는다.
+    const { contextInput } = toContextNormalizationInput(주문표하나);
+    expect(contextInput).not.toHaveProperty("maxPriceKrw");
+  });
+
+  it("정했으면 정규화 입력에 실린다", () => {
+    const { contextInput } = toContextNormalizationInput(주문표하나, { 예산: 6000 });
+    expect(contextInput.maxPriceKrw).toBe(6000);
   });
 });

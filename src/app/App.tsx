@@ -21,6 +21,7 @@ import {
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, type 접근성 } from "@/api/a11y";
+import { 가격한도, 한도후보 } from "@/api/budget";
 import { 이어쓰기 } from "@/api/session";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
@@ -1178,14 +1179,51 @@ function OrderSheetCard({
   );
 }
 
+/**
+ * 가격 한도를 고르는 줄.
+ *
+ * 순위를 바꾸는 값이 아니라 **후보를 빼는 값**이다. 서버에서 확인한 것:
+ * 한도가 5,000원이면 5,500~7,000원짜리 후보가 전부 excludedCandidates 로 빠지고
+ * reasonCode 는 PRICE_LIMIT_EXCEEDED 다. 그래서 "비싼 건 빼고 찾아요" 라고
+ * 먼저 말한다 — 순위만 밀리는 줄 알고 낮게 잡으면 담을 게 없다는 답을 받는다.
+ *
+ * 주문표가 아니라 이번 이용에 딸린 값이라 여기(주문 직전)에 둔다. 주문표에 넣으면
+ * 예산은 그날그날 다른데 저장해 둔 조건에 굳어 버린다.
+ */
+function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바꾸기: (원: number | null) => void }) {
+  return (
+    <div>
+      <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 6 }}>가격 한도 (선택)</h2>
+      <div className="flex flex-wrap" style={{ gap: 6 }}>
+        <Chip label="안 정함" selected={예산 === null} onClick={() => on바꾸기(null)} />
+        {한도후보.map((원) => (
+          <Chip
+            key={원}
+            label={`${원.toLocaleString("ko-KR")}원`}
+            selected={예산 === 원}
+            onClick={() => on바꾸기(예산 === 원 ? null : 원)}
+          />
+        ))}
+      </div>
+      {예산 !== null && (
+        <p style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
+          {예산.toLocaleString("ko-KR")}원보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SavedSheetsScreen({
-  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false,
+  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false, 예산, on예산,
 }: {
   sheets: OrderSheet[];
   onAddSheet: () => void;
   onDeleteSheet: (id: string) => void;
   onOrder: (sheet: OrderSheet) => void;
   showOrder?: boolean;
+  예산: number | null;
+  on예산: (원: number | null) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(sheets[0]?.id ?? null);
 
@@ -1253,6 +1291,10 @@ function SavedSheetsScreen({
       </div>
 
       <StickyFooter>
+        {/* 주문 버튼이 보일 때만 묻는다. 연결도 안 된 화면에서 예산부터 물으면 뜬금없다. */}
+        {showOrder && 고른것 && 백엔드가아는장소(고른것) && (
+          <한도고르기 예산={예산} on바꾸기={on예산} />
+        )}
         {/*
           아직 연결되지 않은 장소는 주문으로 보내지 않는다.
           
@@ -3619,7 +3661,7 @@ export default function App() {
    */
   const [이어받은] = useState(() => {
     const v = 이어쓰기.읽기();
-    if (v) 접근성설정.되살리기(v.a11y);
+    if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); }
     return v;
   });
   const [screen, setScreen] = useState<Screen>(이어받은?.screen ?? "welcome");
@@ -3673,6 +3715,12 @@ export default function App() {
    */
   const [접근성값, set접근성값] = useState<접근성>(() => 접근성설정.읽기());
   useEffect(() => 접근성설정.구독(() => set접근성값({ ...접근성설정.읽기() })), []);
+  /*
+   * 가격 한도. 저장소는 api/budget.ts 에 있고 화면은 그걸 비춘다 — 접근성과 같은 이유다.
+   * 연동 계층(backend.ts)도 이 값을 읽어야 한다. 서버로 나가는 hardConstraints 에 실린다.
+   */
+  const [예산, set예산] = useState<number | null>(() => 가격한도.읽기());
+  useEffect(() => 가격한도.구독(() => set예산(가격한도.읽기())), []);
   const largeText = 접근성값.largeText;
   /*
    * 되살릴 때 서버에서 다시 불러오지 않는다.
@@ -3720,9 +3768,9 @@ export default function App() {
     이어쓰기.쓰기({
       screen, tab, name, account: 계정, sheets,
       fromServer: [...서버에서온것.current],
-      a11y: 접근성값, planId,
+      a11y: 접근성값, budget: 예산, planId,
     });
-  }, [screen, tab, name, 계정, sheets, 접근성값, planId]);
+  }, [screen, tab, name, 계정, sheets, 접근성값, 예산, planId]);
 
   const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
@@ -4125,6 +4173,8 @@ export default function App() {
               // 실서비스에서는 주문표 저장 시점에 서버로 올라가고 이 줄은 사라진다.
               onOrder={(p) => { registerSheet(p); setOrderSheet(p); setScreen("order-confirm"); }}
               showOrder={fromQr}
+              예산={예산}
+              on예산={(원) => 가격한도.바꾸기(원)}
             />
           )}
           {screen === "order-confirm" && pairingId && orderSheet && (
@@ -4168,6 +4218,9 @@ export default function App() {
                   // 설정을 그대로 보게 되고, 그 값이 서버로도 계속 나간다.
                   // 화면이 '모두 지워요' 라고 말한 것에 이것도 들어간다.
                   접근성설정.비우기();
+                  // 가격 한도도 내가 정한 값이다. 남겨 두면 다음 사람이 앞사람의 한도로
+                  // 걸러진 목록을 보게 되고, 왜 메뉴가 적게 나오는지 알 수 없다.
+                  가격한도.비우기();
                   서버까지지우기();
                   /*
                    * 서버에 올라간 주문표도 지운다 (팀 #79 의 DELETE).

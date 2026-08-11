@@ -9,6 +9,7 @@ import { KioBridgeError, clearSheets, type KioBridgeApi } from "@/api/client";
 import { STEPS } from "@/domain/catalog";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정 } from "@/api/a11y";
+import { 가격한도 } from "@/api/budget";
 
 /**
  * 팀 API 명세서의 경로와 1:1 로 맞춘 계층.
@@ -1102,7 +1103,9 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     // 안 맞는다. 결과를 바꾸는 건 고른 조건과 접근성 설정이라 그것만 넣는다.
     // 접근성 설정이 바뀌면 표준형도 달라진다. 키에 그대로 들어가므로 캐시가 자동으로 갈린다.
     const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기() });
-    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p).contextInput)}`;
+    // 가격 한도가 바뀌면 후보 자체가 달라진다(넘는 것은 제외된다). 키에 들어가므로
+    // 한도를 고치면 캐시가 자동으로 갈라진다 — 접근성 설정과 같은 방식이다.
+    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p, { 예산: 가격한도.읽기() }).contextInput)}`;
     마지막키.set(p.id, 키);
     return 키;
   };
@@ -1138,7 +1141,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       status: string; sessionContext: ChickenStoreSessionContext;
       reconfirmationFields?: { path?: string; message?: string }[];
       contractValidation?: { valid: boolean; errors?: { message?: string }[] };
-    }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p) });
+    }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p, { 예산: 가격한도.읽기() }) });
 
     // 서버가 못 쓰겠다고 하면 거기서 멈춘다. 조용히 넘기면 승인 직전에 터진다.
     for (const r of [pr, sr]) {

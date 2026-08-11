@@ -127,7 +127,10 @@ export function toCanonicalProfile(
 }
 
 /** 닭강정집 세션 맥락. 다른 장소는 백엔드에 대응 타입이 아직 없다. */
-export function toChickenStoreContext(p: OrderSheet): ChickenStoreSessionContext {
+export function toChickenStoreContext(
+  p: OrderSheet,
+  opts: { 예산?: number | null } = {},
+): ChickenStoreSessionContext {
   return {
     intent: { task: "ORDER_FOOD" },
     facts: {},
@@ -142,7 +145,16 @@ export function toChickenStoreContext(p: OrderSheet): ChickenStoreSessionContext
       // 알레르기는 절대 조건이다. 모르는 값을 조용히 버리면 그 사람의 알레르기가
       // 서버에 전달되지 않는다. UNKNOWN 으로라도 보내서 서버가 알게 한다.
       allergenIds: 고른값들(p, "알레르기 (꼭 빼주세요)").map((v) => 알레르기[v] ?? "UNKNOWN"),
-      maxPriceKrw: null,
+      /*
+       * 이번 이용의 가격 한도(api/budget.ts). 안 정했으면 null 이다.
+       *
+       * 스키마는 이 칸을 `{"type":"number","minimum":0}` 으로만 두고 required 에서
+       * 뺐다 — 즉 **없는 것은 되고 null 은 안 된다.** 지금 null 이 통과하는 건
+       * 백엔드의 @JsonInclude(NON_NULL) 이 킷으로 나가기 전에 지워 주기 때문이다.
+       * 그쪽 애노테이션 하나에 기대고 있는 셈이라, 우리 쪽에서도 값이 있을 때만
+       * 싣는다(toContextNormalizationInput).
+       */
+      maxPriceKrw: opts.예산 ?? null,
     },
     capabilities: {},
     fieldMetadata: {},
@@ -178,6 +190,15 @@ export interface ContextNormalizationInput {
     cupOption: CupOption;
     quantity?: number;
     allergenIds: AllergenId[];
+    /**
+     * 가격 한도. 안 정했으면 아예 안 싣는다.
+     *
+     * 백엔드가 @PositiveOrZero BigDecimal 로 받고
+     * (SessionContextNormalizationRequest.ContextInput), hardConstraints 로 옮긴 뒤
+     * `/hardConstraints/maxPriceKrw` 의 fieldMetadata 까지 만들어 준다. 다 준비돼
+     * 있었는데 화면이 안 보내서 서버의 가격 점수가 늘 0 이었다.
+     */
+    maxPriceKrw?: number;
   };
   /**
    * 이 값들을 어떻게 얻었는지.
@@ -207,16 +228,20 @@ export function toProfileNormalizationInput(
 
 export function toContextNormalizationInput(
   p: OrderSheet,
-  opts: { capturedAt?: string } = {},
+  opts: { capturedAt?: string; 예산?: number | null } = {},
 ): ContextNormalizationInput {
-  const ctx = toChickenStoreContext(p);
+  const ctx = toChickenStoreContext(p, opts);
   const { quantity, ...나머지 } = ctx.preferences;
+  const 한도 = ctx.hardConstraints.maxPriceKrw;
   return {
     contextInput: {
       ...나머지,
       // 수량은 @Min(1) 이라 null 을 보내면 거절당한다. 안 고르면 아예 뺀다.
       ...(quantity == null ? {} : { quantity }),
       allergenIds: ctx.hardConstraints.allergenIds,
+      // 가격 한도도 같다. 안 정했으면 칸 자체를 안 만든다 — 스키마가 number 만
+      // 받고 null 은 안 받는다. 값이 없으면 서버가 fieldMetadata 도 안 만든다.
+      ...(한도 == null ? {} : { maxPriceKrw: 한도 }),
     },
     collectionMetadata: {
       source: "WEB_FORM",

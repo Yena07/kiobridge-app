@@ -71,6 +71,14 @@ export interface 이어쓸것 {
   fromServer: string[];
   a11y: 접근성;
   /**
+   * 이번 이용의 가격 한도(원). 안 정했으면 null 이다.
+   *
+   * 오래 붙들 값이 아니라 "오늘은 얼마까지" 라서 이번 이용에만 둔다. 다만 새로고침
+   * 한 번에 풀리면 안 된다 — 한도를 넘는 메뉴는 후보에서 빠지므로, 조용히 풀리면
+   * 아까 안 보이던 메뉴가 갑자기 보이고 사용자는 이유를 알 수 없다.
+   */
+  budget: number | null;
+  /**
    * 실행 중인 계획.
    *
    * 연결(pairingId)은 안 남기는데 이것만 남기는 이유는, 이 값으로 하는 일이
@@ -159,6 +167,7 @@ const 남길것이있나 = (v: 이어쓸것): boolean =>
   || v.name !== ""
   || v.sheets.length > 0
   || v.planId !== null
+  || v.budget !== null
   || Object.values(v.a11y).some(Boolean);
 
 export const 이어쓰기 = {
@@ -215,6 +224,10 @@ export const 이어쓰기 = {
       sheets,
       fromServer,
       a11y: 접근성읽기(o.a11y),
+      // 계약이 minimum: 0 인 number 다. 양의 정수가 아니면 안 정한 것으로 본다 —
+      // 손대서 음수를 넣어 두면 서버가 400 으로 되돌려서 주문 자체가 안 된다.
+      budget: typeof o.budget === "number" && Number.isInteger(o.budget) && o.budget > 0
+        ? o.budget : null,
       // 실행 화면으로 돌아가지 못하면 계획도 들고 있을 이유가 없다.
       planId: screen === "execution" ? planId : null,
     };

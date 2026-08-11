@@ -64,6 +64,7 @@ const 채운값 = (덮을것: Partial<이어쓸것> = {}): 이어쓸것 => ({
   sheets: [주문표("p1"), 주문표("p2")],
   fromServer: ["p2"],
   a11y: { ...기본접근성, largeText: true },
+  budget: null,
   planId: null,
   ...덮을것,
 });
@@ -93,10 +94,10 @@ describe("남으면 안 되는 것", () => {
    * 남기는가' 를 바꾼 것이니, session.ts 의 설명과 개인정보 화면 문구를
    * 같이 고쳤는지 다시 보라는 뜻이다.
    */
-  it("적어 두는 칸은 정해진 여덟 개뿐이다", () => {
+  it("적어 두는 칸은 정해진 아홉 개뿐이다", () => {
     이어쓰기.쓰기(채운값());
     expect(Object.keys(적힌것()).sort()).toEqual(
-      ["a11y", "account", "fromServer", "name", "planId", "screen", "sheets", "tab"],
+      ["a11y", "account", "budget", "fromServer", "name", "planId", "screen", "sheets", "tab"],
     );
   });
 
@@ -217,12 +218,27 @@ describe("손댄 값을 믿지 않는다", () => {
     망가진것({ a11y: { largeText: true, highContrast: "예", 없는칸: true } });
     expect(이어쓰기.읽기()!.a11y).toEqual({ ...기본접근성, largeText: true });
   });
+
+  it("가격 한도가 양의 정수가 아니면 안 정한 것으로 본다", () => {
+    // 계약이 minimum: 0 인 number 다. 음수를 넣어 두면 서버가 400 으로 되돌려서
+    // 한 칸 잘못된 값 때문에 주문 자체가 안 된다.
+    for (const 나쁜값 of [-1000, 0, 5500.5, "6000", null, true]) {
+      망가진것({ budget: 나쁜값 });
+      expect(이어쓰기.읽기()!.budget).toBeNull();
+    }
+  });
+
+  it("가격 한도를 정해 두면 그대로 되살린다", () => {
+    // 조용히 풀리면 아까 안 보이던 메뉴가 갑자기 보이고 사용자는 이유를 알 수 없다.
+    이어쓰기.쓰기(채운값({ budget: 8000 }));
+    expect(이어쓰기.읽기()!.budget).toBe(8000);
+  });
 });
 
 describe("남길 것이 없으면 아무것도 안 쓴다", () => {
   const 빈값 = 채운값({
     screen: "welcome", tab: "menu", name: "", account: null,
-    sheets: [], fromServer: [], a11y: { ...기본접근성 }, planId: null,
+    sheets: [], fromServer: [], a11y: { ...기본접근성 }, budget: null, planId: null,
   });
 
   it("빈 이용은 저장하지 않는다", () => {
