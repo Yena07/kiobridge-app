@@ -619,6 +619,46 @@ interface RunStep {
 const 고른값을담는동작 = new Set(["select_service", "select_menu", "select_option"]);
 
 /*
+ * 서버가 준 label 을 화면에 올려도 되는지.
+ *
+ * label 은 검증되지 않은 서버 입력이다. 여기를 그대로 통과시키면 서버가 무엇을
+ * 담아 보내든 결과 화면에 뜬다 - 상품 ID(CHICKEN-001) · 화면 좌표 · 결제 문구
+ * 전부. 우리 실격 요건 둘을 정면으로 건드린다.
+ *
+ * 그런데 우리는 **사용자가 무엇을 골랐는지 이미 안다.** 주문표의 선택값과
+ * 화면에 띄우고 있는 후보 이름이 그것이다. 그 목록에 있는 값만 통과시킨다.
+ *
+ * 흰 목록이라 새는 길이 없다. 모르는 값이면 값을 지우고 동작만 말한다 -
+ * 무엇을 골랐는지 한 줄 잃지만, 지어낸 값이나 새면 안 되는 값을 띄우는 것보다 낫다.
+ *
+ * 앞서 ICE 를 살리려고 모양 검사를 없앴는데, 그때 '고른 값 자리는 안전하다' 고
+ * 전제했다. 그 전제에 근거가 없었다. 모양이 아니라 **아는 값인지**로 가른다.
+ */
+const 아는값인가 = (label: string, 아는값: Set<string>): boolean =>
+  아는값.has(label) && 보여도되나(label);
+
+/*
+ * 주문표에 고른 값과 **이번에 담기로 한 메뉴 하나**의 이름.
+ *
+ * 후보 전체를 넣으면 안 된다. 대안 후보 이름까지 흰 목록에 들어가서, 서버가
+ * 사용자가 고르지 않은 후보 이름을 보내도 "OO 골랐어요" 로 뜬다. 고른 적 없는
+ * 메뉴를 골랐다고 말하는 셈이라, 대신 눌러 주는 앱에서 가장 나쁜 거짓말이다.
+ *
+ * 찾지 못하면 이름을 아예 넣지 않는다. 그때는 "하나 골랐어요" 로 물러난다.
+ */
+const 아는값모으기 = (
+  profile: OrderSheet | undefined,
+  고른후보: KitCandidate | undefined,
+): Set<string> => {
+  const s = new Set<string>();
+  for (const 값들 of Object.values(profile?.selections ?? {})) {
+    for (const v of 값들) if (v) s.add(v);
+  }
+  if (고른후보?.name) s.add(고른후보.name);
+  return s;
+};
+
+/*
  * 아는 화면 코드만 갈라 준다.
  *
  * confirm_option 이 두 번 온다 — 옵션을 확정할 때와 메뉴를 장바구니로 넘길 때다.
@@ -632,9 +672,12 @@ const 아는화면: Record<string, string> = {
   OPTION_CONFIRM: "옵션을 확정했어요",
   MENU_SELECTION_WITH_CART: "메뉴를 장바구니로 넘겼어요",
 };
-const 동작말 = (action: string, label: string): string => {
-  // 고른 값 자리면 모양을 따지지 않는다. ICE 도 그대로 "ICE 골랐어요" 다.
-  if (고른값을담는동작.has(action)) return label ? `${label} 골랐어요` : "하나 골랐어요";
+const 동작말 = (action: string, label: string, 아는값: Set<string>): string => {
+  // 고른 값 자리라도 우리가 아는 값일 때만 그대로 쓴다. ICE 는 주문표에 있으니
+  // "ICE 골랐어요" 가 되고, CHICKEN-001 은 없으니 "하나 골랐어요" 가 된다.
+  if (고른값을담는동작.has(action)) {
+    return 아는값인가(label, 아는값) ? `${label} 골랐어요` : "하나 골랐어요";
+  }
   if (아는화면[label]) return 아는화면[label];
   switch (action) {
     case "confirm_option":
@@ -644,15 +687,18 @@ const 동작말 = (action: string, label: string): string => {
     case "verify_cart":
       return "장바구니를 확인했어요";
     default:
-      // 모르는 동작이다. label 이 코드꼴이면 무슨 일이 있었는지 지어내지 않는다.
-      return label && !/^[A-Z][A-Z0-9_]*$/.test(label) ? label : "한 단계 진행했어요";
+      // 모르는 동작이다. 아는 값이 아니면 무슨 일이 있었는지 지어내지 않는다.
+      return 아는값인가(label, 아는값) ? label : "한 단계 진행했어요";
   }
 };
-const 한일만들기 = (단계: RunStep[] | undefined): { text: string; ok: boolean }[] | undefined => {
+const 한일만들기 = (
+  단계: RunStep[] | undefined,
+  아는값: Set<string>,
+): { text: string; ok: boolean }[] | undefined => {
   if (!단계 || 단계.length === 0) return undefined;
   return [...단계]
     .sort((a, b) => a.actionIndex - b.actionIndex)
-    .map((s) => ({ text: 동작말(s.action, (s.label ?? "").trim()), ok: s.success }));
+    .map((s) => ({ text: 동작말(s.action, (s.label ?? "").trim(), 아는값), ok: s.success }));
 };
 
 /** 킷 fixture 의 후보. candidate-filters 가 이 모양으로 돌려준다. */
@@ -874,8 +920,14 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   // 승인 응답에 실려 온 검증 실패 문장(#66). 확인 화면이 그대로 보여 준다.
   // 실행결과(raw)에는 없는 값이라 따로 들고 있어야 한다.
   const 검증문장 = new Map<string, string[]>();
-  // 승인 응답에 실려 온 실행 단계(#71). 같은 이유로 따로 들고 있는다.
-  const 실행단계 = new Map<string, RunStep[]>();
+  /*
+   * 승인 응답에 실려 온 실행 단계(#71).
+   *
+   * **원문을 담지 않는다.** 화면에 올릴 문장으로 바꾼 뒤에 담는다. 원문에는
+   * 서버가 무엇을 넣었을지 모르는 label 이 들어 있고, 그걸 메모리에 두면
+   * 화면에 안 띄워도 '앱이 상품 ID 를 들고 있는' 상태가 된다.
+   */
+  const 실행단계 = new Map<string, { text: string; ok: boolean }[]>();
   // 후보 필터가 준 후보들. 이름·가격과 축별 값이 여기 있다.
   const 후보 = new Map<string, Map<string, KitCandidate>>();
   // 정규화를 거친 주문표·세션 맥락. 매핑과 승인이 같은 값을 쓴다.
@@ -1196,9 +1248,20 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       } else {
         검증문장.delete(sessionId);
       }
-      // 같은 이유로 여기도 덮거나 지운다 — 앞 승인의 단계가 남으면 안 된다.
-      if (Array.isArray(r.runSteps)) {
-        실행단계.set(sessionId, r.runSteps);
+      /*
+       * 같은 이유로 여기도 덮거나 지운다 — 앞 승인의 단계가 남으면 안 된다.
+       *
+       * 담기 전에 문장으로 바꾼다. 아는 값(주문표에 고른 값 · 이번에 담기로 한
+       * 메뉴 이름)만 통과하므로, 서버가 무엇을 보냈든 여기 남는 것은 우리가 이미
+       * 알고 있던 값뿐이다.
+       */
+      // 사용자가 다른 후보를 골랐으면 그것, 아니면 서버 1순위. 그 하나만 아는 값이다.
+      const 담을후보 = input.candidateId ?? rec.recommendedCandidateId ?? undefined;
+      const 한일 = Array.isArray(r.runSteps)
+        ? 한일만들기(r.runSteps, 아는값모으기(profile, 담을후보 ? 후보.get(profile.id)?.get(담을후보) : undefined))
+        : undefined;
+      if (한일) {
+        실행단계.set(sessionId, 한일);
       } else {
         실행단계.delete(sessionId);
       }
@@ -1289,7 +1352,8 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         e.result === "PASS" ? "cart_ready" : e.result === "FAIL" ? "aborted" : "running";
 
       const 요약 = 서버요약.get(sessionId);
-      const 한일 = 한일만들기(실행단계.get(sessionId));
+      // 이미 문장으로 바꿔 담아 뒀다. 여기서는 꺼내 쓰기만 한다.
+      const 한일 = 실행단계.get(sessionId);
       return {
         state,
         // 몇 번째 화면까지 갔는지. 실행한 동작 수가 그대로 진행도다.
