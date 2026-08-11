@@ -21,6 +21,7 @@ import {
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, type 접근성 } from "@/api/a11y";
+import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
@@ -1199,6 +1200,9 @@ function SavedSheetsScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheets]);
 
+  const 고른것 = sheets.find((p) => p.id === selectedId) ?? null;
+  const 주문가능 = 고른것 !== null && 백엔드가아는장소(고른것);
+
   return (
     <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
@@ -1245,13 +1249,34 @@ function SavedSheetsScreen({
       </div>
 
       <StickyFooter>
+        {/*
+          아직 연결되지 않은 장소는 주문으로 보내지 않는다.
+          
+          지금 백엔드가 다루는 것은 닭강정집뿐이다. 카페 주문표로 주문하면
+          "매장컵"·"테이크아웃" 을 이용방식 표에서 못 찾아 serviceType 이
+          UNKNOWN 이 되고, 음료·온도·사이즈·시럽은 축 자체가 없어 전부
+          NO_PREFERENCE 가 된다. 킷 스키마가 UNKNOWN 을 허용하는 enum 이라
+          **검증은 통과하고 닭강정이 추천된다.**
+          
+          게다가 확인표() 는 UNKNOWN·NO_PREFERENCE 축을 건너뛰므로 확인 카드가
+          텅 빈 채로 승인 화면이 뜬다. 무엇을 담는지 못 보고 승인하게 된다.
+          
+          막을 때 이유를 말한다. 버튼만 잠그면 왜 안 되는지 알 수 없다.
+        */}
+        {showOrder && 고른것 && !백엔드가아는장소(고른것) && (
+          <div style={{ marginBottom: 4 }} role="status">
+            <InfoBox>
+              {고른것.place ?? "이 장소"}는 아직 키오스크와 연결되지 않았어요. 지금은 음식점 주문표로만 주문할 수 있어요.
+            </InfoBox>
+          </div>
+        )}
         {showOrder && (
           <PrimaryBtn
             onClick={() => {
               const picked = sheets.find((p) => p.id === selectedId);
               if (picked) onOrder(picked);
             }}
-            disabled={!selectedId}
+            disabled={!selectedId || !주문가능}
           >
             이 주문표로 주문하기
           </PrimaryBtn>
