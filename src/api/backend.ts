@@ -113,7 +113,7 @@ export interface RecommendationResult {
   /** 사용자가 고른 조건이 반영됐는지 항목별로. 1순위 추천 기준이다. */
   matchedOptions: { label: string; value: string; matched: boolean; note?: string }[];
   /**
-   * 후보별로 어긋나는 축의 이름. 예: { "CHICKEN-003": ["형태"] }
+   * 후보별로 어긋나는 축의 이름. 예: { "candidate-beta": ["형태"] }
    *
    * matchedOptions 는 1순위 하나에 대한 답이라, 대안 후보를 고른 사용자에게는
    * 쓸 수 없다. 그걸 그대로 쓰면 '매운 뼈' 를 고른 사람에게
@@ -657,7 +657,7 @@ const 고른값을담는동작 = new Set(["select_service", "select_menu", "sele
  * 서버가 준 label 을 화면에 올려도 되는지.
  *
  * label 은 검증되지 않은 서버 입력이다. 여기를 그대로 통과시키면 서버가 무엇을
- * 담아 보내든 결과 화면에 뜬다 - 상품 ID(CHICKEN-001) · 화면 좌표 · 결제 문구
+ * 담아 보내든 결과 화면에 뜬다 - 상품 ID(candidate-alpha) · 화면 좌표 · 결제 문구
  * 전부. 우리 실격 요건 둘을 정면으로 건드린다.
  *
  * 그런데 우리는 **사용자가 무엇을 골랐는지 이미 안다.** 주문표의 선택값과
@@ -709,7 +709,7 @@ const 아는화면: Record<string, string> = {
 };
 const 동작말 = (action: string, label: string, 아는값: Set<string>): string => {
   // 고른 값 자리라도 우리가 아는 값일 때만 그대로 쓴다. ICE 는 주문표에 있으니
-  // "ICE 골랐어요" 가 되고, CHICKEN-001 은 없으니 "하나 골랐어요" 가 된다.
+  // "ICE 골랐어요" 가 되고, candidate-alpha 은 없으니 "하나 골랐어요" 가 된다.
   if (고른값을담는동작.has(action)) {
     return 아는값인가(label, 아는값) ? `${label} 골랐어요` : "하나 골랐어요";
   }

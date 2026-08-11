@@ -7,13 +7,13 @@ import type { OrderSheet } from "@/domain/types";
 // 이 테스트가 통과한다는 건 "백엔드가 명세대로 주면 화면이 돈다" 는 뜻이다.
 
 const 후보표시 = {
-  "CHICKEN-001": { displayName: "매운 순살 닭강정", priceText: "6,000원" },
-  "CHICKEN-003": { displayName: "매운 뼈 닭강정", priceText: "5,500원" },
+  "candidate-alpha": { displayName: "매운 순살 닭강정", priceText: "6,000원" },
+  "candidate-beta": { displayName: "매운 뼈 닭강정", priceText: "5,500원" },
 };
 
 const 기본추천 = (over: Partial<RecommendationResult> = {}): RecommendationResult => ({
   unmetConditions: [],
-  recommendedCandidateId: "CHICKEN-001",
+  recommendedCandidateId: "candidate-alpha",
   alternativeCandidateIds: [],
   excludedCandidates: [],
   recommendationReasons: ["포장하기를 고르셔서 포장이 되는 메뉴만 남겼어요"],
@@ -28,8 +28,8 @@ function 가짜백엔드(over: Partial<Backend> = {}, rec = 기본추천()): Bac
   return {
     createSession: async () => ({ sessionId: "s1", kioskName: "OO분식 1번", expiresAt: Date.now() + 60000 }),
     filterCandidates: async () => ({
-      survivingCandidateIds: ["CHICKEN-001", "CHICKEN-003"],
-      excluded: [{ candidateId: "CHICKEN-005", reasonCode: "ALLERGEN_CONFLICT", explanation: "땅콩 알레르기를 알려주셔서 땅콩 토핑 닭강정은 뺐어요" }],
+      survivingCandidateIds: ["candidate-alpha", "candidate-beta"],
+      excluded: [{ candidateId: "candidate-gamma", reasonCode: "ALLERGEN_CONFLICT", explanation: "땅콩 알레르기를 알려주셔서 땅콩 토핑 닭강정은 뺐어요" }],
     }),
     recommend: async () => rec,
     submit: async () => {},
@@ -95,7 +95,7 @@ describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
     // 내보내면 화면은 "비슷한 메뉴가 여러 개예요" 라고 말하면서 고를 것을 하나도
     // 못 보여 준다. 승인은 후보 선택을 요구하는데 고를 방법이 없으니 갇힌다.
     const r = await 매핑(가짜백엔드({}, 기본추천({
-      alternativeCandidateIds: ["CHICKEN-003"],
+      alternativeCandidateIds: ["candidate-beta"],
       requiresReconfirmation: true,
       display: {},
     })));
@@ -120,17 +120,17 @@ describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
 
 describe("후보별 불일치는 서버가 알려 준 것만 쓴다", () => {
   const 애매 = (over = {}) => 기본추천({
-    alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true, ...over,
+    alternativeCandidateIds: ["candidate-beta"], requiresReconfirmation: true, ...over,
   });
 
   it("서버가 알려 주면 표식 순서에 맞춰 실어 준다", async () => {
     const r = await 매핑(가짜백엔드({}, 애매({
-      unmatchedLabelsByCandidate: { "CHICKEN-003": ["형태"] },
+      unmatchedLabelsByCandidate: { "candidate-beta": ["형태"] },
     })));
     expect(r.candidates?.find((c) => c.candidateId === "c1")?.unmatchedLabels).toBeUndefined();
     expect(r.candidates?.find((c) => c.candidateId === "c2")?.unmatchedLabels).toEqual(["형태"]);
     // 상품 ID 는 여전히 새어 나가지 않는다.
-    expect(JSON.stringify(r.candidates)).not.toContain("CHICKEN-");
+    expect(JSON.stringify(r.candidates)).not.toContain("candidate-");
   });
 
   it("서버가 안 알려 주면 비워 둔다 — 짐작하지 않는다", async () => {
@@ -153,18 +153,18 @@ describe("후보별 불일치는 서버가 알려 준 것만 쓴다", () => {
 describe("상품 ID 를 화면으로 내보내지 않는다", () => {
   it("후보 표식은 c1·c2 형태다", async () => {
     const r = await 매핑(가짜백엔드({}, 기본추천({
-      alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true,
+      alternativeCandidateIds: ["candidate-beta"], requiresReconfirmation: true,
     })));
     expect(r.result).toBe("clarification");
     expect(r.candidates?.map((c) => c.candidateId)).toEqual(["c1", "c2"]);
-    expect(JSON.stringify(r.candidates)).not.toContain("CHICKEN-");
+    expect(JSON.stringify(r.candidates)).not.toContain("candidate-");
   });
 
   it("우리가 주지 않은 표식은 거절한다", async () => {
     // 예전에는 숫자로 바꾸기만 해서 c99 는 undefined 를 제출하고
     // cabc·c0 는 조용히 1순위로 되돌아갔다. 고르지 않은 메뉴가 담긴다.
     const submit = vi.fn(async () => {});
-    const b = 가짜백엔드({ submit }, 기본추천({ alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true }));
+    const b = 가짜백엔드({ submit }, 기본추천({ alternativeCandidateIds: ["candidate-beta"], requiresReconfirmation: true }));
     const api = createApi(b);
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
@@ -180,12 +180,12 @@ describe("상품 ID 를 화면으로 내보내지 않는다", () => {
     // 후보 목록만 보면 부족하다. reasons·item·sheetOptions·message 어디로든
     // 새어 나갈 수 있다. 응답 전체를 문자열로 만들어 잠근다.
     //
-    // 상품 ID 는 서버가 정하는 값이라 CHICKEN- 만 막으면 다음 환경에서 뚫린다.
+    // 상품 ID 는 서버가 정하는 값이라 접두어 하나만 막으면 다음 환경에서 뚫린다.
     // 가짜 백엔드가 쓰는 모든 후보 ID 를 그대로 금지어로 쓴다.
-    const 후보ID = ["CHICKEN-001", "CHICKEN-003", "CHICKEN-005"];
+    const 후보ID = ["candidate-alpha", "candidate-beta", "candidate-gamma"];
     const 경우 = [
       기본추천(),
-      기본추천({ alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true }),
+      기본추천({ alternativeCandidateIds: ["candidate-beta"], requiresReconfirmation: true }),
       기본추천({ confidence: 0.4 }),
       기본추천({ matchedOptions: [{ label: "컵", value: "종이컵", matched: false }] }),
       기본추천({ recommendedCandidateId: null }),
@@ -199,12 +199,12 @@ describe("상품 ID 를 화면으로 내보내지 않는다", () => {
 
   it("사용자가 고른 표식을 서버가 아는 후보로 되돌려 보낸다", async () => {
     const submit = vi.fn(async () => {});
-    const b = 가짜백엔드({ submit }, 기본추천({ alternativeCandidateIds: ["CHICKEN-003"], requiresReconfirmation: true }));
+    const b = 가짜백엔드({ submit }, 기본추천({ alternativeCandidateIds: ["candidate-beta"], requiresReconfirmation: true }));
     const api = createApi(b);
     await api.claimPairing("kb");
     await api.requestMapping("s1", "p1");
     await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "clarification", candidateId: "c2" });
-    expect(submit).toHaveBeenCalledWith("s1", expect.objectContaining({ candidateId: "CHICKEN-003" }));
+    expect(submit).toHaveBeenCalledWith("s1", expect.objectContaining({ candidateId: "candidate-beta" }));
   });
 });
 
@@ -469,7 +469,7 @@ const 목주문표: OrderSheet = {
 
 /** POST /api/v1/recommendations 응답. 승인 요청에 그대로 되돌려 준다. */
 const 목추천 = {
-  recommendedCandidateId: "CHICKEN-001",
+  recommendedCandidateId: "candidate-alpha",
   alternativeCandidateIds: [],
   excludedCandidates: [],
   recommendationReasons: ["매운맛 선호와 일치해요."],
@@ -721,7 +721,7 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     const e = await b.getEvidence("s1");
     /*
      * 상품 ID 나 좌표 모양을 값으로 쓰지 않는다. 테스트 데이터여도 그 형식이
-     * frontend/src 아래 남는다. 거르는 기준이 값의 모양이 아니라 '아는 값인지'
+     * 소스 트리에 남는다. 거르는 기준이 값의 모양이 아니라 '아는 값인지'
      * 라서, 중립적인 값으로도 똑같이 검증된다.
      */
     const 통째로 = JSON.stringify(e.한일);
@@ -741,8 +741,8 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
      */
     const b = 붙이기({ "candidate-filters": {
       eligibleCandidates: [
-        { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
-        { candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true },
+        { candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true },
+        { candidateId: "candidate-beta", name: "매운 뼈 닭강정", price: 5500, available: true },
       ],
       excludedCandidates: [],
     } });
@@ -750,7 +750,7 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
       valid: true, raw: 실행성공,
       runSteps: [{ actionIndex: 0, action: "select_menu", label: "매운 뼈 닭강정", success: true }],
     });
-    // 서버 1순위는 CHICKEN-001 이다. 대안(매운 뼈)의 이름은 통과하면 안 된다.
+    // 서버 1순위는 candidate-alpha 이다. 대안(매운 뼈)의 이름은 통과하면 안 된다.
     expect((await b.getEvidence("s1")).한일?.[0].text).toBe("하나 골랐어요");
   });
 
@@ -1061,16 +1061,16 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     // 1순위만 덮으면 그 후보가 대안에도 남아 두 필드가 겹친다.
     // 백엔드 RecommendationValidator 가 ALTERNATIVE_DUPLICATES_RECOMMENDED 로 막는다.
     const { b, calls } = 캡처({
-      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-003"] },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-alpha", alternativeCandidateIds: ["candidate-beta"] },
     });
     await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     await b.submit("s1", {
       pairingId: "s1", sheetId: "p1", mappingResult: "clarification",
-      candidateId: "CHICKEN-003", profile: 목주문표,
+      candidateId: "candidate-beta", profile: 목주문표,
     });
     const rec = calls.find((c) => c.url.includes("orchestrator/approve"))!.body.recommendation as Record<string, unknown>;
-    expect(rec.recommendedCandidateId).toBe("CHICKEN-003");
-    expect(rec.alternativeCandidateIds).toEqual(["CHICKEN-001"]);
+    expect(rec.recommendedCandidateId).toBe("candidate-beta");
+    expect(rec.alternativeCandidateIds).toEqual(["candidate-alpha"]);
   });
 
   it("모르는 값(UNKNOWN)을 '안 맞음' 으로 단정하지 않는다", async () => {
@@ -1080,12 +1080,12 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b } = 캡처({
       "candidate-filters": {
         eligibleCandidates: [{
-          candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true,
+          candidateId: "candidate-beta", name: "매운 뼈 닭강정", price: 5500, available: true,
           attributes: { spicyLevel: "HOT", boneType: "BONELESS" },
         }],
         excludedCandidates: [],
       },
-      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-003" },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-beta" },
     });
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 모르는맵기 });
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 모르는맵기 });
@@ -1156,19 +1156,19 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     // 그건 실격 조건이다.
     const { b } = 캡처({ "candidate-filters": {
       eligibleCandidates: [
-        { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000 },
-        { candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500 },
+        { candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000 },
+        { candidateId: "candidate-beta", name: "매운 뼈 닭강정", price: 5500 },
       ],
       excludedCandidates: [{
-        candidateId: "CHICKEN-005", reasonCode: "ALLERGEN",
+        candidateId: "candidate-gamma", reasonCode: "ALLERGEN",
         // 서버가 주는 explanation 은 규칙 추적용 문자열이다. 사람에게 보여 줄 문장은 reasonText 다.
-        explanation: "ruleId=CHICKEN_ALLERGEN_HARD_CONSTRAINT, sourceValue=[PEANUT]",
+        explanation: "ruleId=ALLERGEN_HARD_CONSTRAINT, sourceValue=[PEANUT]",
         reasonText: "[PEANUT] 알레르기와 겹쳐서 제외됐어요.",
       }],
     } });
     const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
-    expect(r.survivingCandidateIds).toEqual(["CHICKEN-001", "CHICKEN-003"]);
-    expect(r.display?.["CHICKEN-001"]).toEqual({ displayName: "매운 순살 닭강정", priceText: "6,000원" });
+    expect(r.survivingCandidateIds).toEqual(["candidate-alpha", "candidate-beta"]);
+    expect(r.display?.["candidate-alpha"]).toEqual({ displayName: "매운 순살 닭강정", priceText: "6,000원" });
     // 규칙 추적 문자열이 화면으로 새지 않는다.
     expect(r.excluded[0].explanation).toBe("[PEANUT] 알레르기와 겹쳐서 제외됐어요.");
     expect(JSON.stringify(r.excluded)).not.toContain("ruleId=");
@@ -1179,14 +1179,14 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     // 서버가 available:false 를 eligibleCandidates 에 남겨 보내는 걸 확인했다.
     const { b } = 캡처({ "candidate-filters": {
       eligibleCandidates: [
-        { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
-        { candidateId: "CHICKEN-008", name: "품절 닭강정", price: 6000, available: false },
+        { candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true },
+        { candidateId: "candidate-delta", name: "품절 닭강정", price: 6000, available: false },
       ],
       excludedCandidates: [],
     } });
     const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
-    expect(r.survivingCandidateIds).toEqual(["CHICKEN-001"]);
-    expect(r.display?.["CHICKEN-008"]).toBeUndefined();
+    expect(r.survivingCandidateIds).toEqual(["candidate-alpha"]);
+    expect(r.display?.["candidate-delta"]).toBeUndefined();
     // 조용히 사라지면 "왜 없지?" 가 된다. 뺀 이유를 말해 준다.
     expect(r.excluded.map((e) => e.explanation).join()).toContain("지금 팔지 않아서");
   });
@@ -1195,12 +1195,12 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b } = 캡처({
       "candidate-filters": {
         eligibleCandidates: [
-          { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
-          { candidateId: "CHICKEN-008", name: "품절 닭강정", price: 6000, available: false },
+          { candidateId: "candidate-alpha", name: "매운 순살 닭강정", price: 6000, available: true },
+          { candidateId: "candidate-delta", name: "품절 닭강정", price: 6000, available: false },
         ],
         excludedCandidates: [],
       },
-      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-001", alternativeCandidateIds: ["CHICKEN-008"] },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-alpha", alternativeCandidateIds: ["candidate-delta"] },
     });
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
@@ -1213,13 +1213,13 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b } = 캡처({
       "candidate-filters": {
         eligibleCandidates: [{
-          candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true,
+          candidateId: "candidate-beta", name: "매운 뼈 닭강정", price: 5500, available: true,
           attributes: { spicyLevel: "HOT", boneType: "BONE" },
           supportedOptions: { SERVICE_TYPE: ["DINE_IN", "TAKE_OUT"], CUP: ["PAPER"] },
         }],
         excludedCandidates: [],
       },
-      recommendations: { ...목추천, recommendedCandidateId: "CHICKEN-003" },
+      recommendations: { ...목추천, recommendedCandidateId: "candidate-beta" },
     });
     await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
@@ -1230,7 +1230,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     expect(표["이용 방식"].matched).toBe(true);
     // 화면에는 enum 이 아니라 사용자가 고른 한글이 보여야 한다.
     expect(표["형태"].value).toBe("순살");
-    expect(rec.unmatchedLabelsByCandidate?.["CHICKEN-003"]).toEqual(["형태"]);
+    expect(rec.unmatchedLabelsByCandidate?.["candidate-beta"]).toEqual(["형태"]);
   });
 
   it("추천에는 생존 후보를 보내지 않는다 — 서버가 다시 계산한다", async () => {
@@ -1238,7 +1238,7 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     const { b, calls } = 캡처();
     await b.recommend({
       environmentId: "chicken-store", profileId: "p1",
-      survivingCandidateIds: ["CHICKEN-001"], profile: 목주문표,
+      survivingCandidateIds: ["candidate-alpha"], profile: 목주문표,
     });
     expect(calls[0].url).toBe("/api/bff/api/v1/recommendations");
     expect(calls[0].body).not.toHaveProperty("survivingCandidateIds");
@@ -1268,9 +1268,9 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     await b.submit("s1", {
       pairingId: "s1", sheetId: "p1", mappingResult: "clarification",
-      candidateId: "CHICKEN-003", profile: 목주문표,
+      candidateId: "candidate-beta", profile: 목주문표,
     });
-    expect((calls[1].body.recommendation as Record<string, unknown>).recommendedCandidateId).toBe("CHICKEN-003");
+    expect((calls[1].body.recommendation as Record<string, unknown>).recommendedCandidateId).toBe("candidate-beta");
   });
 
   it("주문표 없이 부르면 조용히 넘어가지 않는다", async () => {

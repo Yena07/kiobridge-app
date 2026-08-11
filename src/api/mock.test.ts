@@ -206,7 +206,7 @@ describe("상태별 화면 요건", () => {
   it("clarification 은 후보를 여러 개 주고 상품 ID 를 노출하지 않는다", () => {
     const r = buildMapping("clarification", 땅콩알레르기);
     expect(r.candidates?.length).toBeGreaterThan(1);
-    // 키오스크 상품 ID(CHICKEN-00x)가 앱으로 새어 나오면 안 된다. 불투명한 표식만 쓴다.
+    // 키오스크 상품 ID(candidate-alphax)가 앱으로 새어 나오면 안 된다. 불투명한 표식만 쓴다.
     for (const c of r.candidates ?? []) {
       expect(c.candidateId).toMatch(/^c\d+$/);
     }
