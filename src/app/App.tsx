@@ -6,7 +6,7 @@ import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
   SUCCESS, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
-  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES, PAPER, RULE, KICKER, BTN_H, TOGGLE_OFF,
+  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES, PAPER, RULE, KICKER, BTN_H, TOGGLE_OFF, ON_DARK,
 } from "@/design/tokens";
 import type {
   Screen, MainTab, PlaceType, PairingState, StepStatus, OrderSheet, PairingResult,
@@ -32,7 +32,9 @@ const LARGE_TEXT_SCALE = 1.18;
 
 // 워드마크는 세리프로. 정체(kio)와 이탤릭(bridge)을 섞어 에디토리얼 인상을 만든다.
 function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number }) {
-  const color = light ? PAPER : TEXT_1;
+  // light 는 사진.카메라처럼 늘 어두운 판 위에 얹을 때 쓴다. 팔레트를 따라가면
+  // 다크에서 검은 판에 검은 글자가 된다. 여기는 뒤집지 않는다.
+  const color = light ? ON_DARK : TEXT_1;
   return (
     <div
       aria-label="키오브릿지"
@@ -240,7 +242,9 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
         {/* 주 버튼 = 익명 시작. 가입도 로그인도 요구하지 않는다. */}
         <PrimaryBtn onClick={onStart}>
           <span className="flex items-center justify-center gap-2">
-            <Pictogram name="handPointing" size={18} color="#fff" />
+            {/* 대표 버튼 안이라 버튼 면과 함께 뒤집혀야 한다. #fff 로 박으면 다크에서
+                흰 알약 위에 흰 아이콘이 된다. 코드래빗이 잡은 셋과 같은 종류다. */}
+            <Pictogram name="handPointing" size={18} color={PAPER} />
             바로 시작하기
           </span>
         </PrimaryBtn>
@@ -253,7 +257,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
           type="button"
           onClick={onLogin}
           style={{
-            marginTop: 4, minHeight: 56, borderRadius: RADIUS.button, background: "#fff",
+            marginTop: 4, minHeight: 56, borderRadius: RADIUS.button, background: SURFACE,
             border: `1px solid ${BORDER}`, color: TEXT_2, fontSize: 15, fontWeight: 600,
           }}
           className="flex items-center justify-center gap-2 w-full"
@@ -1789,7 +1793,7 @@ function AccountScreen({
             onClick={onLogin}
             style={{
               marginTop: 20, width: "100%", minHeight: 52, borderRadius: RADIUS.button,
-              background: "#fff", border: `1px solid ${BORDER}`, color: TEXT_2,
+              background: SURFACE, border: `1px solid ${BORDER}`, color: TEXT_2,
               fontSize: 15, fontWeight: 600, fontFamily: FONT, cursor: "pointer",
             }}
             className="flex items-center justify-center gap-2"

@@ -29,6 +29,13 @@ export const BACKDROP = "var(--kb-desk)";
 
 /** 종이색 바탕. 흰 화면은 형광등 아래에서 눈이 부시고 글자 가장자리가 번져 보인다. */
 export const PAPER = "var(--kb-paper)";
+/*
+ * 늘 어두운 판 위에 얹는 흰색.
+ *
+ * 사진 위 · 카메라 화면처럼 팔레트와 무관하게 어두운 자리가 있다. 거기에
+ * PAPER 를 쓰면 다크에서 함께 검어져 글자가 사라진다. 이 자리는 뒤집지 않는다.
+ */
+export const ON_DARK = "#FFFFFF";
 /** 섹션 머리의 굵은 줄(2px). 이 디자인에서 화면을 자르는 유일한 선이다. */
 export const RULE = "var(--kb-rule)";
 
@@ -201,7 +208,9 @@ export const FOCUS_STYLES = `
     outline-offset: 2px;
     border-radius: 8px;
   }
-  ::selection { background: ${TEXT_1}; color: #fff; }
+  /* 고른 글자. 배경이 TEXT_1 이므로 글자는 반드시 그 반대색(PAPER)이어야 한다.
+     #fff 로 박아 두면 다크에서 흰 배경에 흰 글자가 된다. */
+  ::selection { background: ${TEXT_1}; color: ${PAPER}; }
   /* 확인 카드의 마지막 행에는 구분선을 남기지 않는다.
      행의 구분선은 인라인 스타일로 들어가므로 !important 가 없으면 덮이지 않는다. */
   [data-confirm-body] > div:last-child { border-bottom: none !important; }
