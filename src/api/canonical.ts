@@ -139,15 +139,14 @@ export function toCanonicalProfile(
     },
     consent: {
       /*
-       * 화면에 '개인화에 동의하십니까' 라는 항목은 없다. 대신 사용자가 조건을
-       * 저장하고 '이 주문표로 주문하기' 를 눌러 그 조건으로 골라 달라고 한다.
-       * 그 행동 자체가 이 주문에 한한 동의라고 보고 true 로 둔다.
+       * 이제 화면이 직접 묻는다(api/consent.ts). 예전에는 이 자리에 "동의 항목을
+       * 따로 묻게 되면 그 값을 여기로 넘긴다" 고 적어 두고 true 로 박아 두었다.
        *
-       * 동의 항목을 따로 묻게 되면 그 값을 여기로 넘긴다. 기본값을 false 로
-       * 두지 않는 이유는, 앱이 실제로 개인화하고 있는데 안 한다고 적는 것도
-       * 사실과 다르기 때문이다.
+       * 기본값을 false 로 바꿨다. 안 넘기면 동의를 못 받은 것이므로, 못 받은
+       * 동의를 받은 것처럼 보내지 않는다. 화면이 동의 없이는 못 들어오게 막고
+       * 있어서 실제 흐름에서 이 기본값에 닿는 것은 시험과 목뿐이다.
        */
-      personalization: opts.personalization ?? true,
+      personalization: opts.personalization ?? false,
       /*
        * 주문표는 이 탭이 살아 있는 동안만 남는다. 창을 닫으면 사라진다
        * (api/session.ts 의 sessionStorage). SESSION_ONLY 가 사실이다.
@@ -281,7 +280,7 @@ export interface ContextNormalizationInput {
 
 export function toProfileNormalizationInput(
   p: OrderSheet,
-  opts: { collectedAt?: string; 접근성?: Partial<도움설정> } = {},
+  opts: { collectedAt?: string; 접근성?: Partial<도움설정>; personalization?: boolean } = {},
 ): ProfileNormalizationInput {
   const c = toCanonicalProfile(p, opts);
   // providerId 와 dataClassification 은 서버가 채운다. 보내지 않는다.

@@ -72,6 +72,7 @@ const 채운값 = (덮을것: Partial<이어쓸것> = {}): 이어쓸것 => ({
   sheets: [주문표("p1"), 주문표("p2")],
   fromServer: ["p2"],
   a11y: { ...기본도움설정, largeText: true },
+  consent: true,
   budget: null,
   planId: null,
   ...덮을것,
@@ -102,10 +103,10 @@ describe("남으면 안 되는 것", () => {
    * 남기는가' 를 바꾼 것이니, session.ts 의 설명과 개인정보 화면 문구를
    * 같이 고쳤는지 다시 보라는 뜻이다.
    */
-  it("적어 두는 칸은 정해진 아홉 개뿐이다", () => {
+  it("적어 두는 칸은 정해진 열 개뿐이다", () => {
     이어쓰기.쓰기(채운값());
     expect(Object.keys(적힌것()).sort()).toEqual(
-      ["a11y", "account", "budget", "fromServer", "name", "planId", "screen", "sheets", "tab"],
+      ["a11y", "account", "budget", "consent", "fromServer", "name", "planId", "screen", "sheets", "tab"],
     );
   });
 
@@ -252,6 +253,19 @@ describe("손댄 값을 믿지 않는다", () => {
     }
   });
 
+  it("동의는 boolean true 일 때만 받는다", () => {
+    /*
+     * 손댄 값으로 동의를 만들지 않는다. "true" · 1 · {} 는 자바스크립트에서 truthy 라,
+     * 값이 있는지만 보면 개인정보 동의를 문자열 하나로 만들어 낼 수 있다.
+     */
+    for (const 나쁜값 of ["true", 1, {}, [], "예"]) {
+      망가진것({ consent: 나쁜값 });
+      expect(이어쓰기.읽기()!.consent).toBe(false);
+    }
+    망가진것({ consent: true });
+    expect(이어쓰기.읽기()!.consent).toBe(true);
+  });
+
   it("가격 한도를 정해 두면 그대로 되살린다", () => {
     // 조용히 풀리면 아까 안 보이던 메뉴가 갑자기 보이고 사용자는 이유를 알 수 없다.
     이어쓰기.쓰기(채운값({ budget: 8000 }));
@@ -262,7 +276,7 @@ describe("손댄 값을 믿지 않는다", () => {
 describe("남길 것이 없으면 아무것도 안 쓴다", () => {
   const 빈값 = 채운값({
     screen: "welcome", tab: "menu", name: "", account: null,
-    sheets: [], fromServer: [], a11y: { ...기본도움설정 }, budget: null, planId: null,
+    sheets: [], fromServer: [], a11y: { ...기본도움설정 }, consent: false, budget: null, planId: null,
   });
 
   it("빈 이용은 저장하지 않는다", () => {

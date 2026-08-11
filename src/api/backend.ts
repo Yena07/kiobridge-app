@@ -10,6 +10,7 @@ import { STEPS } from "@/domain/catalog";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정 } from "@/api/a11y";
 import { 가격한도 } from "@/api/budget";
+import { 개인정보동의 } from "@/api/consent";
 
 /**
  * 팀 API 명세서의 경로와 1:1 로 맞춘 계층.
@@ -1210,7 +1211,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     // collectedAt 은 부를 때마다 달라진다(현재 시각). 키에 넣으면 캐시가 한 번도
     // 안 맞는다. 결과를 바꾸는 건 고른 조건과 접근성 설정이라 그것만 넣는다.
     // 접근성 설정이 바뀌면 표준형도 달라진다. 키에 그대로 들어가므로 캐시가 자동으로 갈린다.
-    const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기() });
+    const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기(), personalization: 개인정보동의.읽기() });
     // 가격 한도가 바뀌면 후보 자체가 달라진다(넘는 것은 제외된다). 키에 들어가므로
     // 한도를 고치면 캐시가 자동으로 갈라진다 — 접근성 설정과 같은 방식이다.
     const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p, { 예산: 가격한도.읽기() }).contextInput)}`;
@@ -1242,7 +1243,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       environmentId,
       // 큰 글씨를 켜 놓고 주문해도 서버가 몰랐다 — opts 를 안 넘겨서 일곱이 전부
       // false 로 나가고 있었다. 화면이 묻는 값을 그대로 보낸다.
-      profileInput: toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기() }),
+      profileInput: toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기(), personalization: 개인정보동의.읽기() }),
     });
 
     const sr = await 보내기<{

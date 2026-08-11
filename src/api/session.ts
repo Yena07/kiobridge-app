@@ -72,6 +72,13 @@ export interface 이어쓸것 {
   /** 도움 설정. 킷의 일곱 칸 + 소리 안내. */
   a11y: 도움설정;
   /**
+   * 개인정보 수집·이용에 동의했는가. 안 했으면 앱에 들어갈 수 없다.
+   *
+   * 이번 이용에만 남는다. 창을 닫으면 사라져서 다음 사람은 다시 동의해야 한다 —
+   * 앞사람의 동의가 다음 사람에게 이어지면 그건 동의가 아니다.
+   */
+  consent: boolean;
+  /**
    * 이번 이용의 가격 한도(원). 안 정했으면 null 이다.
    *
    * 오래 붙들 값이 아니라 "오늘은 얼마까지" 라서 이번 이용에만 둔다. 다만 새로고침
@@ -169,6 +176,7 @@ const 남길것이있나 = (v: 이어쓸것): boolean =>
   || v.sheets.length > 0
   || v.planId !== null
   || v.budget !== null
+  || v.consent
   || Object.values(v.a11y).some(Boolean);
 
 export const 이어쓰기 = {
@@ -236,6 +244,8 @@ export const 이어쓰기 = {
       sheets,
       fromServer,
       a11y: 접근성읽기(o.a11y),
+      // boolean 이 아니면 동의하지 않은 것으로 본다. 손댄 값으로 동의를 만들지 않는다.
+      consent: o.consent === true,
       // 계약이 minimum: 0 인 number 다. 양의 정수가 아니면 안 정한 것으로 본다 —
       // 손대서 음수를 넣어 두면 서버가 400 으로 되돌려서 주문 자체가 안 된다.
       budget: typeof o.budget === "number" && Number.isInteger(o.budget) && o.budget > 0
