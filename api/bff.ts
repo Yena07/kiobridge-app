@@ -95,16 +95,31 @@ const 허용경로 = [
    */
   ...(process.env.KIOBRIDGE_DISABLE_PROFILE_SYNC === "1"
     ? []
-    : [/^api\/v1\/users\/\d+\/profiles$/]),
+    : [
+        /^api\/v1\/users\/\d+\/profiles$/,
+        // 주문표 하나를 지우는 길(팀 #79). profileId 는 앱이 만든 문자열이라
+        // 숫자로 좁힐 수 없다. 대신 경로 한 칸만 받는다 - [^/]+ 라 더 깊이 못 간다.
+        /^api\/v1\/users\/\d+\/profiles\/[^/]+$/,
+      ]),
   // 명세에는 있고 아직 컨트롤러가 없는 것들. 생기면 바로 통하도록 열어 둔다.
   // 여기 있다고 백엔드에 있는 건 아니다 — 없으면 404 가 그대로 올라온다.
   /^api\/v1\/environments(\/[^/]+(\/(fixture|input-options|compatibility-rules))?)?$/,
   /^api\/v1\/sessions(\/[^/]+(\/(submission|validate|execute))?)?$/,
 ];
 
-// 경로만 검사하면 메서드는 무엇이든 통과한다. 백엔드에 DELETE 가 생기는 순간
-// 이 함수가 그 통로가 된다. 지금 쓰는 두 가지만 연다.
-const 허용메서드 = new Set(["GET", "POST"]);
+/*
+ * 경로만 검사하면 메서드는 무엇이든 통과한다. 이 함수가 지우는 통로가 되면 안 된다.
+ *
+ * 그래서 메서드를 경로별로 연다. DELETE 는 '주문표 하나' 한 곳에만 열려 있다 -
+ * 목록 경로(.../profiles)나 세션.추천 경로로는 DELETE 가 못 간다.
+ */
+const 기본허용메서드 = new Set(["GET", "POST"]);
+const 메서드별추가허용: { 메서드: string; 경로: RegExp }[] = [
+  { 메서드: "DELETE", 경로: /^api\/v1\/users\/\d+\/profiles\/[^/]+$/ },
+];
+const 메서드가되나 = (method: string, 경로: string): boolean =>
+  기본허용메서드.has(method)
+  || 메서드별추가허용.some((x) => x.메서드 === method && x.경로.test(경로));
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const 보내기 = (status: number, body: unknown, type = "application/json") => {
@@ -118,10 +133,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // 설정이 없으면 조용히 실패하지 않는다. 붙이는 사람이 왜 안 되는지 알아야 한다.
     return 보내기(503, { code: "BFF_NOT_CONFIGURED", message: "서버에 백엔드 주소가 설정되지 않았어요" });
   }
-  if (!허용메서드.has(req.method ?? "")) {
-    return 보내기(405, { code: "METHOD_NOT_ALLOWED", message: "허용되지 않은 방식이에요" });
-  }
-
   // req.url 은 "/api/bff?p=internal/..." 처럼 경로+쿼리만 온다. 절대 주소가 아니라
   // 기준 주소를 붙여야 URL 로 읽을 수 있다. 기준값 자체는 쓰지 않는다.
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -129,6 +140,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const 경로 = (url.searchParams.get("p") ?? url.pathname.replace(/^\/api\/bff\/?/, "")).replace(/^\/+/, "");
   if (!허용경로.some((r) => r.test(경로))) {
     return 보내기(404, { code: "NOT_ALLOWED", message: "허용되지 않은 경로예요" });
+  }
+  // 메서드 검사는 경로를 안 뒤에 한다. DELETE 를 한 경로에만 열어야 해서다.
+  // 경로를 먼저 막으므로, 여기 닿는 것은 이미 허용된 경로다.
+  if (!메서드가되나(req.method ?? "", 경로)) {
+    return 보내기(405, { code: "METHOD_NOT_ALLOWED", message: "허용되지 않은 방식이에요" });
   }
 
   // p 는 우리가 만든 값이라 그대로 넘기면 안 된다. 백엔드로 보낼 쿼리에서 뺀다.
