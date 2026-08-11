@@ -164,6 +164,41 @@ export function toChickenStoreContext(
 /** 백엔드가 이 주문표를 다룰 수 있는가. 지금 대응 타입이 있는 건 닭강정집뿐이다. */
 export const 백엔드가아는장소 = (p: OrderSheet): boolean => p.place === "음식점";
 
+/**
+ * enum 을 사람이 읽는 말로 되돌린다. 위의 표들을 뒤집어 만든다.
+ *
+ * 서버가 규칙 판정에 실제로 비교한 값을 실어 보낸다.
+ *
+ *   { errorCode: "SPICY_LEVEL_MISMATCH", sourceValue: "MILD", candidateValue: ["HOT"] }
+ *
+ * 그 값이 enum 이라 그대로 쓰면 화면에 "HOT" 이 뜬다. 어르신께 보여 드릴 말이 아니다.
+ * 표를 손으로 한 벌 더 적지 않고 뒤집어 쓴다 — 두 벌이면 한쪽만 고치는 날이 온다.
+ *
+ * 모르는 값은 **비운다.** 지어내지 않는다 — 서버에 새 enum 이 생겼을 때
+ * 원문을 그대로 띄우느니 그 줄을 안 그리는 편이 낫다.
+ */
+const 뒤집기 = <T extends string>(표: Record<string, T>): Record<string, string> =>
+  Object.fromEntries(Object.entries(표).map(([말, e]) => [e, 말]));
+
+const 되돌리기표: Record<string, string> = {
+  ...뒤집기(이용방식), ...뒤집기(맵기), ...뒤집기(형태), ...뒤집기(컵),
+};
+
+/** enum 하나를 우리말로. 모르면 빈 문자열이다. */
+export const 우리말 = (v: unknown): string =>
+  typeof v === "string" ? (되돌리기표[v] ?? "") : "";
+
+/**
+ * 후보가 가진 값들을 우리말로 이어 붙인다.
+ *
+ * candidateValue 는 배열로 온다 — 후보가 받아 주는 값이 여럿일 수 있어서다
+ * (`["DINE_IN","TAKE_OUT"]`). 하나라도 못 옮기면 그것만 빼고, 전부 못 옮기면 빈 문자열이다.
+ */
+export const 우리말들 = (v: unknown): string => {
+  const 값들 = Array.isArray(v) ? v : [v];
+  return 값들.map(우리말).filter(Boolean).join(" · ");
+};
+
 
 // ─── 정규화 경로에 넣을 원자료 ────────────────────────────────────────────────
 //

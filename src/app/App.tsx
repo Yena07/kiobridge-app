@@ -2384,8 +2384,18 @@ function ReasonList({ reasons, 제목 = "이 메뉴를 고른 이유" }: { reaso
  * 킷 가이드가 [필수] 로 정한 "결과만 보여주지 말고 왜 그런지 함께" 도 이 순서가
  * 더 잘 지킨다. 아래로 밀려 안 읽히는 것보다 앞에 세우는 편이 낫다.
  */
-function ReasonStep({ reasons, onNext, 확인중 }: {
+function ReasonStep({ reasons, scoredAxes = [], onNext, 확인중 }: {
   reasons: RecommendationReason[];
+  /**
+   * 서버가 점수를 매길 때 이 메뉴를 밀어 준 축들.
+   *
+   * 이유 문장(reasons)이 빠뜨리는 것이 있어서 따로 보여 준다 — 가격 한도를 정해도
+   * 서버의 이유 문장에는 가격 얘기가 한 줄도 안 나온다(실측). 그러면 사용자는
+   * 자기가 정한 한도가 결과에 반영됐는지 알 방법이 없다.
+   *
+   * 점수 숫자는 안 띄운다. 0.0259 는 이 앱을 쓰는 분들에게 읽을 수 없는 값이다.
+   */
+  scoredAxes?: string[];
   onNext: () => void;
   /** 되묻는 상황이면 다음 화면에서 할 일을 미리 알려 준다. */
   확인중?: boolean;
@@ -2402,6 +2412,24 @@ function ReasonStep({ reasons, onNext, 확인중 }: {
         desc="저장해 두신 조건으로 오늘 메뉴에서 찾은 결과예요."
       />
 
+      {scoredAxes.length > 0 && (
+        <div>
+          <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 6 }}>이걸 보고 골랐어요</h2>
+          <div className="flex flex-wrap" style={{ gap: 6 }}>
+            {scoredAxes.map((축) => (
+              <span
+                key={축}
+                style={{
+                  fontSize: 14, fontWeight: 700, color: TEXT_1, fontFamily: FONT,
+                  backgroundColor: CANVAS, borderRadius: RADIUS.pill, padding: "8px 14px",
+                }}
+              >
+                {축}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {쓴것.length > 0 && <ReasonList reasons={쓴것} 제목="반영한 조건" />}
       {/* 못 맞춘 것을 반영한 것 바로 아래 둔다. 이 둘을 나란히 읽어야 무엇이
           되고 무엇이 안 됐는지가 한눈에 잡힌다. 빼 둔 메뉴는 그다음이다. */}
@@ -2954,6 +2982,7 @@ function OrderConfirmScreen({
         {mapping && 이유단계 && (
           <ReasonStep
             reasons={mapping.reasons ?? []}
+            scoredAxes={mapping.scoredAxes}
             확인중={mapping.result === "clarification" || mapping.result === "low_confidence"}
             onNext={() => set이유먼저(false)}
           />

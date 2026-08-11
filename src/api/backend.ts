@@ -2,7 +2,7 @@ import type {
   ApproveInput, CartResult, MappedOption, RejectInput, MappingResponse, PairingResult, PlanCreated, PlanStatus, OrderSheet, StepStatus,
 } from "@/domain/types";
 import {
-  toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput,
+  toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput, 우리말들,
   type CanonicalProfile, type ChickenStoreSessionContext,
 } from "@/api/canonical";
 import { KioBridgeError, clearSheets, type KioBridgeApi } from "@/api/client";
@@ -123,6 +123,14 @@ export interface RecommendationResult {
    * 없으면 화면이 후보별 불일치를 표시하지 않는다. 짐작하지 않는다.
    */
   unmatchedLabelsByCandidate?: Record<string, string[]>;
+  /**
+   * 서버가 점수를 매길 때 이 후보를 **밀어 준** 축들. 숫자는 안 싣는다.
+   *
+   * scoreBreakdown 을 그대로 띄우지 않고 양수인 칸의 이름만 남긴 것이다.
+   * 이유 문장(recommendationReasons)이 빠뜨리는 것이 여기 남는다 — 가격 한도를
+   * 정해도 서버의 이유 문장에는 가격 얘기가 한 줄도 안 나온다(실측).
+   */
+  scoredAxes: string[];
 }
 
 /** evidence 중 화면이 쓰는 부분. 39개 필드 전부를 화면이 알 필요는 없다. */
@@ -301,6 +309,12 @@ export function createApi(
         ...rec.unmetConditions.map((text) => ({ kind: "unmet" as const, text })),
         ...제외.map((e) => ({ kind: "excluded" as const, text: e.explanation })),
       ].filter((r) => 보여도되나(r.text));
+      /*
+       * 서버가 점수를 매길 때 본 축들. 담을 것이 정해진 뒤에만 뜻이 있어서
+       * not_found 에는 싣지 않는다 — 고른 메뉴가 없는데 "이걸 보고 골랐어요" 는
+       * 말이 안 된다.
+       */
+      const 점수본것 = rec.scoredAxes.length > 0 ? { scoredAxes: rec.scoredAxes } : {};
 
       // 서버가 display 를 빠뜨리면 이름 없는 후보가 화면에 뜬다.
       // 빈칸을 보여 주느니 그 후보를 빼는 게 낫다.
@@ -321,7 +335,7 @@ export function createApi(
           return { result: "not_found", reasons, message: "담을 수 있는 메뉴가 없어요" };
         }
         return {
-          result, reasons,
+          result, reasons, ...점수본것,
           reason: "비슷한 메뉴가 여러 개예요",
           // 목에만 넣고 여기를 빼면, 실서버로 바꾸는 순간 조건표가 다시 통째로
           // 사라진다. 사용자는 포장인지 종이컵인지 못 보고 승인하게 된다.
@@ -349,7 +363,7 @@ export function createApi(
         return { result: "not_found", reasons, message: "담을 수 있는 메뉴가 없어요" };
       }
       return {
-        result, reasons,
+        result, reasons, ...점수본것,
         ...(result === "changed" ? { diffNote: "저장하신 주문과 달라진 점이 있어요. 이대로 진행할까요?" } : {}),
         item: { ...고름, options: rec.matchedOptions },
       };
@@ -783,8 +797,19 @@ interface KitExcluded {
 interface 규칙판정 {
   ruleId?: string;
   result?: "PASS" | "FAIL" | "RECONFIRM" | "SKIPPED";
+  /**
+   * BLOCK · WARN. 서버가 이 규칙을 얼마나 세게 보는지.
+   *
+   * warningsByCandidateId 에는 WARN 만 담기게 돼 있다(CandidateFilterResult 문서).
+   * 그래도 읽는다 — 여기에 BLOCK 이 섞여 오면 서버가 '담으면 안 된다' 고 한 후보를
+   * 우리가 "조금 다른 메뉴" 로 내미는 것이 된다. 그럴 땐 후보에서 뺀다.
+   */
   severity?: string;
   errorCode?: string;
+  /** 서버가 비교에 쓴 우리 쪽 값. enum 이다("MILD"). */
+  sourceValue?: unknown;
+  /** 후보 쪽 값. 여럿일 수 있어 배열로 온다(["HOT"] · ["DINE_IN","TAKE_OUT"]). */
+  candidateValue?: unknown;
 }
 
 interface CandidateFilterResponse {
@@ -803,6 +828,18 @@ interface CandidateFilterResponse {
    * passes 를 함께 봐야 '맞음' 과 '비교 안 함' 이 갈린다.
    */
   warningsByCandidateId?: Record<string, 규칙판정[]>;
+  /*
+   * 재확인이 필요한 판정. **이 흐름에서는 닿지 않는다.**
+   *
+   * 서버에 직접 쌀보면 이건 allergenIds 에 UNKNOWN 이 섞였을 때만 채워진다
+   * (CHICKEN_ALLERGEN_HARD_CONSTRAINT). 그런데 그 경우는 그보다 앞인 정규화에서
+   * 이미 막힐다 — session-context-normalizations 가 status: RECONFIRMATION_REQUIRED 를
+   * 돌려주고, 위의 정규화() 가 거기서 RECONFIRM_REQUIRED 를 던진다.
+   * 그래서 candidate-filters 까지 오지를 못한다.
+   *
+   * 읽지 않는 이유를 적어 둔다. 선언만 보고 "안 쓰네" 하면 닿지도 않는 길을
+   * 화면에 이으려다 죽은 코드를 하나 만들게 된다.
+   */
   reconfirmationsByCandidateId?: Record<string, 규칙판정[]>;
   passesByCandidateId?: Record<string, 규칙판정[]>;
 }
@@ -813,6 +850,25 @@ interface CandidateFilterResponse {
  * errorCode 로 잇는다 - ruleId 는 환경마다 접두어가 붙지만(CHICKEN_...) errorCode 는
  * 무엇이 어긋났는지를 가리키는 이름이라 더 안정적이다. 모르는 코드는 넘긴다.
  */
+/**
+ * 점수 칸 이름을 화면의 축 이름으로. 모르는 칸은 넘긴다.
+ *
+ * 서버가 칸을 늘리면 여기 없는 이름이 들어오는데, 그때 원문("boneTypeMatch")을
+ * 띄우느니 조용히 빠지는 편이 낫다.
+ */
+const 점수축: Record<string, string> = {
+  serviceTypeMatch: "이용 방식",
+  spicyLevelMatch: "맵기",
+  priceScore: "가격",
+};
+
+/** 이 후보를 밀어 준 축들. 양수인 칸만 고른다 — 깎인 축은 다른 자리가 말한다. */
+const 도움된축 = (점수: Record<string, number> | undefined): string[] =>
+  Object.entries(점수 ?? {})
+    .filter(([, v]) => typeof v === "number" && v > 0)
+    .map(([k]) => 점수축[k])
+    .filter((x): x is string => Boolean(x));
+
 const 규칙축: Record<string, string> = {
   SERVICE_TYPE_MISMATCH: "이용 방식",
   SPICY_LEVEL_MISMATCH: "맵기",
@@ -827,17 +883,27 @@ const 사유문장 = (e: KitExcluded): string => e.reasonText ?? "";
 interface RecommendationResponse {
   recommendedCandidateId: string | null;
   alternativeCandidateIds?: string[];
-  excludedCandidates?: { candidateId: string; reasonCode?: string; explanation?: string }[];
+  /*
+   * candidate-filters 와 같은 모양이다. 예전에는 여기만 reasonText 없이 적어 두었는데,
+   * 사유문장() 은 reasonText 를 읽는다 — 구조적 타이핑 덕에 우연히 통하고 있었다.
+   * 서버는 여기서도 reasonText 를 보낸다(실측).
+   */
+  excludedCandidates?: KitExcluded[];
   recommendationReasons?: string[];
   unmetConditions?: string[];
   /**
    * 축별 점수. 서버가 무엇을 보고 이 후보를 1순위로 골랐는지 남긴 것이다.
    *
-   * 지금 화면에는 안 쓴다. 숫자를 그대로 띄우면 이 앱을 쓰는 분들에게는
-   * 읽을 수 없는 값이 하나 더 느는 것이라, 어떻게 보여 줄지를 먼저 정해야 한다.
+   * 칸은 셋뿐이고(RecommendationEngineService.buildScoreBreakdown) **음수가 나올 수 있다.**
    *
-   * 다만 받아서 개발 기록에는 남긴다. 예전에는 타입에 선언조차 없어서 '왜 이게
-   * 1순위인지' 를 확인할 방법이 아예 없었다. 심사 축에 설명 가능성이 있다.
+   *   serviceTypeMatch  일치 보너스 · 불일치 벌점
+   *   spicyLevelMatch   위와 같음. 한 칸 차이면 벌점이 작다
+   *   priceScore        가격 한도 대비 남는 비율. 한도를 안 정하면 늘 0
+   *
+   * 숫자는 화면에 안 띄운다. 이 앱을 쓰는 분들에게 0.0259 는 읽을 수 없는 값이
+   * 하나 더 느는 것이다. 대신 **양수인 축의 이름만** 뽑아서 "이걸 보고 골랐어요"
+   * 로 옮긴다(아래 점수축). 깎인 축은 여기서 말하지 않는다 — 그건 이미
+   * unmetConditions 와 어긋난 줄이 자기 말로 하고 있다.
    */
   scoreBreakdown?: Record<string, number>;
   confidence?: number;
@@ -1071,12 +1137,23 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const pass = 판정.pass[candidateId];
 
     const 고른값 = p.selections ?? {};
-    const 한줄 = (축: string, matched: boolean): MappedOption | null => {
+    /**
+     * @param 이메뉴는 후보가 가진 값을 우리말로 옮긴 것. 없으면 빈 문자열이다.
+     *
+     * 어긋난 줄에 무엇이 어긋났는지를 적는다. 예전에는 어느 축이든
+     * "오늘은 이 조합이 없어요" 한 문장이었다 — 무엇으로 바뀌는지는 말해 주지 않아서,
+     * 사용자가 이걸 담아도 되는지 판단할 근거가 없었다. 서버가 비교한 값을
+     * 실어 보내 주고 있었는데(candidateValue) 우리가 안 읽고 있었다.
+     */
+    const 한줄 = (축: string, matched: boolean, 이메뉴는 = ""): MappedOption | null => {
       const 값 = 고른값[축]?.[0];
       if (!값) return null;   // 사용자가 안 고른 축은 보여 줄 것이 없다
-      return matched
-        ? { label: 축, value: 값, matched: true }
-        : { label: 축, value: 값, matched: false, note: "오늘은 이 조합이 없어요" };
+      if (matched) return { label: 축, value: 값, matched: true };
+      return {
+        label: 축, value: 값, matched: false,
+        // 옮기지 못한 값(모르는 enum)이면 예전 문장으로 돌아간다. 원문을 띄우지 않는다.
+        note: 이메뉴는 ? `이 메뉴는 ${이메뉴는}이에요` : "오늘은 이 조합이 없어요",
+      };
     };
 
     const 행: MappedOption[] = [];
@@ -1085,7 +1162,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const 축 = 규칙축[r.errorCode ?? ""];
       if (!축 || 본축.has(축)) continue;
       본축.add(축);
-      const x = 한줄(축, false);
+      const x = 한줄(축, false, 우리말들(r.candidateValue));
       if (x) 행.push(x);
     }
     for (const r of pass ?? []) {
@@ -1158,7 +1235,17 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
 
     const sr = await 보내기<{
       status: string; sessionContext: ChickenStoreSessionContext;
-      reconfirmationFields?: { path?: string; message?: string }[];
+      /*
+       * 재확인이 필요한 칸들. 실측한 모양:
+       *   { path: "/sessionContext/hardConstraints/allergenIds",
+       *     reasonCode: "HARD_CONSTRAINT_UNKNOWN",
+       *     message: "allergenIds 가 UNKNOWN 입니다. ..." }
+       *
+       * 화면은 message 만 쓴다. path 와 reasonCode 는 어느 칸인지를 가리키는데,
+       * 지금 이 분기에 닿는 상황이 알레르기 하나뿐이라 둘로 갈라 말할 것이 없다.
+       * 칸이 늘면 그때 path 로 짚는다 — 그러려면 선언이 먼저 있어야 한다.
+       */
+      reconfirmationFields?: { path?: string; reasonCode?: string; message?: string }[];
       contractValidation?: { valid: boolean; errors?: { message?: string }[] };
     }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p, { 예산: 가격한도.읽기() }) });
 
@@ -1280,6 +1367,17 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       // 다른 기계 앞에 서 있어도 같은 세션을 받는다는 뜻이다.
       // 백엔드가 아직 이 값을 받지 않지만, 여기서 빼 두면 받게 되는 날에도
       // 아무도 눈치채지 못한다. 보내고, 서버가 무시하면 서버 사정이다.
+      /*
+       * initialState 는 읽지 않는다. 실측 응답에 늘 실려 오지만("SERVICE_TYPE")
+       * 이건 **키오스크가 지금 어느 화면인지가 아니라 환경 설정값**이다 —
+       * environments/chicken-store/manifest.json 의 initialState 를 그대로 돌려주는
+       * 것이고, 같은 가게면 언제 불러도 같은 값이다(다른 환경은 "WELCOME").
+       *
+       * 그래서 '앞사람이 쓰던 화면이 남아 있나' 같은 걸 여기서 알 수는 없다.
+       * 쓸 자리가 있다면 우리가 박아 둔 STEPS 의 첫 단계와 맞는지 보는 것인데,
+       * 지금 붙는 환경이 닭강정집 하나뿐이라(백엔드가아는장소) 그 검사는 늘 통과한다.
+       * 환경이 늘면 그때 여기서 짚는다.
+       */
       const r = await 보내기<{ sessionId: string; environmentId?: string; initialState: string; submissionEndpoint: string }>(
         "/internal/simulation/session", { environmentId, claimCode },
       );
@@ -1308,10 +1406,25 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const { sessionContext } = await 정규화(environmentId, profile);
       const r = await 보내기<CandidateFilterResponse>("/api/v1/candidate-filters", { environmentId, sessionContext });
 
+      /*
+       * 서버가 '담으면 안 된다' 고 한 후보인가.
+       *
+       * warningsByCandidateId 에는 WARN 만 담기게 돼 있다(CandidateFilterResult 문서).
+       * 그래서 여기 BLOCK 이 있으면 그건 서버 쪽이 어긋난 것인데, 어긋난 쪽으로
+       * 기울 방향이 정해져 있다 — BLOCK 은 알레르기·품절 같은 절대 조건에 붙는
+       * severity 다. 그런 후보를 "조금 다른 메뉴" 로 내밀면 안 된다.
+       *
+       * 지금은 한 번도 안 걸린다(실측: severity 가 전부 "WARN" 또는 null).
+       * available 검사와 같은 이유로 남긴다 — 한쪽만 막으면 언젠가 샌다.
+       */
+      const 막힌후보 = (id: string): boolean =>
+        (r.warningsByCandidateId?.[id] ?? []).some((x) => x.severity === "BLOCK" && x.result === "FAIL");
+
       // 지금 팔지 않는 것은 후보가 아니다. 심사 필수 기준이 '선택 불가능 후보
       // 추천 0건' 이고, 서버가 available:false 를 남겨 보내는 걸 확인했다.
       // 서버가 나중에 걸러 주더라도 여기 검사는 남긴다 — 한쪽만 막으면 언젠가 샌다.
-      const 담을수있는 = (r.eligibleCandidates ?? []).filter((c) => c?.candidateId && c.available !== false);
+      const 담을수있는 = (r.eligibleCandidates ?? [])
+        .filter((c) => c?.candidateId && c.available !== false && !막힌후보(c.candidateId));
 
       const display: Record<string, { displayName: string; priceText: string }> = {};
       for (const c of 담을수있는) {
@@ -1333,6 +1446,16 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       for (const c of (r.eligibleCandidates ?? [])) {
         if (c?.available === false && c.name) {
           뺀것.push({ candidateId: c.candidateId, reasonCode: "UNAVAILABLE", explanation: `${c.name}${은는(c.name)} 지금 팔지 않아서 뺐어요` });
+        } else if (c?.candidateId && 막힌후보(c.candidateId) && c.name) {
+          // 우리가 뺐으면 뺐다고 말한다. 어느 축 때문인지는 서버가 준 errorCode 로 짚는다.
+          const 축 = (r.warningsByCandidateId?.[c.candidateId] ?? [])
+            .filter((x) => x.severity === "BLOCK").map((x) => 규칙축[x.errorCode ?? ""]).find(Boolean);
+          뺀것.push({
+            candidateId: c.candidateId, reasonCode: "BLOCKED",
+            explanation: 축
+              ? `${c.name}${은는(c.name)} ${축}이(가) 맞지 않아서 뺐어요`
+              : `${c.name}${은는(c.name)} 조건에 맞지 않아서 뺐어요`,
+          });
         }
       }
 
@@ -1372,6 +1495,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         unmetConditions: r.unmetConditions ?? [],
         confidence: r.confidence ?? 0,
         requiresReconfirmation: r.requiresReconfirmation ?? false,
+        scoredAxes: 도움된축(r.scoreBreakdown),
         // 이름·가격은 candidate-filters 에서 온다. 추천 응답에는 없다.
         display: {},
         // 축별 일치 여부. 서버 판정이 있으면 그것을 쓰고, 없으면 우리가 맞춰 본다.
