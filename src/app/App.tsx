@@ -1086,7 +1086,7 @@ function OrderSheetCard({
             style={{
               width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 5,
               display: "flex", alignItems: "center", justifyContent: "center",
-              backgroundColor: selected ? "white" : "transparent",
+              backgroundColor: selected ? PAPER : "transparent",
               // 안 고른 동그라미의 테두리는 "여기 고를 수 있는 게 있다"를 알리는 유일한 표시다.
               // TEXT_3 는 옅은 면 위에서 1.62:1 이라 컨트롤 경계 기준(3:1)에 못 미쳤다.
               border: selected ? "none" : `1.5px solid ${TEXT_2}`,
@@ -2254,39 +2254,68 @@ function InfoBox({ children, variant = "warn" }: { children: React.ReactNode; va
  * 서로 다른 질문의 선택지가 조용히 한 그룹으로 묶인다.
  */
 function OptionCard({
-  name, price, selected, onClick, photo, groupName,
+  name, price, selected, onClick, photo, groupName, matched,
 }: {
   name: string; price: string; selected: boolean; onClick: () => void;
   photo?: string | null; groupName: string;
+  /**
+   * 저장해 두신 조건과 이 후보가 한 축도 어긋나지 않는가.
+   *
+   * 서버가 후보별로 알려 준 unmatchedLabels 가 **비어 있을 때만** 참이다.
+   * 안 알려 주면(undefined) 아무 말도 하지 않는다 - 이름을 뜯어보고 짐작하면
+   * '아이스 아메리카노' 처럼 이름에 ICE 가 없는 후보를 틀렸다고 말하게 된다.
+   */
+  matched?: boolean;
 }) {
   const [포커스, set포커스] = useState(false);
   const 속: React.ReactNode = (
     <>
-      <span className="flex items-center gap-3" style={{ minWidth: 0 }}>
+      <span className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
         {photo && <img src={photo} alt="" aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />}
-        <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1, textAlign: "left" }}>{name}</span>
+        <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, textAlign: "left" }}>{name}</span>
+        {/*
+          위트 액센트 하나. 뜻은 옆의 '조건 일치' 라는 글자가 지고 있고 이 그림은
+          거들기만 한다 - 이모지는 기기마다 모양이 다르고 스크린리더가 이름을
+          읽어 주므로, 뜻을 이 자리에 맡기지 않는다.
+        */}
+        {matched && (
+          <span
+            className="flex items-center"
+            style={{ gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 12, fontWeight: 700, color: selected ? PAPER : P }}
+          >
+            <span aria-hidden="true">🌿</span>조건 일치
+          </span>
+        )}
       </span>
-      <div className="flex items-center gap-3">
-        <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1, ...NUM }}>{price}</span>
+      <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
+        <span style={{ fontFamily: SERIF, fontSize: 21, whiteSpace: "nowrap", color: selected ? PAPER : TEXT_1, ...NUM }}>{price}</span>
         <div aria-hidden="true" style={{
           width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
-          backgroundColor: selected ? "white" : "transparent",
+          backgroundColor: selected ? PAPER : "transparent",
           // 안 고른 동그라미의 테두리는 "여기 고를 수 있는 게 있다"를 알리는 유일한 표시다.
           // TEXT_3 는 옅은 면 위에서 1.62:1 이라 컨트롤 경계 기준(3:1)에 못 미쳤다.
           border: selected ? "none" : `1.5px solid ${TEXT_2}`,
         }}>
-          {selected && <Check size={12} strokeWidth={3} color={P} />}
+          {selected && <Check size={12} strokeWidth={3} color={RULE} />}
         </div>
       </div>
     </>
   );
 
+  /*
+   * 카드에서 헤어라인 행으로 바꿨다.
+   *
+   * 후보가 셋이면 카드 셋이 각각 면을 갖는데, 종이색 바탕에서는 면이 겹겹이
+   * 쌓여 보여 무엇을 고르는 자리인지가 흐려진다. 줄로 나누면 목록이 하나로
+   * 읽히고, 고른 줄만 검게 반전돼서 어디를 골랐는지가 한눈에 들어온다.
+   */
   const 겉모양 = {
     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-    padding: "17px 20px", borderRadius: RADIUS.card, cursor: "pointer", fontFamily: FONT,
+    padding: "18px 16px", borderRadius: selected ? RADIUS.card : 0, cursor: "pointer", fontFamily: FONT,
     border: "none", width: "100%",
-    backgroundColor: selected ? P : SURFACE,
+    // 고른 것은 검은 면. 초록은 '조건 일치' 한 곳에만 남긴다.
+    backgroundColor: selected ? RULE : "transparent",
     transition: "background-color 0.15s",
   } as const;
 
@@ -2382,8 +2411,9 @@ function OrderClarification({
           })}
         </ConfirmCard>
       )}
-      <div className="flex flex-col gap-2" role="radiogroup" aria-label="비슷한 메뉴 후보">
+      <div role="radiogroup" aria-label="비슷한 메뉴 후보" style={{ borderTop: `2px solid ${RULE}` }}>
         {candidates.map((c, i) => (
+          <div key={`row-${c.candidateId}`} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
           <OptionCard
             key={c.candidateId}
             groupName="후보"
@@ -2391,8 +2421,10 @@ function OrderClarification({
             name={c.displayName}
             price={c.priceText}
             photo={c.imageUrl}
+            matched={c.unmatchedLabels?.length === 0}
             onClick={() => setSelected(i)}
           />
+          </div>
         ))}
       </div>
       <ReasonSummary reasons={reasons} onOpen={onReasons} />
