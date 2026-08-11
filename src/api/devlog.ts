@@ -55,7 +55,21 @@ export const 본문을남길까 = (경로: string): boolean => !/\/api\/v1\/auth
  * 어디에 있든 가린다. profile-normalizations 의 profileInput, approve 의
  * profile, users/{id}/profiles 의 본문에 각각 다른 깊이로 들어 있다.
  */
-const 가릴칸 = new Set(["memo"]);
+/*
+ * label 도 함께 가린다.
+ *
+ * 승인 응답의 runSteps[].label 은 검증되지 않은 서버 값이다. 화면에 올리는
+ * 쪽은 아는 값만 통과시키도록 막았는데, **이 기록은 응답 본문을 통째로**
+ * 담는다. 서버가 상품 ID 나 화면 좌표를 보내면 화면에는 안 뜨지만 여기
+ * 최대 60건이 남고, ?log 화면과 시연 녹화에 그대로 보인다.
+ *
+ * "앱이 상품 ID 를 들고 있으면 안 된다" 는 화면만이 아니라 메모리에 대한
+ * 조건이라, 가리는 쪽이 맞다.
+ *
+ * 무엇을 했는지는 action 과 success 로 남으므로 흐름을 보는 데는 지장이 없다.
+ * 잃는 것은 '어떤 값을 골랐는지' 한 조각인데, 그건 요청 본문 쪽에 이미 있다.
+ */
+const 가릴칸 = new Set(["memo", "label"]);
 
 const 걸어가며가리기 = (v: unknown): unknown => {
   if (Array.isArray(v)) return v.map(걸어가며가리기);
