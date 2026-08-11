@@ -430,6 +430,31 @@ describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
     expect(s.steps[2]).toBe("failed");
     expect(s.abort?.recoverable).toBe(false);
   });
+
+  it("동작 수가 단계 수보다 많아도 전부 완료로 보이지 않는다", async () => {
+    /*
+     * reachedStep 은 '실행한 동작 수' 이고 STEPS 는 다섯 칸이라 단위가 다르다.
+     * 백엔드가 만드는 동작은 9~10개라 중단이 나면 거의 항상 5 이상이 된다.
+     *
+     * 자르지 않으면 다섯 칸이 전부 i < reachedStep 에 걸려 모두 done 이 되고,
+     * 화면 위쪽은 "안전을 위해 멈췄어요" 인데 아래는 다 끝난 것처럼 보인다.
+     */
+    const b = 가짜백엔드({
+      getEvidence: async () => ({
+        state: "aborted", reachedStep: 8,
+        abort: { code: "SAFETY_STOP", title: "안전을 위해 멈췄어요", message: "예상하지 못한 화면", userAction: "직원을 불러 주세요" },
+      }),
+    });
+    const api = createApi(b);
+    await api.claimPairing("kb");
+    await api.requestMapping("s1", "p1");
+    const { planId } = await api.approve({ pairingId: "s1", sheetId: "p1", mappingResult: "exact" });
+    const s = await api.getPlanStatus(planId);
+    expect(s.steps.every((x) => x === "done")).toBe(false);
+    // 실패 칸이 반드시 하나 찍힌다. 멈췄다는 사실이 단계에도 남아야 한다.
+    expect(s.steps.filter((x) => x === "failed")).toHaveLength(1);
+    expect(s.steps[s.steps.length - 1]).toBe("failed");
+  });
 });
 
 // ─── 팀 백엔드 어댑터 ─────────────────────────────────────────────────────────
@@ -536,6 +561,41 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 주문표 });
     await b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 주문표 });
   };
+
+  it("재확인이 필요하면 돌아갈 길이 있는 오류로 알린다", async () => {
+    /*
+     * 이 분기가 죽어 있었다.
+     *
+     * 백엔드는 reconfirmationFields 가 비지 않을 때만 RECONFIRMATION_REQUIRED 를
+     * 내고, 그 필드는 contractValidation.errors 에서 골라 만든다. 킷은
+     * HARD_CONSTRAINT_UNKNOWN 을 warning 이 아니라 error 로 넣는다.
+     *
+     * 즉 RECONFIRMATION_REQUIRED 이면 valid 는 반드시 false 다. INVALID 검사가
+     * 위에 있으면 항상 그쪽이 먼저 던지고, 알레르기를 모르는 분에게
+     * 돌아갈 길 없는(recoverable: false) 오류와 킷 원문이 그대로 나간다.
+     */
+    const b = 붙이기({
+      "session-context-normalizations": {
+        status: "RECONFIRMATION_REQUIRED",
+        sessionContext: 정규화응답.맥락.sessionContext,
+        reconfirmationFields: [{ field: "allergenIds", message: "알레르기를 다시 확인해 주세요" }],
+        contractValidation: {
+          valid: false,
+          errors: [{ code: "HARD_CONSTRAINT_UNKNOWN", message: "allergenIds 가 UNKNOWN 입니다. 임의로 추론하지 말고..." }],
+        },
+      },
+    });
+    const e = await b.recommend({
+      environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표,
+    }).then(() => null, (err: KioBridgeError) => err);
+
+    expect(e?.code).toBe("RECONFIRM_REQUIRED");
+    // 돌아갈 길을 준다. 이게 이 분기를 만든 이유다.
+    expect(e?.recoverable).toBe(true);
+    // 킷 원문이 아니라 재확인 쪽 문장을 쓴다.
+    expect(e?.message).toBe("알레르기를 다시 확인해 주세요");
+    expect(e?.message).not.toContain("UNKNOWN");
+  });
 
   it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
     const b = 붙이기();

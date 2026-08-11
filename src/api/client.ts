@@ -354,13 +354,11 @@ export const mockApi: KioBridgeApi = {
  *
  * 기본은 목이다. __TEAM_BACKEND__ 가 참일 때만 팀 백엔드로 간다(npm run dev:team · build:team).
  *
- * 기본값을 아직 목으로 두는 이유는 두 가지다.
- *   1. 추천 응답에 조건별 일치 여부(matchedOptions)가 없어서, 확인 카드가
- *      "무엇을 왜 골랐는지" 를 항목별로 보여 주지 못한다.
- *   2. 백엔드 운영 배포(main)가 dev 보다 한참 뒤처져 컨트롤러가 하나도 없다.
+ * 배포본은 팀 백엔드로 간다 - vercel.json 의 buildCommand 가 build:team 이다.
+ * 목이 남아 있는 것은 백엔드 없이 화면만 띄워 볼 때(npm run dev)와 테스트를
+ * 위해서다. 둘은 같은 계약(KioBridgeApi)을 구현하므로 화면 코드는 어느 쪽인지
+ * 모른다.
  *
- * 그래서 배포본은 목으로 두고, 연동 시험은 로컬에서 dev 를 돌려서 한다.
- * 둘 다 풀리면 이 스위치를 걷어내고 팀 백엔드를 기본으로 삼는다.
  * docs/BACKEND_INTEGRATION.md 참고.
  */
 export const api: KioBridgeApi =
