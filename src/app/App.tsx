@@ -54,9 +54,12 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
 
 // 레퍼런스에는 진행 막대가 없다. 점 형태로 최소화해 상단 여백을 비워 둔다.
 //
-// 전체 3단계다 — 회원가입 → 호칭 → 첫 주문표. 예전에는 전화번호·인증번호가 앞에 있어
-// 4단계였는데, 그 둘을 걷어내면서 하나 줄었다. 기본값만 고치고 넘어가면 화면마다
-// "3단계 중 4단계" 처럼 실제와 어긋난 값이 남으므로 부르는 쪽에서 전부 명시한다.
+// 전체 3단계다 — 회원가입 → 호칭 → 도움 설정. 그다음의 '환영합니다' 는 세지 않는다.
+// 읽고 넘어가는 화면이지 채울 것이 없어서, 단계로 세면 아직 할 일이 남은 것처럼 보인다.
+//
+// 예전에는 두 단계였다(가입 · 호칭). 도움 설정을 계정 화면에서 이 흐름으로 끌어오면서
+// 하나 늘었다. 기본값만 고치고 넘어가면 화면마다 "3단계 중 2단계" 처럼 실제와 어긋난
+// 값이 남으므로 부르는 쪽에서 전부 명시한다.
 function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
   return (
     <div className="flex justify-center gap-1.5" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={`전체 ${total}단계 중 ${step}단계`}>
@@ -523,7 +526,7 @@ function SignupScreen({ onDone, onBack, onGoLogin }: {
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={1} total={2} />
+          <ProgressBar step={1} total={3} />
         </div>
       </div>
 
@@ -625,7 +628,7 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
-          <ProgressBar step={2} total={2} />
+          <ProgressBar step={2} total={3} />
         </div>
       </div>
 
@@ -1936,25 +1939,125 @@ function ToggleRow({
   );
 }
 
-/**
- * 접근성 설정.
+interface 도움항목 { key: keyof 접근성; label: string; sub: string }
+
+/*
+ * 일곱 항목을 여기 한 곳에만 둔다.
  *
- * 여기 있는 항목은 전부 실제로 동작하는 것만 둔다. 준비 중인 기능을 목록에 올려 두면
- * 화면을 믿을 수 없게 된다. 큰 글씨는 앱 전체(휴대폰 틀 안)에 바로 적용된다.
+ * 두 화면이 이걸 쓴다 — 가입 직후의 설정 화면(SetupScreen)과 계정 화면에서 여는
+ * 접근성 화면(AccessibilityScreen). 각자 목록을 갖고 있으면 한쪽만 고치는 날이 오고,
+ * 그러면 같은 스위치가 두 자리에서 다른 말을 하게 된다.
+ *
+ * 킷 계약이 요구하는 일곱 가지를 다 묻는다. 예전에는 '큰 글씨' 하나만 묻고 나머지
+ * 여섯을 false 로 박아 서버에 보냈다 — 백엔드는 받을 준비가 돼 있었는데 화면이 안
+ * 물어서 늘 "아무 도움도 필요 없음" 으로 나가고 있었다.
  */
+
+/** 켜면 이 앱이 실제로 무언가를 한다. 무엇을 하는지 sub 에 그대로 적는다. */
+const 바로바꾸는것: 도움항목[] = [
+  { key: "largeText", label: "큰 글씨", sub: "앱 전체의 글씨와 버튼을 크게 봐요" },
+  { key: "highContrast", label: "고대비", sub: "글씨와 배경의 차이를 더 뚜렷하게 해요" },
+  { key: "simpleSteps", label: "쉬운 단계", sub: "이유 화면을 건너뛰고 바로 확인 화면으로 가요" },
+  { key: "mobilitySupport", label: "시간 여유", sub: "연결 시간이 지나도 보던 화면을 멋대로 닫지 않아요" },
+  { key: "staffAssistancePreferred", label: "직원 도움", sub: "승인 화면에도 직원에게 보여 달라는 안내를 띄워요" },
+];
+/** 켜도 이 앱 화면은 그대로다. 키오스크로 전해지기만 한다. */
+const 전해드릴것: 도움항목[] = [
+  { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
+  { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 이 앱은 원래 소리를 쓰지 않아요" },
+];
+
+/** 머리카락 굵기 선으로 이어 붙인 스위치 묶음. 두 화면이 같은 모양으로 쓴다. */
+function 도움목록({ 항목들, 설정, onChange }: {
+  항목들: 도움항목[];
+  설정: 접근성;
+  onChange: (한칸: Partial<접근성>) => void;
+}) {
+  return (
+    <div style={{ borderTop: `1px solid ${BORDER}` }}>
+      {항목들.map((r, i) => (
+        <div key={r.key} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
+          <ToggleRow
+            label={r.label}
+            sub={r.sub}
+            on={설정[r.key]}
+            onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
- * 접근성 설정.
+ * 가입 직후 한 번 묻는 도움 설정. 회원가입 → 호칭 → **여기** → 환영합니다.
  *
- * 킷 계약이 요구하는 일곱 가지를 다 묻는다. 예전에는 '큰 글씨' 하나만 묻고
- * 나머지 여섯을 false 로 박아 서버에 보냈다 — 백엔드는 받을 준비가 돼 있었는데
- * 화면이 안 물어서 늘 "아무 도움도 필요 없음" 으로 나가고 있었다.
+ * 예전에는 계정 화면 깊숙한 곳에만 있었다. 큰 글씨가 필요한 사람이 그걸 찾으려면
+ * 이미 작은 글씨로 세 번을 눌러야 했다 — 도움이 필요한 사람일수록 도달하기 어려운
+ * 자리에 도움을 두고 있었다.
+ *
+ * 스위치는 **누르는 즉시 적용된다.** 저장 버튼을 따로 두지 않는 이유가 이것이다.
+ * 큰 글씨를 켜 보고 "이 정도면 읽히는지" 를 눈으로 확인한 뒤 넘어가야 뜻이 있다.
+ * 눌러 놓고 저장을 눌러야 반영되면, 그 사이에는 아무 일도 안 일어나서 사용자는
+ * 자기가 무엇을 골랐는지 모른 채 확인을 누르게 된다.
+ *
+ * 그래서 아래에도 버튼이 하나뿐이다. '건너뛰기' 와 '저장하기' 를 나란히 두면
+ * 둘이 똑같은 일(다음 화면으로 가기)을 하게 되고, 무엇을 눌러야 하는지 묻는
+ * 화면이 하나 더 생긴다. 이 화면은 통째로 선택이라 그 말을 글로 적는다.
+ */
+function SetupScreen({ 설정, onChange, onNext, onBack }: {
+  설정: 접근성;
+  onChange: (한칸: Partial<접근성>) => void;
+  onNext: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex flex-col h-full kb-paper">
+      <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
+        <BackButton onClick={onBack} />
+        <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
+          <ProgressBar step={3} total={3} />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `28px ${GAP.screenX}px 24px` }}>
+        <CenterHeadline
+          kicker="accessibility"
+          title={<>필요한 도움이<br />있으신가요?</>}
+          desc="켜는 즉시 이 화면이 바로 바뀌어요. 안 켜셔도 괜찮아요"
+          spot={<GlassesSpot />}
+        />
+
+        <p style={{ fontSize: 13, color: TEXT_2, margin: "24px 0 20px", lineHeight: 1.7, textAlign: "center" }}>
+          나중에 계정 화면에서 언제든 바꿀 수 있어요.
+        </p>
+
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
+        <도움목록 항목들={바로바꾸는것} 설정={설정} onChange={onChange} />
+
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24 }}>키오스크에 전해 드려요</h2>
+        <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
+          앱 화면은 그대로예요. 지금은 전해 주기만 해요.
+        </p>
+        <도움목록 항목들={전해드릴것} 설정={설정} onChange={onChange} />
+      </div>
+
+      <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
+        <PrimaryBtn onClick={onNext}>계속하기</PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 접근성 설정. 계정 화면에서 언제든 다시 연다.
  *
  * 두 무리로 나눠 적는다.
  *
- *   이 앱이 바로 바꾸는 것   큰 글씨 · 고대비
- *   키오스크에 전해 드릴 것   나머지 다섯
+ *   이 앱이 바로 바꾸는 것   큰 글씨 · 고대비 · 쉬운 단계 · 시간 여유 · 직원 도움
+ *   키오스크에 전해 드릴 것   그림 안내 · 소리 대신 화면
  *
- * 뒤의 다섯은 이 앱 화면을 바꾸지 않는다. 켰는데 아무 일도 안 일어나면 사용자는
+ * 뒤의 둘은 이 앱 화면을 바꾸지 않는다. 켰는데 아무 일도 안 일어나면 사용자는
  * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
  * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
  */
@@ -1963,20 +2066,6 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
   onChange: (한칸: Partial<접근성>) => void;
   onBack: () => void;
 }) {
-  // 켜면 이 앱이 실제로 무언가를 한다. 무엇을 하는지 sub 에 그대로 적는다.
-  const 바로바꾸는것: { key: keyof 접근성; label: string; sub: string }[] = [
-    { key: "largeText", label: "큰 글씨", sub: "앱 전체의 글씨와 버튼을 크게 봐요" },
-    { key: "highContrast", label: "고대비", sub: "글씨와 배경의 차이를 더 뚜렷하게 해요" },
-    { key: "simpleSteps", label: "쉬운 단계", sub: "이유 화면을 건너뛰고 바로 확인 화면으로 가요" },
-    { key: "mobilitySupport", label: "시간 여유", sub: "연결 시간이 지나도 보던 화면을 멋대로 닫지 않아요" },
-    { key: "staffAssistancePreferred", label: "직원 도움", sub: "승인 화면에도 직원에게 보여 달라는 안내를 띄워요" },
-  ];
-  // 켜도 이 앱 화면은 그대로다. 키오스크로 전해지기만 한다.
-  const 전해드릴것: { key: keyof 접근성; label: string; sub: string }[] = [
-    { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
-    { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 이 앱은 원래 소리를 쓰지 않아요" },
-  ];
-
   return (
     <div className="flex flex-col h-full kb-paper">
       <SubScreenHeader
@@ -2009,18 +2098,7 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         </p>
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
-        <div style={{ borderTop: `1px solid ${BORDER}` }}>
-          {바로바꾸는것.map((r, i) => (
-            <div key={r.key} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
-              <ToggleRow
-                label={r.label}
-                sub={r.sub}
-                on={설정[r.key]}
-                onToggle={() => onChange({ [r.key]: !설정[r.key] })}
-              />
-            </div>
-          ))}
-        </div>
+        <도움목록 항목들={바로바꾸는것} 설정={설정} onChange={onChange} />
 
         {/*
           이 한 줄은 문단이 아니라 제목의 일부다. 스위치와 제목 사이에 본문이
@@ -2041,19 +2119,7 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
-        <div style={{ borderTop: `1px solid ${BORDER}` }}>
-          {전해드릴것.map((r, i) => (
-            <div key={r.key} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
-              <ToggleRow
-                label={r.label}
-                sub={r.sub}
-                on={설정[r.key]}
-                onToggle={() => onChange({ [r.key]: !설정[r.key] })}
-              />
-            </div>
-          ))}
-        </div>
-
+        <도움목록 항목들={전해드릴것} 설정={설정} onChange={onChange} />
       </div>
     </div>
   );
@@ -4007,10 +4073,22 @@ export default function App() {
           )}
           {screen === "name" && (
             <NameScreen
-              onNext={(n) => { setName(n); setScreen("greeting"); }}
+              onNext={(n) => { setName(n); setScreen("setup"); }}
               // 가입은 이미 끝났다. 뒤로 가도 가입 화면으로 돌아가지 않는다 —
               // 돌아가면 같은 아이디로 또 가입하려다 "이미 쓰고 있는 아이디예요" 를 만난다.
               onBack={() => { setScreen("saved"); setTab("menu"); }}
+            />
+          )}
+          {screen === "setup" && (
+            <SetupScreen
+              설정={접근성값}
+              // 계정 화면의 접근성 설정과 같은 저장소에 쓴다. 여기서 켠 것이
+              // 거기서도 켜져 있어야 한다 — 두 화면이 같은 스위치를 다루므로.
+              onChange={(한칸) => 접근성설정.바꾸기(한칸)}
+              onNext={() => setScreen("greeting")}
+              // 호칭 화면으로 되돌아간다. 여기까지 왔으면 호칭은 이미 적었고,
+              // 고쳐 적고 싶을 수 있는 유일한 앞 단계다.
+              onBack={() => setScreen("name")}
             />
           )}
           {screen === "greeting" && (

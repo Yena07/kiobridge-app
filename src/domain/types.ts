@@ -1,9 +1,12 @@
 // 로그인은 끝까지 선택이다. login·signup 은 welcome 과 계정 화면에서만 들어갈 수 있고,
 // 주 흐름(saved → order-confirm → execution)은 이 둘을 거치지 않는다.
 export type Screen =
-  | "welcome" | "login" | "signup" | "name" | "greeting" | "sheet" | "saved"
+  | "welcome" | "login" | "signup" | "name"
+  | "setup"     // 가입 직후 한 번 묻는 도움 설정. 'profile' 이라 부르지 않는다 —
+                // 백엔드가 주문표를 profile 이라 불러서 그 이름은 이미 임자가 있다.
+  | "greeting" | "sheet" | "saved"
   | "order-confirm" | "execution"
-  | "a11y"      // 접근성 설정
+  | "a11y"      // 접근성 설정 (계정 화면에서 언제든)
   | "privacy";  // 무엇을 저장하고 무엇을 저장하지 않는지
 export type MainTab = "qr" | "menu" | "account";
 export type PlaceType = "카페" | "음식점" | "병원" | "관공서" | null;

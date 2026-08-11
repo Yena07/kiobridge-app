@@ -39,7 +39,7 @@ const KEY = "kb.session.v3";
  * 남아 있지 않아서, 화면만 띄우면 빈 껍데기가 된다.
  */
 const 이어볼수있는화면 = new Set<Screen>([
-  "welcome", "name", "greeting", "sheet", "saved", "a11y", "privacy", "execution",
+  "welcome", "name", "setup", "greeting", "sheet", "saved", "a11y", "privacy", "execution",
 ]);
 
 /**
