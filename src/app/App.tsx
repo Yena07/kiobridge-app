@@ -6,7 +6,7 @@ import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, ACCENT, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
   SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
-  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES,
+  FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES, PAPER, RULE, KICKER, BTN_H, TOGGLE_OFF,
 } from "@/design/tokens";
 import type {
   Screen, MainTab, PlaceType, PairingState, StepStatus, OrderSheet, PairingResult,
@@ -24,8 +24,8 @@ import { 접근성설정, type 접근성 } from "@/api/a11y";
 import BackendLog from "@/app/BackendLog";
 
 // 휴대폰 틀 크기. 큰 글씨 모드가 이 값을 기준으로 안쪽 크기를 되계산한다.
-const FRAME_W = 384;
-const FRAME_H = 780;
+const FRAME_W = 390;
+const FRAME_H = 844;
 const LARGE_TEXT_SCALE = 1.18;
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
@@ -109,9 +109,12 @@ function PrimaryBtn({
       onClick={onClick}
       disabled={disabled}
       style={{
-        width: "100%", height: 56, borderRadius: RADIUS.button,
-        fontSize: 17, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
-        backgroundColor: disabled ? SURFACE : P,
+        width: "100%", height: BTN_H, borderRadius: RADIUS.button,
+        fontSize: 17, fontWeight: 700, fontFamily: FONT, letterSpacing: "-0.02em",
+        // 종이색 바탕에서는 초록 알약이 색을 하나 더 늘린 것처럼 보인다. 검정은
+        // 글자와 같은 색이라 화면이 조용해지고, 누를 곳이 대비만으로 읽힌다.
+        // 초록은 성공.연결 표시 한 곳에만 남긴다.
+        backgroundColor: disabled ? SURFACE : RULE,
         // 비활성 컨트롤은 WCAG 대비 규정에서 빠져 있다. 그래도 여기서는 고친다.
         // 아직 못 누르는 버튼의 글자가 "다 채우면 무슨 일이 일어나는지"를 알려 주는 유일한 문장이라
         // 1.62:1(#C4C4C8)로 지워 놓으면 무엇을 기다리는지 알 수 없다.
@@ -133,8 +136,8 @@ function OutlineBtn({ children, onClick }: { children: React.ReactNode; onClick?
       type="button"
       onClick={onClick}
       style={{
-        width: "100%", height: 56, borderRadius: RADIUS.button,
-        fontSize: 17, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
+        width: "100%", height: BTN_H, borderRadius: RADIUS.button,
+        fontSize: 17, fontWeight: 700, fontFamily: FONT, letterSpacing: "-0.02em",
         backgroundColor: SURFACE,
         color: TEXT_BTN,
         border: "none",
@@ -151,7 +154,7 @@ function StickyFooter({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="shrink-0 flex flex-col gap-2"
-      style={{ backgroundColor: "white", padding: `12px ${GAP.screenX}px 24px` }}
+      style={{ backgroundColor: PAPER, padding: `12px ${GAP.screenX}px 24px` }}
     >
       {children}
     </div>
@@ -165,10 +168,11 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
       aria-pressed={selected}
       onClick={onClick}
       style={{
-        minHeight: 44, padding: "10px 16px", borderRadius: RADIUS.pill,
-        fontSize: 15, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.01em",
-        backgroundColor: selected ? P : CANVAS,
-        color: selected ? "white" : TEXT_CHIP,
+        minHeight: 44, padding: "10px 18px", borderRadius: RADIUS.pill,
+        fontSize: 15, fontWeight: 700, fontFamily: FONT, letterSpacing: "-0.01em",
+        // 고른 칩은 검은 알약. 초록은 화면당 한 곳(연결.성공)에만 남긴다.
+        backgroundColor: selected ? RULE : CANVAS,
+        color: selected ? PAPER : TEXT_CHIP,
         border: "none",
         cursor: "pointer",
         transition: "all 0.15s",
@@ -200,7 +204,7 @@ function SectionLabel({ text, required }: { text: string; required?: boolean }) 
  */
 function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () => void }) {
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       {/* 첫 화면은 사진 한 장으로 "어디서 쓰는 앱인지"를 설명한다.
           아래쪽을 흰색으로 흘려보내 사진과 본문의 경계를 지운다. */}
       <div className="shrink-0 relative" style={{ height: "42%", minHeight: 0, overflow: "hidden" }}>
@@ -393,7 +397,7 @@ function LoginScreen({ onDone, onBack, onGoSignup }: {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
       </div>
@@ -495,7 +499,7 @@ function SignupScreen({ onDone, onBack, onGoLogin }: {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
@@ -597,7 +601,7 @@ function SignupScreen({ onDone, onBack, onGoLogin }: {
 function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack: () => void }) {
   const [name, setName] = useState("");
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0 flex items-center" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex-1 flex justify-center" style={{ marginRight: 34 }}>
@@ -655,7 +659,7 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
 
   return (
     <div
-      className="flex flex-col h-full items-center justify-center text-center bg-white"
+      className="flex flex-col h-full items-center justify-center text-center kb-paper"
       style={{ padding: `0 ${GAP.screenX}px` }}
       role="status"
       aria-live="polite"
@@ -706,7 +710,7 @@ function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby="confirm-body"
-        style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: `28px ${GAP.screenX}px 24px`, outline: "none" }}
+        style={{ backgroundColor: PAPER, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: `28px ${GAP.screenX}px 24px`, outline: "none" }}
       >
         <h2 id="confirm-title" style={{ ...TYPE.title, color: TEXT_1, margin: 0 }}>{title}</h2>
         <p id="confirm-body" style={{ ...TYPE.body, color: TEXT_2, marginTop: 10 }}>{body}</p>
@@ -830,7 +834,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         {/*
          * 진행 표시를 두지 않는다.
@@ -1177,7 +1181,7 @@ function SavedSheetsScreen({
   }, [sheets]);
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
         <AppLogo size={26} />
         <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 22 }}>저장된 주문표</h1>
@@ -1246,7 +1250,7 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
     { id: "account", icon: <Pictogram name="userCircle" size={25} />, label: "계정" },
   ];
   return (
-    <nav aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: "white", paddingBottom: 12 }}>
+    <nav aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: PAPER, paddingBottom: 12 }}>
       {items.map(({ id, icon, label }) => {
         const active = tab === id;
         return (
@@ -1292,14 +1296,49 @@ function SpinnerIcon() {
 }
 
 // 상태 화면 공통 골격 — 가운데 정렬 표식 + 제목 + 설명. 색이 아니라 배치로 위계를 만든다.
-function StatusHero({ mark, title, desc }: { mark: React.ReactNode; title: React.ReactNode; desc?: React.ReactNode }) {
+/**
+ * 상태 화면의 머리.
+ *
+ * kicker 는 이탤릭 영문 한 줄이다. 뜻은 담지 않는다 - 읽어야 할 말은 전부 아래
+ * 한글 제목에 있고, 영어를 못 읽어도 잃는 정보가 없다. aria-hidden 으로 두어
+ * 스크린리더가 읽지 않는다.
+ */
+function StatusHero({ mark, kicker, title, desc }: {
+  mark: React.ReactNode; kicker?: string; title: React.ReactNode; desc?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center text-center">
       <div aria-hidden="true" className="flex items-center justify-center" style={{ height: 72 }}>{mark}</div>
-      <h2 style={{ ...TYPE.title, color: TEXT_1, marginTop: 20 }}>{title}</h2>
-      {desc && <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8 }}>{desc}</p>}
+      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, marginTop: 18, display: "block" }}>{kicker}</span>}
+      <h2 style={{ ...TYPE.display, color: TEXT_1, marginTop: kicker ? 4 : 20 }}>{title}</h2>
+      {desc && <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>{desc}</p>}
     </div>
   );
+}
+
+/**
+ * 제목 오른쪽에 놓는 선 드로잉 한 점.
+ *
+ * 스트로크 5.5px, round cap, 배경 없음. 장식이라 aria-hidden 이고,
+ * 이 그림이 없어도 화면의 뜻은 그대로다 - 뜻은 제목이 지고 있다.
+ */
+function GlassesSpot({ size = 76 }: { size?: number }) {
+  return (
+    <svg width={size} height={size * 0.5} viewBox="0 0 152 76" fill="none" aria-hidden="true">
+      <g stroke={TEXT_1} strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="40" cy="44" rx="27" ry="22" />
+        <ellipse cx="112" cy="44" rx="27" ry="22" />
+        <path d="M67 40c5-4 13-4 18 0" />
+        <path d="M13 40C13 20 24 12 34 12" />
+        <path d="M139 40c0-20-11-28-21-28" />
+      </g>
+    </svg>
+  );
+}
+
+/** 섹션 머리의 굵은 줄. 이 디자인에서 화면을 자르는 유일한 선이다. */
+function Rule({ style }: { style?: React.CSSProperties }) {
+  return <div aria-hidden="true" style={{ height: 2, backgroundColor: RULE, ...style }} />;
 }
 
 function PairingConnecting() {
@@ -1509,7 +1548,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
 
           {!scanning && (
             <div className="absolute inset-0 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.10)" }}>
-              <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: PAPER, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
                   <path d="M7 17L13 23L25 11" stroke={P} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -1604,7 +1643,7 @@ function QrScreen({ onPaired, initialPhase = "scan", connected = null }: {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 0` }}>
         <AppLogo size={26} />
       </div>
@@ -1666,7 +1705,7 @@ function AccountScreen({
         { label: "로그아웃", sub: "", action: onLogout, danger: true },
       ];
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 24px` }}>
         <AppLogo size={26} />
         <div className="flex items-center gap-4" style={{ marginTop: 28 }}>
@@ -1731,11 +1770,19 @@ function AccountScreen({
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 /** 계정 화면에서 여는 하위 화면들의 공통 머리. */
-function SubScreenHeader({ title, onBack }: { title: string; onBack: () => void }) {
+function SubScreenHeader({ title, kicker, spot, onBack }: {
+  title: React.ReactNode; kicker?: string; spot?: React.ReactNode; onBack: () => void;
+}) {
   return (
-    <div className="shrink-0" style={{ padding: `14px ${GAP.screenX}px 8px` }}>
+    <div className="shrink-0" style={{ padding: `14px ${GAP.screenX}px 0` }}>
       <BackButton onClick={onBack} />
-      <h1 style={{ ...TYPE.title, color: TEXT_1, marginTop: 8 }}>{title}</h1>
+      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, marginTop: 22, display: "block" }}>{kicker}</span>}
+      <div className="flex items-end justify-between" style={{ gap: 12 }}>
+        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: kicker ? 2 : 12, flex: 1 }}>{title}</h1>
+        {/* 제목 오른쪽의 선 드로잉 한 점. 장식이라 스크린리더에서 뺀다. */}
+        {spot && <span aria-hidden="true" style={{ flexShrink: 0, marginBottom: 4 }}>{spot}</span>}
+      </div>
+      <Rule style={{ marginTop: 18 }} />
     </div>
   );
 }
@@ -1754,30 +1801,30 @@ function ToggleRow({
       onClick={onToggle}
       style={{
         width: "100%", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 16, padding: "18px 20px", textAlign: "left", cursor: "pointer", fontFamily: FONT,
+        gap: 16, padding: "18px 0", textAlign: "left", cursor: "pointer", fontFamily: FONT,
         backgroundColor: "transparent", border: "none",
       }}
     >
       <span>
-        <span style={{ display: "block", fontSize: 16, fontWeight: 500, color: TEXT_1, letterSpacing: "-0.01em" }}>{label}</span>
-        <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 3 }}>{sub}</span>
+        <span style={{ display: "block", fontSize: 17, fontWeight: 700, color: TEXT_1, letterSpacing: "-0.02em" }}>{label}</span>
+        <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 4 }}>{sub}</span>
       </span>
       {/* 색만으로 상태를 알리지 않는다 — 켜짐일 때는 체크 표시도 함께 둔다. */}
       <span
         aria-hidden="true"
         style={{
-          width: 52, height: 31, borderRadius: 100, flexShrink: 0, position: "relative",
-          backgroundColor: on ? P : BORDER, transition: "background-color 0.2s",
+          width: 54, height: 32, borderRadius: 999, flexShrink: 0, position: "relative",
+          backgroundColor: on ? RULE : TOGGLE_OFF, transition: "background-color 0.2s",
         }}
       >
         <span
           style={{
-            position: "absolute", top: 3, left: on ? 24 : 3, width: 25, height: 25, borderRadius: "50%",
-            backgroundColor: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)", transition: "left 0.2s",
+            position: "absolute", top: 3, left: on ? 25 : 3, width: 26, height: 26, borderRadius: "50%",
+            backgroundColor: PAPER, boxShadow: "0 1px 3px rgba(0,0,0,0.18)", transition: "left 0.2s",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
-          {on && <Check size={14} strokeWidth={3} style={{ color: P }} />}
+          {on && <Check size={14} strokeWidth={3} style={{ color: RULE }} />}
         </span>
       </span>
     </button>
@@ -1826,8 +1873,13 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <SubScreenHeader title="접근성 설정" onBack={onBack} />
+    <div className="flex flex-col h-full kb-paper">
+      <SubScreenHeader
+        kicker="accessibility"
+        title={<>보기 편하게<br />바꿔드릴게요</>}
+        spot={<GlassesSpot />}
+        onBack={onBack}
+      />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
         {/*
           설명은 전부 맨 위에 모아 둔다.
@@ -1846,16 +1898,17 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
           어려우면 이 화면을 직원에게 보여 주세요.
         </p>
 
-        <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 8 }}>이 앱이 바로 바꿔요</h2>
-        <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
-          {바로바꾸는것.map((r) => (
-            <ToggleRow
-              key={r.key}
-              label={r.label}
-              sub={r.sub}
-              on={설정[r.key]}
-              onToggle={() => onChange({ [r.key]: !설정[r.key] })}
-            />
+        <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
+        <div style={{ borderTop: `1px solid ${BORDER}` }}>
+          {바로바꾸는것.map((r, i) => (
+            <div key={r.key} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
+              <ToggleRow
+                label={r.label}
+                sub={r.sub}
+                on={설정[r.key]}
+                onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+              />
+            </div>
           ))}
         </div>
 
@@ -1878,15 +1931,16 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
-        <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
-          {전해드릴것.map((r) => (
-            <ToggleRow
-              key={r.key}
-              label={r.label}
-              sub={r.sub}
-              on={설정[r.key]}
-              onToggle={() => onChange({ [r.key]: !설정[r.key] })}
-            />
+        <div style={{ borderTop: `1px solid ${BORDER}` }}>
+          {전해드릴것.map((r, i) => (
+            <div key={r.key} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
+              <ToggleRow
+                label={r.label}
+                sub={r.sub}
+                on={설정[r.key]}
+                onToggle={() => onChange({ [r.key]: !설정[r.key] })}
+              />
+            </div>
           ))}
         </div>
 
@@ -1953,7 +2007,7 @@ function PrivacyRows({ guest }: { guest: boolean }) {
 
 function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }) {
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <SubScreenHeader title="개인정보 안내" onBack={onBack} />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
         <PrivacyRows guest={guest} />
@@ -2556,7 +2610,7 @@ function OrderConfirmScreen({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-2" style={{ marginTop: 20, paddingBottom: 16 }}>
@@ -2864,7 +2918,7 @@ function ExecSuccess({ cart, steps, done, note, serverStatus, onHome }: {
             <Pictogram name="receipt" size={17} color={TEXT_2} />
             담긴 내역
           </p>
-          <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 11px", borderRadius: RADIUS.pill, backgroundColor: "white", color: TEXT_2 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 11px", borderRadius: RADIUS.pill, backgroundColor: PAPER, color: TEXT_2 }}>
             {cart.evidenceLabel}
           </span>
         </div>
@@ -3010,7 +3064,7 @@ function ExecutionScreen({ planId, onHome }: { planId: string; onHome: () => voi
   }, [status.state, pollError]);
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
         <AppLogo size={26} />
       </div>
@@ -3654,7 +3708,7 @@ export default function App() {
            * 흰색에 가까운 값이 전부 순백으로 뭉개져서 카드 경계가 사라졌다.
            */
           data-contrast={접근성값.highContrast ? "high" : undefined}
-          className="bg-white overflow-hidden flex flex-col"
+          className="kb-paper overflow-hidden flex flex-col"
           style={{
             zoom: largeText ? LARGE_TEXT_SCALE : 1,
             width: largeText ? FRAME_W / LARGE_TEXT_SCALE : "100%",
