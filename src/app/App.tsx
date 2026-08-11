@@ -1867,7 +1867,15 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
           profile 을 읽지 않는다. 지금은 정말로 전해 주기만 한다.)
         */}
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24 }}>키오스크에 전해 드려요</h2>
-        <p style={{ fontSize: 12, color: TEXT_3, marginBottom: 8, lineHeight: 1.6 }}>
+        {/*
+          TEXT_3 를 쓸 뻔했다. 제목보다 낮춰 보이려고 골랐는데 tokens.ts 에
+          "글자 금지" 라고 적어 둔 값이다 - 흰 배경에서 1.74:1 이라 읽으라고
+          둔 문장이 사실상 안 보인다. 하필 접근성 화면에서 그럴 뻔했다.
+
+          낮춰 보이는 것은 색이 아니라 자리와 크기로 만든다. 색은 본문용
+          TEXT_2(흰 배경 5.30:1)를 쓴다.
+        */}
+        <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
         <div style={{ borderRadius: RADIUS.card, backgroundColor: SURFACE, overflow: "hidden" }}>
