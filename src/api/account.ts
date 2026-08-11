@@ -25,8 +25,11 @@ import { 연동기록, 팀백엔드모드, 본문을남길까 } from "@/api/devl
  *    프론트에서 고칠 수 있는 문제가 아니라 docs/BACKEND_INTEGRATION.md 에 적어 두었다.
  *    그래서 화면 어디에도 "안전하게 보관됩니다" 같은 말을 쓰지 않는다.
  *
- * 2. **주문표 삭제 경로가 없다.** 화면에서 주문표를 지워도 서버에는 남는다.
- *    '이 기기에서 정보 지우기' 가 서버까지 닿지 못하므로 그 화면의 문구도 그렇게 적었다.
+ * 2. **주문표는 지울 수 있고, 주문 기록은 못 지운다.** (팀 #79)
+ *    DELETE /api/v1/users/{userId}/profiles/{profileId} 가 생겨서 '이 기기에서
+ *    정보 지우기' 가 서버의 주문표까지 닿는다. 다만 키오스크에 보낸 승인.거절
+ *    기록은 여전히 지우는 경로가 없다. 화면 문구도 둘을 나눠 적는다 -
+ *    뭉뚱그려 "다 지워져요" 라고 하면 그게 거짓말이 된다.
  *
  * 3. **place 가 @NotBlank 다.** 장소를 안 고른 주문표는 서버가 400 으로 막는다.
  *    올리기 전에 여기서 걸러내고, 왜 안 올라갔는지 화면이 말한다.
@@ -44,6 +47,14 @@ export interface AccountApi {
   listSheets(userId: number): Promise<OrderSheet[]>;
   /** (userId, profileId) 기준 upsert. 같은 id 로 다시 부르면 덮어쓴다. */
   saveSheet(userId: number, sheet: OrderSheet): Promise<void>;
+  /**
+   * 서버에 저장된 주문표 하나를 지운다.
+   *
+   * 없는 것을 지워도 성공으로 친다(서버가 204). '이 기기에서 정보 지우기' 는
+   * 화면에 있는 것을 전부 지우려 드는데, 그중 서버에 안 올라간 것도 섞여 있다.
+   * 거기서 오류가 나면 지우는 도중에 멈춘다.
+   */
+  deleteSheet(userId: number, profileId: string): Promise<void>;
 }
 
 // ─── 입력 규칙 — 백엔드 제약을 그대로 옮긴다 ──────────────────────────────────
@@ -289,6 +300,12 @@ export const mockAccount: AccountApi = {
     것들.set(sheet.id, 주문표복사(sheet));
     서버주문표.set(userId, 것들);
   },
+
+  async deleteSheet(userId, profileId) {
+    await delay(목지연);
+    // 없는 것을 지워도 오류로 두지 않는다. 서버가 204 라 목도 같게 둔다.
+    서버주문표.get(userId)?.delete(profileId);
+  },
 };
 
 /** 테스트가 목 저장소를 비운다. 앱은 부르지 않는다. */
@@ -325,7 +342,7 @@ const 문구 = (code: string, 서버문구: string | undefined, status: number):
  * 같은 출처로만 요청하고 CORS 가 발생하지 않는다. backend.ts 의 createTeamBackend 와 같다.
  */
 export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
-  const 부르기 = async <T>(방법: "GET" | "POST", path: string, body?: unknown): Promise<T> => {
+  const 부르기 = async <T>(방법: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> => {
     const 시작 = 팀백엔드모드 ? performance.now() : 0;
     /*
      * 가입.로그인 경로는 본문을 남기지 않는다 — 비밀번호가 화면 구석 패널과
@@ -444,6 +461,13 @@ export function createTeamAccount(baseUrl = "/api/bff"): AccountApi {
         selections: sheet.selections ?? {},
         memo: sheet.memo ?? "",
       });
+    },
+
+    async deleteSheet(userId, profileId) {
+      await 부르기<void>(
+        "DELETE",
+        `/api/v1/users/${encodeURIComponent(userId)}/profiles/${encodeURIComponent(profileId)}`,
+      );
     },
   };
 }
