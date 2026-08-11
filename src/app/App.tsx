@@ -4,8 +4,8 @@ import { ChevronLeft, Check } from "lucide-react";
 import { Pictogram } from "@/design/Pictogram";
 import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
-  P, ACCENT, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
-  SUCCESS, SUCCESS_BG, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
+  P, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
+  SUCCESS, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
   FONT, SERIF, TYPE, NUM, GAP, RADIUS, FOCUS_STYLES, PALETTE_STYLES, PAPER, RULE, KICKER, BTN_H, TOGGLE_OFF,
 } from "@/design/tokens";
 import type {
@@ -222,7 +222,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: 0, padding: `0 ${GAP.screenX}px`, marginTop: -12 }}>
-        <Pictogram name="handPointing" size={54} color={P} />
+        <Pictogram name="handPointing" size={54} color={TEXT_1} />
         <div style={{ marginTop: 18 }}>
           <AppLogo size={40} />
         </div>
@@ -664,9 +664,9 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
       role="status"
       aria-live="polite"
     >
-      <Pictogram name="handsClapping" size={72} color={P} />
+      <Pictogram name="handsClapping" size={72} color={TEXT_1} />
       <h1 style={{ ...TYPE.title, color: TEXT_1, marginTop: 32 }}>
-        반가워요, <span style={{ color: ACCENT }}>{name}</span>님!
+        반가워요, <span style={{ color: TEXT_1 }}>{name}</span>님!
       </h1>
       <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>
         자주 시키는 주문을 저장해 두면<br />키오스크 앞에서 바로 꺼내 쓸 수 있어요
@@ -890,7 +890,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
                   transition: "background-color 0.15s",
                 }}
               >
-                <span aria-hidden="true" style={{ color: place === label ? "white" : P, display: "flex" }}>{icon}</span>
+                <span aria-hidden="true" style={{ color: place === label ? PAPER : TEXT_1, display: "flex" }}>{icon}</span>
                 {label}
               </button>
             ))}
@@ -1074,7 +1074,7 @@ function OrderSheetCard({
                 width: 40, height: 40, borderRadius: 12,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 backgroundColor: selected ? "rgba(255,255,255,0.16)" : "white",
-                color: selected ? "white" : P, flexShrink: 0,
+                color: selected ? PAPER : TEXT_1, flexShrink: 0,
               }}
             >
               {sheet.place ? PLACE_ICONS[sheet.place] : <Pictogram name="squaresFour" size={19} />}
@@ -1092,7 +1092,7 @@ function OrderSheetCard({
               border: selected ? "none" : `1.5px solid ${TEXT_2}`,
             }}
           >
-            {selected && <Check size={13} strokeWidth={3} color={P} />}
+            {selected && <Check size={13} strokeWidth={3} color={RULE} />}
           </div>
         </div>
 
@@ -1251,7 +1251,7 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
   ];
   return (
     <nav aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: PAPER, paddingBottom: 12 }}>
-      {items.map(({ id, icon, label }) => {
+      {items.map(({ id, label }) => {
         const active = tab === id;
         return (
           <button
@@ -1259,12 +1259,23 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
             type="button"
             aria-current={active ? "page" : undefined}
             onClick={() => onChange(id)}
-            className="flex-1 flex flex-col items-center gap-1.5"
-            style={{ border: "none", backgroundColor: "transparent", cursor: "pointer", minHeight: 56, padding: "12px 0 4px" }}
+            className="flex-1 flex flex-col items-center"
+            style={{ border: "none", backgroundColor: "transparent", cursor: "pointer", minHeight: 56, padding: "14px 0 6px" }}
           >
-            {/* 안 눌린 탭도 읽을 수 있어야 한다. TEXT_3 는 1.74:1 이라 사실상 안 보였다. */}
-            <span aria-hidden="true" style={{ color: active ? P : TEXT_2, display: "flex" }}>{icon}</span>
-            <span style={{ fontSize: 12, fontWeight: active ? 600 : 400, letterSpacing: "-0.02em", color: active ? P : TEXT_2, fontFamily: FONT }}>
+            {/*
+              아이콘을 빼고 글자만 남겼다. 셋뿐인 탭이라 그림이 없어도 무엇인지
+              알 수 있고, 그림.글자.색 셋으로 알리던 것을 글자 하나로 줄이면
+              화면이 조용해진다. 대신 지금 탭에는 밑줄을 그어 색 말고도 표시가
+              남게 한다 - 색을 못 보는 경우에도 어디에 있는지 알아야 한다.
+
+              안 눌린 탭도 읽을 수 있어야 해서 TEXT_2 를 쓴다(TEXT_3 는 1.74:1).
+            */}
+            <span style={{
+              fontSize: 15, fontWeight: active ? 800 : 500, letterSpacing: "-0.02em",
+              color: active ? TEXT_1 : TEXT_2, fontFamily: FONT,
+              borderBottom: active ? `2px solid ${RULE}` : "2px solid transparent",
+              paddingBottom: 4,
+            }}>
               {label}
             </span>
           </button>
@@ -1290,7 +1301,7 @@ function SpinnerIcon() {
   return (
     <svg width="52" height="52" viewBox="0 0 64 64" fill="none" aria-hidden="true">
       <circle cx="32" cy="32" r="27" stroke={BORDER} strokeWidth="4" />
-      <path d="M32 5 A27 27 0 0 1 59 32" stroke={P} strokeWidth="4" strokeLinecap="round" style={SPIN(32, 32)} />
+      <path d="M32 5 A27 27 0 0 1 59 32" stroke={TEXT_1} strokeWidth="4" strokeLinecap="round" style={SPIN(32, 32)} />
     </svg>
   );
 }
@@ -1550,7 +1561,7 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
             <div className="absolute inset-0 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.10)" }}>
               <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: PAPER, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                  <path d="M7 17L13 23L25 11" stroke={P} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M7 17L13 23L25 11" stroke={TEXT_1} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
             </div>
@@ -1709,7 +1720,7 @@ function AccountScreen({
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 24px` }}>
         <AppLogo size={26} />
         <div className="flex items-center gap-4" style={{ marginTop: 28 }}>
-          <div style={{ width: 54, height: 54, borderRadius: "50%", backgroundColor: guest ? SURFACE : P, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 54, height: 54, borderRadius: "50%", backgroundColor: guest ? SURFACE : RULE, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {guest
               ? <Pictogram name="handPointing" size={24} color={TEXT_2} />
               : <span style={{ fontFamily: SERIF, fontSize: 24, color: "white" }}>{name ? name[0] : "?"}</span>}
@@ -2052,7 +2063,7 @@ function ConfirmCard({ children, badge, badgeTone = "success", photo }: {
   photo?: string | null;
 }) {
   const 배지색 = badgeTone === "success"
-    ? { bg: SUCCESS_BG, fg: SUCCESS, icon: "checkCircle" as const }
+    ? { bg: SURFACE, fg: TEXT_1, icon: "checkCircle" as const }
     : badgeTone === "caution"
       ? { bg: WARN_BG, fg: WARN, icon: "warning" as const }
       // neutral 의 바탕을 SURFACE 로 두면 카드 바탕과 같은 색이라 띠가 배경에 묻힌다.
@@ -2091,7 +2102,8 @@ function ConfirmCard({ children, badge, badgeTone = "success", photo }: {
  * 색만으로 알리지 않으므로 말머리 글자가 본체이고 그림은 거든다.
  */
 const 이유표시 = {
-  used:     { 말머리: "반영: ", 그림: "checkCircle" as const, 색: SUCCESS },
+  // 초록을 여기 두면 이유 목록이 초록으로 늘어선다. 초록은 담기 성공 체크에만 남긴다.
+  used:     { 말머리: "반영: ", 그림: "checkCircle" as const, 색: TEXT_1 },
   unmet:    { 말머리: "못 맞춤: ", 그림: "warning" as const, 색: WARN },
   excluded: { 말머리: "제외: ", 그림: "warning" as const, 색: WARN },
 };
@@ -2272,7 +2284,12 @@ function OptionCard({
     <>
       <span className="flex items-center gap-3" style={{ minWidth: 0, flex: 1 }}>
         {photo && <img src={photo} alt="" aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />}
-        <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, textAlign: "left" }}>{name}</span>
+        {/*
+          배지를 이름 옆에 두면 이름이 밀려 두 줄로 접힌다. 메뉴 이름은 이 줄에서
+          가장 먼저 읽어야 하는 값이라 한 줄로 세우고, 배지는 아래로 내린다.
+        */}
+        <span style={{ minWidth: 0, textAlign: "left" }}>
+        <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, display: "block" }}>{name}</span>
         {/*
           위트 액센트 하나. 뜻은 옆의 '조건 일치' 라는 글자가 지고 있고 이 그림은
           거들기만 한다 - 이모지는 기기마다 모양이 다르고 스크린리더가 이름을
@@ -2281,11 +2298,12 @@ function OptionCard({
         {matched && (
           <span
             className="flex items-center"
-            style={{ gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 12, fontWeight: 700, color: selected ? PAPER : P }}
+            style={{ gap: 4, marginTop: 3, whiteSpace: "nowrap", fontSize: 12, fontWeight: 700, color: selected ? PAPER : P }}
           >
             <span aria-hidden="true">🌿</span>조건 일치
           </span>
         )}
+        </span>
       </span>
       <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
         <span style={{ fontFamily: SERIF, fontSize: 21, whiteSpace: "nowrap", color: selected ? PAPER : TEXT_1, ...NUM }}>{price}</span>
@@ -2324,7 +2342,7 @@ function OptionCard({
       ...겉모양, position: "relative", margin: 0,
       // 포커스는 숨은 input 이 받지만 표시는 이 라벨이 한다.
       // 화살표 키를 살리려다 포커스 표시를 잃으면 안 된다.
-      outline: 포커스 ? `3px solid ${P}` : "none",
+      outline: 포커스 ? `3px solid ${RULE}` : "none",
       outlineOffset: 2,
     }}>
       {/* 눈에는 안 보이지만 지우지 않는다. 화살표 이동과 그룹 의미는 이 요소가 만든다. */}
@@ -2646,7 +2664,7 @@ function OrderConfirmScreen({
       <div className="shrink-0" style={{ padding: `12px ${GAP.screenX}px 0` }}>
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-2" style={{ marginTop: 20, paddingBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "white", backgroundColor: P, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 주문표</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: PAPER, backgroundColor: RULE, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 주문표</span>
           <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
         </div>
         <div style={{ height: 1, backgroundColor: BORDER, marginLeft: -GAP.screenX, marginRight: -GAP.screenX }} />
@@ -2798,7 +2816,7 @@ function StepRow({ label, status }: { label: string; status: StepStatus }) {
         {isActive && (
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="10" cy="10" r="7" stroke={BORDER} strokeWidth="2.5" />
-            <path d="M10 3 A7 7 0 0 1 17 10" stroke={P} strokeWidth="2.5" strokeLinecap="round" style={SPIN(10, 10)} />
+            <path d="M10 3 A7 7 0 0 1 17 10" stroke={TEXT_1} strokeWidth="2.5" strokeLinecap="round" style={SPIN(10, 10)} />
           </svg>
         )}
         {isFailed && (
@@ -2816,7 +2834,7 @@ function StepRow({ label, status }: { label: string; status: StepStatus }) {
       </span>
 
       {isActive && (
-        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: RADIUS.pill, backgroundColor: P, color: "white" }}>
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: RADIUS.pill, backgroundColor: RULE, color: PAPER }}>
           진행 중
         </span>
       )}

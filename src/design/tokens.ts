@@ -163,11 +163,11 @@ export const FOCUS_STYLES = `
   [role="radio"]:focus-visible,
   [role="checkbox"]:focus-visible,
   [tabindex]:focus-visible {
-    outline: 3px solid ${P};
+    outline: 3px solid ${RULE};
     outline-offset: 2px;
     border-radius: 8px;
   }
-  ::selection { background: ${P}; color: #fff; }
+  ::selection { background: ${TEXT_1}; color: #fff; }
   /* 확인 카드의 마지막 행에는 구분선을 남기지 않는다.
      행의 구분선은 인라인 스타일로 들어가므로 !important 가 없으면 덮이지 않는다. */
   [data-confirm-body] > div:last-child { border-bottom: none !important; }
