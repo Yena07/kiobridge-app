@@ -59,7 +59,7 @@ function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
       {Array.from({ length: total }).map((_, i) => (
         <div
           key={i}
-          style={{ width: i < step ? 16 : 5, height: 5, borderRadius: 100, backgroundColor: i < step ? P : BORDER, transition: "all 0.4s" }}
+          style={{ width: i < step ? 16 : 5, height: 5, borderRadius: 100, backgroundColor: i < step ? RULE : BORDER, transition: "all 0.4s" }}
         />
       ))}
     </div>
@@ -85,11 +85,16 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-// 온보딩 화면의 가운데 정렬 헤드라인. 레퍼런스처럼 문장을 화면 중앙에 세운다.
-function CenterHeadline({ title, desc }: { title: React.ReactNode; desc?: React.ReactNode }) {
+// 화면 가운데에 세우는 헤드라인. 왼쪽 정렬 머리(SubScreenHeader)와 달리
+// 문장 하나가 화면의 주인공인 자리에 쓴다.
+function CenterHeadline({ title, desc, kicker, spot }: {
+  title: React.ReactNode; desc?: React.ReactNode; kicker?: string; spot?: React.ReactNode;
+}) {
   return (
     <div style={{ textAlign: "center" }}>
-      <h1 style={{ ...TYPE.title, color: TEXT_1 }}>{title}</h1>
+      {spot && <div aria-hidden="true" className="flex justify-center" style={{ marginBottom: 8 }}>{spot}</div>}
+      {kicker && <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, display: "block", marginBottom: 2 }}>{kicker}</span>}
+      <h1 style={{ ...TYPE.display, color: TEXT_1 }}>{title}</h1>
       {desc && <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>{desc}</p>}
     </div>
   );
@@ -766,7 +771,7 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
       <div aria-hidden="true" style={{
         width: 22, height: 22, borderRadius: 6, flexShrink: 0,
         border: checked ? "none" : `1.5px solid ${TEXT_2}`,
-        backgroundColor: checked ? P : "transparent",
+        backgroundColor: checked ? RULE : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
       }}>
         {checked && <Check size={12} strokeWidth={3} color="white" />}
@@ -885,7 +890,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
                   padding: "14px 16px", borderRadius: RADIUS.input, cursor: "pointer",
                   fontSize: 16, fontWeight: 500, fontFamily: FONT, letterSpacing: "-0.01em",
                   border: "none",
-                  backgroundColor: place === label ? P : CANVAS,
+                  backgroundColor: place === label ? RULE : CANVAS,
                   color: place === label ? "white" : TEXT_CHIP,
                   transition: "background-color 0.15s",
                 }}
@@ -1045,7 +1050,8 @@ function OrderSheetCard({
         position: "relative",
         borderRadius: RADIUS.card, marginBottom: 10,
         border: "none",
-        backgroundColor: selected ? P : SURFACE,
+        // 고른 주문표는 검은 면. 초록은 담기 성공 체크에만 남긴다.
+        backgroundColor: selected ? RULE : SURFACE,
         transition: "background-color 0.15s",
         outline: focused ? `3px solid ${TEXT_1}` : "none",
         outlineOffset: 2,
@@ -1184,8 +1190,12 @@ function SavedSheetsScreen({
     <div className="flex flex-col h-full kb-paper">
       <div className="shrink-0" style={{ padding: `20px ${GAP.screenX}px 20px` }}>
         <AppLogo size={26} />
-        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 22 }}>저장된 주문표</h1>
-        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 6 }}>사용할 주문표를 선택하세요</p>
+        <span aria-hidden="true" style={{ ...KICKER, color: TEXT_3, marginTop: 20, display: "block" }}>saved orders</span>
+        <div className="flex items-end justify-between" style={{ gap: 12 }}>
+          <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 2, flex: 1 }}>어떤 주문표로<br />주문할까요?</h1>
+          <span aria-hidden="true" style={{ flexShrink: 0, marginBottom: 4 }}><ReceiptSpot /></span>
+        </div>
+        <Rule style={{ marginTop: 18 }} />
       </div>
 
       <div className="flex-1 overflow-y-auto pb-2" style={{ minHeight: 0, paddingLeft: GAP.screenX, paddingRight: GAP.screenX }}>
@@ -1347,6 +1357,43 @@ function GlassesSpot({ size = 76 }: { size?: number }) {
   );
 }
 
+/** 주문표 화면 — 영수증. */
+function ReceiptSpot({ size = 64 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
+      <g stroke={TEXT_1} strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M24 12h52v76l-10-7-9 7-9-7-9 7-9-7-6 4z" />
+        <path d="M38 36h24M38 52h24M38 66h14" />
+      </g>
+    </svg>
+  );
+}
+
+/** 개인정보 화면 — 자물쇠. */
+function LockSpot({ size = 64 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
+      <g stroke={TEXT_1} strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="22" y="44" width="56" height="44" rx="8" />
+        <path d="M34 44V32a16 16 0 0 1 32 0v12" />
+        <path d="M50 60v12" />
+      </g>
+    </svg>
+  );
+}
+
+/** 이유 화면 — 돋보기. */
+function LoupeSpot({ size = 64 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
+      <g stroke={TEXT_1} strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="44" cy="42" r="26" />
+        <path d="M63 61l22 24" />
+      </g>
+    </svg>
+  );
+}
+
 /** 섹션 머리의 굵은 줄. 이 디자인에서 화면을 자르는 유일한 선이다. */
 function Rule({ style }: { style?: React.CSSProperties }) {
   return <div aria-hidden="true" style={{ height: 2, backgroundColor: RULE, ...style }} />;
@@ -1391,17 +1438,19 @@ function PairingConnected({
     <div className="flex flex-col flex-1" style={{ padding: `32px ${GAP.screenX}px 24px` }}>
       <StatusHero
         mark={<Pictogram name="checkCircle" size={64} color={P} />}
+        kicker="connected"
         title="연결되었습니다"
         desc={<span style={{ fontWeight: 600, color: TEXT_1 }}>{kioskName}</span>}
       />
 
-      <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
-        <div className="flex items-center justify-between gap-4">
+      {/* 면 대신 줄로 가른다. 굵은 줄이 머리와 내용을 나누고, 아래 헤어라인이 끝을 맺는다. */}
+      <div style={{ marginTop: 32, borderTop: `2px solid ${RULE}`, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex items-center justify-between gap-4" style={{ padding: "18px 0" }}>
           <div>
             <p style={{ ...TYPE.label, color: TEXT_1, marginBottom: 5 }}>세션 유효시간</p>
             <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.5 }}>만료되면 QR을 다시 스캔해 주세요</p>
           </div>
-          <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 1, color: TEXT_1, ...NUM }}>{mm}:{ss}</span>
+          <span style={{ fontFamily: SERIF, fontSize: 44, lineHeight: 1, color: TEXT_1, ...NUM }}>{mm}:{ss}</span>
         </div>
       </div>
 
@@ -2019,7 +2068,12 @@ function PrivacyRows({ guest }: { guest: boolean }) {
 function PrivacyScreen({ guest, onBack }: { guest: boolean; onBack: () => void }) {
   return (
     <div className="flex flex-col h-full kb-paper">
-      <SubScreenHeader title="개인정보 안내" onBack={onBack} />
+      <SubScreenHeader
+        kicker="privacy"
+        title={<>무엇을 남기고<br />무엇을 안 남기나요</>}
+        spot={<LockSpot />}
+        onBack={onBack}
+      />
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0, padding: `12px ${GAP.screenX}px 24px` }}>
         <PrivacyRows guest={guest} />
       </div>
@@ -2163,6 +2217,8 @@ function ReasonStep({ reasons, onNext, 확인중 }: {
   return (
     <div className="flex flex-col gap-5">
       <CenterHeadline
+        spot={<LoupeSpot size={58} />}
+        kicker="why this"
         title={<>이렇게 찾았어요</>}
         desc="저장해 두신 조건으로 오늘 메뉴에서 찾은 결과예요."
       />
@@ -2806,11 +2862,12 @@ function StepRow({ label, status }: { label: string; status: StepStatus }) {
       <div style={{
         width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
-        backgroundColor: isDone ? P : isActive ? "white" : isFailed ? FAIL_BG : "white",
+        // 끝난 단계는 검은 동그라미. 다섯 개가 초록으로 늘어서면 화면이 초록 목록이 된다.
+        backgroundColor: isDone ? RULE : isActive ? PAPER : isFailed ? FAIL_BG : PAPER,
       }}>
         {isDone && (
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M4 9.5L7.5 13L14 6" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 9.5L7.5 13L14 6" stroke={PAPER} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
         {isActive && (
@@ -2913,7 +2970,7 @@ function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
                 못하다. 낮춰 보이는 것은 색이 아니라 크기로 만든다.
               */}
               <span style={{ ...TYPE.caption, color: TEXT_2, ...NUM, minWidth: 18 }}>{i + 1}</span>
-              <Pictogram name={d.ok ? "checkCircle" : "xCircle"} size={16} color={d.ok ? P : FAIL} style={{ marginTop: 2 }} />
+              <Pictogram name={d.ok ? "checkCircle" : "xCircle"} size={16} color={d.ok ? TEXT_1 : FAIL} style={{ marginTop: 2 }} />
               {/*
                 Pictogram 은 aria-hidden 이라 이 줄이 됐는지 안 됐는지가 색과
                 모양으로만 남아 있었다. 스크린리더에는 "종이컵 골랐어요" 만
@@ -2959,6 +3016,7 @@ function ExecSuccess({ cart, steps, done, note, serverStatus, onHome }: {
     <div className="flex flex-col gap-6">
       <StatusHero
         mark={<Pictogram name="checkCircle" size={64} color={P} />}
+        kicker="in the cart"
         title="장바구니에 담았어요"
       />
 
@@ -2972,7 +3030,7 @@ function ExecSuccess({ cart, steps, done, note, serverStatus, onHome }: {
             {cart.evidenceLabel}
           </span>
         </div>
-        <span style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, color: TEXT_1, ...NUM }}>
+        <span style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 1.15, color: TEXT_1, ...NUM }}>
           {cart.itemCountText} · {cart.totalText}
         </span>
       </div>
