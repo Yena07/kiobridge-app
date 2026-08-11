@@ -495,9 +495,25 @@ export function createApi(
     async getPlanStatus(planId): Promise<PlanStatus> {
       const sessionId = planId.split("::")[0];
       const e = await backend.getEvidence(sessionId);
+      /*
+       * reachedStep 은 '실행한 동작 수' 이고 STEPS 는 다섯 칸이다. 단위가 다르다.
+       *
+       * 백엔드가 만드는 동작은 9~10개다(select_service · select_menu ·
+       * select_option x4 · confirm_option x2 · open_cart_review · verify_cart).
+       * 그래서 중단됐을 때 reachedStep 이 거의 항상 5 이상이 되고, 다섯 칸이
+       * 전부 i < reachedStep 에 걸려 **모두 '완료'** 로 칠해졌다.
+       *
+       * 화면 위쪽은 "안전을 위해 멈췄어요" 인데 아래 단계는 다 끝난 것처럼
+       * 보인다. 같은 화면이 정반대 말을 한다.
+       *
+       * 마지막 칸을 넘지 않게 자른다. 실패 칸이 적어도 제자리 근처에는 찍힌다.
+       * 정확한 자리는 서버가 준 실행 내역(한일)이 아래에서 그대로 보여 준다 -
+       * 개수가 맞는 것은 그쪽이라 그 자리에 맡긴다.
+       */
+      const 멈춘칸 = Math.min(e.reachedStep, STEPS.length - 1);
       const steps: StepStatus[] =
         e.state === "aborted"
-          ? STEPS.map((_, i) => (i < e.reachedStep ? "done" : i === e.reachedStep ? "failed" : "waiting"))
+          ? STEPS.map((_, i) => (i < 멈춘칸 ? "done" : i === 멈춘칸 ? "failed" : "waiting"))
           : e.state === "cart_ready"
             ? STEPS.map(() => "done")
             : STEPS.map((_, i) => (i < e.reachedStep ? "done" : i === e.reachedStep ? "active" : "waiting"));
@@ -896,6 +912,9 @@ const 앱말투: Record<string, string> = {
   "실행할 수 없습니다.": "담을 수 없어요",
   "안전하게 중단되었습니다.": "안전을 위해 멈췄어요",
   "처리 중 문제가 발생했습니다.": "끝까지 담지 못했어요",
+  // OrchestratorController 가 증거를 못 읽었을 때 내는 문장. 표에 없으면
+  // 조용히 안 보여 주게 되는데, 그 경우야말로 서버 말을 인용할 자리다.
+  "결과를 처리하는 중 문제가 발생했습니다.": "끝까지 담지 못했어요",
 };
 
 /*
@@ -1140,18 +1159,32 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       contractValidation?: { valid: boolean; errors?: { message?: string }[] };
     }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p) });
 
+    /*
+     * 재확인을 먼저 가른다. 순서가 뒤집혀 있어서 이 분기가 죽어 있었다.
+     *
+     * 백엔드는 reconfirmationFields 가 비지 않을 때만 RECONFIRMATION_REQUIRED 를
+     * 낸다. 그 필드는 contractValidation.errors 에서 HARD_CONSTRAINT_UNKNOWN 등을
+     * 골라 만든 것이고, 킷은 그것을 **warning 이 아니라 error** 로 넣는다.
+     *
+     * 그래서 RECONFIRMATION_REQUIRED 이면 contractValidation.valid 는 반드시
+     * false 다. 아래 INVALID 검사가 위에 있으면 항상 그쪽이 먼저 던진다.
+     *
+     * 무엇을 잃었나 - 알레르기가 UNKNOWN 인 분에게 recoverable: true 로
+     * 돌아갈 길을 주려던 것이 recoverable: false 가 됐고, 문구도 킷 원문이
+     * 그대로 나갔다("allergenIds 가 UNKNOWN 입니다. 임의로 추론하지 말고...").
+     * 앱이 모르는 알레르기를 가진 분을 위해 만든 문인데 정작 그 상황에서
+     * 한 줄도 닿지 않았다.
+     */
+    if (sr.status === "RECONFIRMATION_REQUIRED") {
+      const 첫줄 = sr.reconfirmationFields?.[0]?.message;
+      throw new KioBridgeError("RECONFIRM_REQUIRED", 첫줄 ?? "저장하신 조건을 다시 확인해 주세요", true);
+    }
     // 서버가 못 쓰겠다고 하면 거기서 멈춘다. 조용히 넘기면 승인 직전에 터진다.
     for (const r of [pr, sr]) {
       if (r.status === "INVALID" || r.contractValidation?.valid === false) {
         const 첫줄 = r.contractValidation?.errors?.[0]?.message;
         throw new KioBridgeError("PROFILE_INVALID", 첫줄 ?? "저장하신 조건을 서버가 읽지 못했어요", false);
       }
-    }
-    // 재확인이 필요하다는 건 우리가 확신도를 낮게 적었을 때만 나온다.
-    // 이 앱은 사용자가 직접 눌러 고르므로 여기 걸리면 보내는 쪽이 잘못된 것이다.
-    if (sr.status === "RECONFIRMATION_REQUIRED") {
-      const 첫줄 = sr.reconfirmationFields?.[0]?.message;
-      throw new KioBridgeError("RECONFIRM_REQUIRED", 첫줄 ?? "저장하신 조건을 다시 확인해 주세요", true);
     }
 
     // 마지막 관문. 주문표와 세션 맥락을 합쳐 놓고 다시 본다.
@@ -1380,7 +1413,10 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         // 사용자가 다른 후보를 골랐으면 그것이 1순위다. 서버가 조립할 때 그 값을 쓴다.
         //
         // 1순위만 덮으면 그 후보가 대안에도 남아 두 필드가 겹친다.
-        // 백엔드 RecommendationValidator 가 ALTERNATIVE_DUPLICATES_RECOMMENDED 로 막는다.
+        // 1순위와 대안에 같은 후보가 겹치면 서버가 무엇을 담을지 알 수 없다.
+        // (백엔드 RecommendationValidator 에 그 규칙이 있지만 그건
+        //  /api/v1/recommendation-output-validations 에서만 돌고 승인 경로에는
+        //  안 걸린다. 그러니 여기서 겹치지 않게 보내는 것이 유일한 방어다.)
         // 고른 것을 대안에서 빼고, 원래 1순위를 대안으로 옮긴다.
         recommendation: 고른것반영(rec, input.candidateId),
         // note 는 선택 필드다. null 을 보내면 킷 스키마가 'must be string' 으로 막는다.

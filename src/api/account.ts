@@ -162,6 +162,17 @@ export const 못올리는이유 = (p: OrderSheet): string | null => {
   if (p.menuName.length > MENU_NAME_MAX) return `메뉴 이름은 ${MENU_NAME_MAX}자까지 저장돼요`;
   if ((p.memo ?? "").length > MEMO_MAX) return `메모는 ${MEMO_MAX}자까지 저장돼요`;
   if (p.id.length > PROFILE_ID_MAX) return "주문표를 저장할 수 없어요";
+  /*
+   * 값이 빈 축이 섞이면 서버가 400 으로 막는다(팀 #79 의 @NotEmpty).
+   *
+   * 화면(toggleChip)에서 애초에 빈 축을 안 만들도록 고쳤지만 여기에도 둔다.
+   * 이 함수는 서버 제약을 그대로 옮겨 둔 자리이고, 서버가 막는 것을 여기서
+   * 먼저 말해 주는 것이 이 파일의 방침이다. 화면 쪽 한 곳만 믿으면 다른 경로로
+   * 만들어진 주문표에서 같은 400 이 되살아난다.
+   */
+  if (Object.values(p.selections ?? {}).some((v) => v.length === 0)) {
+    return "고르신 항목 중 비어 있는 것이 있어요. 다시 골라 주세요";
+  }
   return null;
 };
 
