@@ -32,7 +32,7 @@ const LARGE_TEXT_SCALE = 1.18;
 
 // 워드마크는 세리프로. 정체(kio)와 이탤릭(bridge)을 섞어 에디토리얼 인상을 만든다.
 function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number }) {
-  const color = light ? "white" : TEXT_1;
+  const color = light ? PAPER : TEXT_1;
   return (
     <div
       aria-label="키오브릿지"
@@ -124,7 +124,7 @@ function PrimaryBtn({
         // 아직 못 누르는 버튼의 글자가 "다 채우면 무슨 일이 일어나는지"를 알려 주는 유일한 문장이라
         // 1.62:1(#C4C4C8)로 지워 놓으면 무엇을 기다리는지 알 수 없다.
         // 초록 알약이 회색 알약으로 바뀌는 것만으로 못 누른다는 신호는 충분하다.
-        color: disabled ? TEXT_2 : "white",
+        color: disabled ? TEXT_2 : PAPER,
         border: "none", cursor: disabled ? "not-allowed" : "pointer",
         transition: "background-color 0.15s",
         ...extraStyle,
@@ -724,7 +724,7 @@ function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel }: {
           <button
             type="button"
             onClick={onConfirm}
-            style={{ width: "100%", minHeight: 52, borderRadius: RADIUS.button, backgroundColor: FAIL, color: "white", border: "none", cursor: "pointer", ...TYPE.bodyBold, fontFamily: FONT }}
+            style={{ width: "100%", minHeight: 52, borderRadius: RADIUS.button, backgroundColor: FAIL, color: PAPER, border: "none", cursor: "pointer", ...TYPE.bodyBold, fontFamily: FONT }}
           >
             {confirmLabel}
           </button>
@@ -774,7 +774,7 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
         backgroundColor: checked ? RULE : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
       }}>
-        {checked && <Check size={12} strokeWidth={3} color="white" />}
+        {checked && <Check size={12} strokeWidth={3} color={PAPER} />}
       </div>
       <span style={{ ...TYPE.caption, fontWeight: 600, color: TEXT_1 }}>{label}</span>
     </button>
@@ -891,7 +891,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
                   fontSize: 16, fontWeight: 500, fontFamily: FONT, letterSpacing: "-0.01em",
                   border: "none",
                   backgroundColor: place === label ? RULE : CANVAS,
-                  color: place === label ? "white" : TEXT_CHIP,
+                  color: place === label ? PAPER : TEXT_CHIP,
                   transition: "background-color 0.15s",
                 }}
               >
@@ -1079,13 +1079,13 @@ function OrderSheetCard({
               style={{
                 width: 40, height: 40, borderRadius: 12,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                backgroundColor: selected ? "rgba(255,255,255,0.16)" : "white",
+                backgroundColor: selected ? "rgba(127,127,127,0.22)" : PAPER,
                 color: selected ? PAPER : TEXT_1, flexShrink: 0,
               }}
             >
               {sheet.place ? PLACE_ICONS[sheet.place] : <Pictogram name="squaresFour" size={19} />}
             </div>
-            <span style={{ ...TYPE.bodyBold, color: selected ? "white" : TEXT_1 }}>{sheet.menuName}</span>
+            <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1 }}>{sheet.menuName}</span>
           </div>
           <div
             aria-hidden="true"
@@ -1113,8 +1113,8 @@ function OrderSheetCard({
           {visibleTags.map((tag, i) => (
             <span key={i} style={{
               fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
-              backgroundColor: selected ? "rgba(0,0,0,0.18)" : "white",
-              color: selected ? "white" : TEXT_2,
+              backgroundColor: selected ? "rgba(127,127,127,0.22)" : PAPER,
+              color: selected ? PAPER : TEXT_2,
             }}>
               {tag}
             </span>
@@ -1122,8 +1122,8 @@ function OrderSheetCard({
           {overflow > 0 && (
             <span style={{
               fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
-              backgroundColor: selected ? "rgba(0,0,0,0.18)" : "white",
-              color: selected ? "white" : TEXT_2,
+              backgroundColor: selected ? "rgba(127,127,127,0.22)" : PAPER,
+              color: selected ? PAPER : TEXT_2,
             }}>
               +{overflow}
             </span>
@@ -1132,7 +1132,7 @@ function OrderSheetCard({
 
         {/* 반투명 흰색(70%)은 초록 위에서 3.31:1 이라 읽히지 않는다. 흰색은 5.08:1 이다. */}
         {sheet.memo && (
-          <p style={{ fontSize: 14, color: selected ? "white" : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{sheet.memo}</p>
+          <p style={{ fontSize: 14, color: selected ? PAPER : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{sheet.memo}</p>
         )}
       </label>
 
@@ -1149,7 +1149,7 @@ function OrderSheetCard({
             fontSize: 13, fontWeight: 500, minHeight: 44, minWidth: 44, padding: "6px 10px",
             background: "none", border: "none", cursor: "pointer",
             // 70% 흰색은 초록 위에서 3.31:1 이었다. 지우는 버튼은 흐릿하면 안 된다.
-            color: selected ? "white" : TEXT_2,
+            color: selected ? PAPER : TEXT_2,
             textDecoration: "underline", textUnderlineOffset: 3,
           }}
         >
@@ -1772,7 +1772,7 @@ function AccountScreen({
           <div style={{ width: 54, height: 54, borderRadius: "50%", backgroundColor: guest ? SURFACE : RULE, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {guest
               ? <Pictogram name="handPointing" size={24} color={TEXT_2} />
-              : <span style={{ fontFamily: SERIF, fontSize: 24, color: "white" }}>{name ? name[0] : "?"}</span>}
+              : <span style={{ fontFamily: SERIF, fontSize: 24, color: PAPER }}>{name ? name[0] : "?"}</span>}
           </div>
           <div>
             <p style={{ ...TYPE.title, color: TEXT_1 }}>{guest ? "게스트로 이용 중" : `${name || "사용자"}님`}</p>
@@ -2570,7 +2570,7 @@ function OrderChanged({
            * 표시를 받는 칸이라 흐리면 안 된다. WARN 으로 그리면 5.5:1 이다.
            */}
           <div aria-hidden="true" style={{ width: 22, height: 22, borderRadius: 6, border: checked ? "none" : `1.5px solid ${WARN}`, backgroundColor: checked ? WARN : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
-            {checked && <Check size={12} strokeWidth={3} color="white" />}
+            {checked && <Check size={12} strokeWidth={3} color={PAPER} />}
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, color: WARN }}>달라진 내용을 확인했어요</span>
         </button>
@@ -2896,7 +2896,7 @@ function StepRow({ label, status }: { label: string; status: StepStatus }) {
         </span>
       )}
       {isFailed && (
-        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: RADIUS.pill, backgroundColor: FAIL, color: "white" }}>
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: RADIUS.pill, backgroundColor: FAIL, color: PAPER }}>
           중단
         </span>
       )}
@@ -3826,7 +3826,7 @@ export default function App() {
             // 여기가 컨테이닝 블록이어야 한다. overflow-hidden 만으로는
             // 자기가 기준이 아니면 클리핑도 못 해서 화면 전체를 덮어 버린다.
             position: "relative",
-            borderRadius: 44, boxShadow: "0 24px 80px rgba(0,0,0,0.45)",
+            borderRadius: 54, boxShadow: "0 24px 80px rgba(0,0,0,0.16)",
           }}
         >
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>

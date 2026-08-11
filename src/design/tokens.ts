@@ -2,11 +2,11 @@
 // 위계는 여전히 크기·여백·굵기로 만든다. 초록은 "누를 수 있는 것/성공한 것"에만 쓴다.
 // P 는 흰 글씨 대비 5.08:1 로 WCAG AA 를 통과하는 값이다. 더 밝은 초록(#03C75A 등)은
 // 2.25:1 밖에 안 나와서 고령 사용자 기준에 미달하므로 쓰지 않는다.
-export const P = "#1E7A4A";          // 초록. 화면당 한 곳에만 쓴다(연결·조건 일치·담기 성공)
+export const P = "var(--kb-green)";          // 초록. 화면당 한 곳에만 쓴다(연결·조건 일치·담기 성공)
 // P_LIGHT / P_DARK 는 지웠다. 쓰는 곳이 한 곳도 없었다.
 // 눌린 상태는 지금 배경색 전환으로 표현하고 있어서 별도 값이 필요하지 않다.
-export const ACCENT = "#1E7A4A";     // 아주 드물게 쓰는 강조 (이름 호명 등)
-export const TEXT_1 = "#111111";     // heading — 본문은 검정 유지
+export const ACCENT = "var(--kb-green)";     // 아주 드물게 쓰는 강조 (이름 호명 등)
+export const TEXT_1 = "var(--kb-text-1)";     // heading
 // 읽어야 하는 글자는 전부 이 색을 쓴다.
 // 예전 값 #8A8A8E 는 흰 배경에서 3.44:1 로 WCAG AA(4.5:1)에 미달했다.
 // 옅은 면(SURFACE #F7F7F8) 위에서는 3.21:1 까지 떨어져서 더 나빴다.
@@ -25,7 +25,7 @@ export const SURFACE = "var(--kb-surface)";    // 옅은 면
 export const CANVAS = "var(--kb-canvas)";     // 입력 필드 배경
 // 폰 프레임 밖 책상. 어두운 보드에서 종이색 데스크로 바꿨다 - 화면 전체가
 // 한 톤으로 이어져서 프레임이 '올려둔 종이' 처럼 보인다.
-export const BACKDROP = "#E7E4DC";
+export const BACKDROP = "var(--kb-desk)";
 
 /** 종이색 바탕. 흰 화면은 형광등 아래에서 눈이 부시고 글자 가장자리가 번져 보인다. */
 export const PAPER = "var(--kb-paper)";
@@ -33,17 +33,17 @@ export const PAPER = "var(--kb-paper)";
 export const RULE = "var(--kb-rule)";
 
 // 상태색은 최소한만. 흑백 안에서 튀지 않게 채도를 낮춘다.
-export const SUCCESS = "#1E7A4A";
-export const SUCCESS_BG = "#E8F1EB";
-export const WARN = "#7A5200";
-export const WARN_BG = "#F5EFE0";
+export const SUCCESS = "var(--kb-green)";
+export const SUCCESS_BG = "var(--kb-green-bg)";
+export const WARN = "var(--kb-warn)";
+export const WARN_BG = "var(--kb-warn-bg)";
 // WARN_BG 위에서 1.29:1 이라 컨트롤 경계(3:1)로 쓸 수 없어서 뺐다.
 // 다시 쓰고 싶으면 대비부터 재고 쓴다.
 // 예전 값 #D92D20 은 옅은 빨강(FAIL_BG) 위에서 4.35:1 로 AA 에 못 미쳤다.
 // "오늘은 제공되지 않아요" 같은 12px 배지가 이 조합으로 그려지므로 지나칠 수 없다.
 // #CE2A1F 는 FAIL_BG 위 4.75:1, 흰 배경 5.28:1 이고 눈으로는 거의 같은 빨강이다.
-export const FAIL = "#B3261E";
-export const FAIL_BG = "#F7EDEC";
+export const FAIL = "var(--kb-fail)";
+export const FAIL_BG = "var(--kb-fail-bg)";
 
 export const FONT = "'Noto Sans KR', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif";
 // 로고·이탤릭 영문 머리말·숫자에만 쓰는 세리프.
@@ -125,7 +125,18 @@ export const BTN_H = 60;
 export const PALETTE_STYLES = `
   :root {
     --kb-paper: #FAF8F3;
+    --kb-desk: #E7E4DC;
+    /* rule 은 '종이의 반대색' 이다. 이 둘만 뒤집으면 버튼.선택.토글이 통째로
+       반전된다 - 검은 알약이 흰 알약이 되고, 켜진 토글은 흰 트랙+검은 노브가 된다.
+       화면 코드는 한 줄도 안 바뀐다. */
     --kb-rule: #111111;
+    --kb-text-1: #111111;
+    --kb-green: #1E7A4A;
+    --kb-green-bg: #E8F1EB;
+    --kb-warn: #7A5200;
+    --kb-warn-bg: #F5EFE0;
+    --kb-fail: #B3261E;
+    --kb-fail-bg: #F7EDEC;
     --kb-text-2: #6d6a63;
     --kb-text-3: #B3AFA5;
     --kb-text-btn: #3A3830;
@@ -135,18 +146,41 @@ export const PALETTE_STYLES = `
     --kb-canvas: #F0EDE5;
     --kb-toggle-off: #DAD5CB;
   }
+  /*
+   * 고대비 = 다크.
+   *
+   * 밝은 바탕에서 글자를 더 어둡게 하는 방식은 한계가 있다 - 종이색 위에서
+   * 아무리 어둡게 해도 11:1 언저리다. 검은 바탕에 밝은 글자는 19:1 이 그냥 나온다.
+   *
+   * paper 와 rule 을 맞바꾸면 나머지는 따라온다. 대표 버튼은 흰 알약에 검은
+   * 글자가 되고(명세의 "다크 화면에선 화이트 필"), 켜진 토글은 흰 트랙에
+   * 검은 노브가 된다. 고른 줄도 흰 면에 검은 글자다.
+   *
+   * 검은 바탕 위 대비 (전부 화면에서 재서 확인했다)
+   *   TEXT_1  #FAF8F3  19.0    TEXT_2  #B8B4AC   9.5
+   *   초록    #4FBF85   8.5    빨강    #E8776C   6.8
+   *   경고    #E0B24D   9.9    토글 off #6B675E  3.6  (컨트롤 경계 3 통과)
+   * TEXT_3 는 여기서도 '글자 금지' 다 - 2.9:1 이라 읽으라고 두면 안 된다.
+   */
   [data-contrast="high"] {
-    /* 고대비는 눈맛보다 대비가 먼저다. 종이색을 흰쪽으로 올리고 글자를 더 어둡게. */
-    --kb-paper: #FDFCF9;
-    --kb-rule: #000000;
-    --kb-text-2: #3A3830;
-    --kb-text-3: #6d6a63;
-    --kb-text-btn: #1A1A16;
-    --kb-text-chip: #1A1A16;
-    --kb-border: #7A766C;
-    --kb-surface: #E8E4D8;
-    --kb-canvas: #E8E4D8;
-    --kb-toggle-off: #B8B2A4;
+    --kb-paper: #0C0C0C;
+    --kb-desk: #050505;
+    --kb-rule: #FAF8F3;
+    --kb-text-1: #FAF8F3;
+    --kb-text-2: #B8B4AC;
+    --kb-text-3: #6E6A62;
+    --kb-text-btn: #FAF8F3;
+    --kb-text-chip: #FAF8F3;
+    --kb-border: #3A3A3A;
+    --kb-surface: #1A1A1A;
+    --kb-canvas: #1A1A1A;
+    --kb-toggle-off: #6B675E;
+    --kb-green: #4FBF85;
+    --kb-green-bg: #16301F;
+    --kb-warn: #E0B24D;
+    --kb-warn-bg: #2E2515;
+    --kb-fail: #E8776C;
+    --kb-fail-bg: #2E1614;
   }
   /* 흰 바탕을 쓰던 자리. 한 곳에서 종이색으로 바꾼다. */
   .kb-paper { background-color: var(--kb-paper); }
