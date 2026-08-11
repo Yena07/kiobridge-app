@@ -1621,9 +1621,15 @@ function QrScannerModal({ onClose, onDetected }: { onClose: () => void; onDetect
 
           {!scanning && (
             <div className="absolute inset-0 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.10)" }}>
-              <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: PAPER, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {/*
+                이 모달의 배경은 팔레트와 무관하게 늘 #000 이다. 여기에 PAPER.TEXT_1
+                을 쓰면 다크에서 검은 배경에 검은 원(1.07:1)이 되어 묻힌다.
+                고정 쌍(ON_DARK 면 + 검은 체크)을 쓴다. 로고는 고쳤는데 같은 모달
+                안의 이 아이콘을 빠뜨렸다.
+              */}
+              <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: ON_DARK, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                  <path d="M7 17L13 23L25 11" stroke={TEXT_1} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M7 17L13 23L25 11" stroke="#111111" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
             </div>
