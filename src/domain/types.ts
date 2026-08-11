@@ -1,9 +1,12 @@
 // 로그인은 끝까지 선택이다. login·signup 은 welcome 과 계정 화면에서만 들어갈 수 있고,
 // 주 흐름(saved → order-confirm → execution)은 이 둘을 거치지 않는다.
 export type Screen =
-  | "welcome" | "login" | "signup" | "name" | "greeting" | "sheet" | "saved"
+  | "welcome" | "login" | "signup" | "name"
+  | "setup"     // 가입 직후 한 번 묻는 도움 설정. 'profile' 이라 부르지 않는다 —
+                // 백엔드가 주문표를 profile 이라 불러서 그 이름은 이미 임자가 있다.
+  | "greeting" | "sheet" | "saved"
   | "order-confirm" | "execution"
-  | "a11y"      // 접근성 설정
+  | "a11y"      // 접근성 설정 (계정 화면에서 언제든)
   | "privacy";  // 무엇을 저장하고 무엇을 저장하지 않는지
 export type MainTab = "qr" | "menu" | "account";
 export type PlaceType = "카페" | "음식점" | "병원" | "관공서" | null;
@@ -97,6 +100,15 @@ export interface MappingResponse {
   diffNote?: string;
   /** 추천 이유. 확인 화면에 그대로 보여 준다. */
   reasons?: RecommendationReason[];
+  /**
+   * 서버가 점수를 매길 때 이 메뉴를 밀어 준 축들. 예: ["이용 방식", "가격"]
+   *
+   * 점수 숫자는 안 실는다 — 0.0259 는 이 앱을 쓰는 분들에게 읽을 수 없는 값이다.
+   * 이유 문장(reasons)과 겹치는 것도 있지만 빠지는 것도 있다 — 가격 한도를
+   * 정해도 서버 이유 문장에는 가격 얘기가 한 줄도 안 나온다(실측).
+   * 비어 있으면 화면이 그 줄을 아예 안 그린다.
+   */
+  scoredAxes?: string[];
   /**
    * 사용자가 저장해 둔 조건. clarification 처럼 상품이 아직 정해지지 않은 상태에서
    * 조건만 보여 줄 때 쓴다. item 에 빈 displayName 을 넣어 실어 보내면

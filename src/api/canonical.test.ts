@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrderSheet } from "@/domain/types";
-import { toCanonicalProfile, toChickenStoreContext, 백엔드가아는장소, 수량숫자 } from "./canonical";
+import { toCanonicalProfile, toChickenStoreContext, toContextNormalizationInput, 백엔드가아는장소, 수량숫자 } from "./canonical";
 
 // 이 파일이 지키는 것: 화면의 한글 선택지가 백엔드 enum 으로 정확히 옮겨진다.
 // 여기가 어긋나면 사용자가 '매운맛'을 골랐는데 서버는 '순한맛'으로 읽는다.
@@ -84,7 +84,8 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
   });
 
   it("보관 정책이 화면의 실제 동작과 같다", () => {
-    // 주문표는 메모리에만 있고 새로고침하면 사라진다. SESSION_ONLY 가 사실이다.
+    // 주문표는 이 탭이 살아 있는 동안만 남고 창을 닫으면 사라진다. SESSION_ONLY 가 사실이다.
+    // 새로고침을 넘겨 이어 쓰는 것은 세션이 끝나는 것이 아니라 이 값과 어긋나지 않는다.
     expect(toCanonicalProfile(주문표({})).consent.retentionPolicy).toBe("SESSION_ONLY");
   });
 
@@ -118,6 +119,37 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
     ]);
   });
 
+  it("소리 안내는 accessibility 에 섞이지 않는다", () => {
+    /*
+     * 킷 스키마의 accessibility 는 additionalProperties: false 이고 일곱이 전부
+     * required 다. 여덟 번째 칸이 끼면 제출이 막힌다.
+     *
+     * 화면 쪽 설정(도움설정)에는 소리 안내가 있어서, 예전처럼 통째로 펼쳐
+     * 넘기면 그대로 딸려 나간다. 칸 이름을 적어 고르는 것이 그걸 막는다.
+     */
+    const c = toCanonicalProfile(주문표({}), { 접근성: { largeText: true, voiceGuide: true } });
+    expect(Object.keys(c.accessibility).sort()).toEqual([
+      "hearingSupport", "highContrast", "largeText", "mobilitySupport",
+      "simpleSteps", "staffAssistancePreferred", "visualGuidance",
+    ]);
+    expect(c.accessibility).not.toHaveProperty("voiceGuide");
+    expect(JSON.stringify(c.accessibility)).not.toContain("voiceGuide");
+  });
+
+  it("소리 안내를 켜면 preferredInput 이 VOICE 로 나간다", () => {
+    /*
+     * 킷 enum 에 원래 있던 값이다(TOUCH · VOICE · KEYBOARD · SWITCH · ASSISTED ·
+     * MULTIMODAL). 여태 "TOUCH" 로 박아 보내고 있었다. 로컬 백엔드로 확인했다 -
+     * status VALID, contractValidation.valid true.
+     */
+    expect(toCanonicalProfile(주문표({}), { 접근성: { voiceGuide: true } }).interaction.preferredInput).toBe("VOICE");
+  });
+
+  it("안 켜면 그대로 TOUCH 다", () => {
+    expect(toCanonicalProfile(주문표({})).interaction.preferredInput).toBe("TOUCH");
+    expect(toCanonicalProfile(주문표({}), { 접근성: { largeText: true } }).interaction.preferredInput).toBe("TOUCH");
+  });
+
   it("수집 시각을 넘기면 그걸 쓴다 — 시계에 기대지 않는다", () => {
     const t = "2026-08-01T05:30:00.000Z";
     expect(toCanonicalProfile(주문표({}), { collectedAt: t }).source.collectedAt).toBe(t);
@@ -132,5 +164,34 @@ describe("백엔드가 다룰 수 있는 장소인지 본다", () => {
       expect(백엔드가아는장소({ ...주문표({}), place })).toBe(false);
     }
     expect(백엔드가아는장소({ ...주문표({}), place: null })).toBe(false);
+  });
+});
+
+/*
+ * 가격 한도.
+ *
+ * 지금까지 늘 null 로 나가서 서버의 가격 점수가 죽어 있었다. 같은 주문표로 재 본 것:
+ *
+ *   한도 없음     priceScore 0.0      confidence 0.5   대안 2개
+ *   한도 5,800원  priceScore 0.0259   confidence 0.8   대안 0개
+ */
+describe("가격 한도", () => {
+  const 주문표하나 = 주문표({ "이용 방식": ["포장하기"] });
+
+  it("정한 값을 hardConstraints 에 실어 보낸다", () => {
+    expect(toChickenStoreContext(주문표하나, { 예산: 8000 }).hardConstraints.maxPriceKrw).toBe(8000);
+  });
+
+  it("안 정했으면 정규화 입력에서 칸 자체를 뺀다", () => {
+    // 킷 스키마가 { "type": "number", "minimum": 0 } 이라 null 을 안 받는다.
+    // 지금 null 이 통하는 것은 백엔드의 @JsonInclude(NON_NULL) 이 킷으로 나가기
+    // 전에 지워 주기 때문이다. 그쪽 애노테이션 하나에 기대지 않는다.
+    const { contextInput } = toContextNormalizationInput(주문표하나);
+    expect(contextInput).not.toHaveProperty("maxPriceKrw");
+  });
+
+  it("정했으면 정규화 입력에 실린다", () => {
+    const { contextInput } = toContextNormalizationInput(주문표하나, { 예산: 6000 });
+    expect(contextInput.maxPriceKrw).toBe(6000);
   });
 });
