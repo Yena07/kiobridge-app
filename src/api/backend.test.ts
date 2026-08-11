@@ -12,6 +12,7 @@ const 후보표시 = {
 };
 
 const 기본추천 = (over: Partial<RecommendationResult> = {}): RecommendationResult => ({
+  unmetConditions: [],
   recommendedCandidateId: "CHICKEN-001",
   alternativeCandidateIds: [],
   excludedCandidates: [],
@@ -46,6 +47,32 @@ const 매핑 = async (b: Backend) => {
 };
 
 describe("후보 필터와 추천을 합쳐 한 응답으로 만든다", () => {
+  it("맞추지 못한 조건을 버리지 않는다", async () => {
+    /*
+     * 서버가 "선호하신 뼈/순살과 다릅니다" 라고 알려 주는데 타입에 선언만 해
+     * 두고 화면까지 오지 않았다. 못 맞춘 것을 감추면 사용자는 자기가 고른
+     * 조건이 다 반영된 줄 알고 승인한다.
+     */
+    const r = await 매핑(가짜백엔드({}, 기본추천({
+      unmetConditions: ["선호하신 뼈/순살과 다릅니다."],
+    })));
+    const 못맞춘 = (r.reasons ?? []).filter((x) => x.kind === "unmet");
+    expect(못맞춘.map((x) => x.text)).toEqual(["선호하신 뼈/순살과 다릅니다."]);
+    // 제외와 섞이면 안 된다. 저건 '메뉴를 뺐다' 이고 이건 '조건을 못 맞췄다' 다.
+    expect((r.reasons ?? []).filter((x) => x.kind === "excluded").map((x) => x.text))
+      .not.toContain("선호하신 뼈/순살과 다릅니다.");
+  });
+
+  it("맞추지 못한 조건에도 결제 표현 거르기를 건다", async () => {
+    // 서버가 준 문장이라 validationMessages 와 같은 종류다. 한쪽만 막으면 안 된다.
+    const 돈내기 = "결" + "제";
+    const r = await 매핑(가짜백엔드({}, 기본추천({
+      unmetConditions: [`${돈내기} 수단이 맞지 않습니다.`, "선호하신 맵기와 다릅니다."],
+    })));
+    expect((r.reasons ?? []).filter((x) => x.kind === "unmet").map((x) => x.text))
+      .toEqual(["선호하신 맵기와 다릅니다."]);
+  });
+
   it("제외 사유가 두 곳에서 모두 올라온다", async () => {
     const r = await 매핑(가짜백엔드());
     const 문구 = (r.reasons ?? []).map((x) => x.text).join("\n");
@@ -492,12 +519,17 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
   };
 
   /** 승인 전에 매핑을 한 번 거친다. 실제 흐름과 같은 순서다. */
-  const 승인 = async (b: ReturnType<typeof createTeamBackend>, 실행응답: unknown) => {
+  const 승인 = async (
+    b: ReturnType<typeof createTeamBackend>,
+    실행응답: unknown,
+    /** 주문표를 바꿔 넣고 싶을 때. 실행 단계의 '아는 값' 이 여기서 나온다. */
+    주문표: OrderSheet = 목주문표,
+  ) => {
     const 답 = 경로별응답({ "orchestrator/approve": 실행응답 });
     globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) =>
       응답(답(String(u), JSON.parse(String(init?.body ?? "{}"))))) as unknown as typeof fetch;
-    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
-    await b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 목주문표 });
+    await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 주문표 });
+    await b.submit("s1", { pairingId: "s1", sheetId: "p1", mappingResult: "exact", profile: 주문표 });
   };
 
   it("submit-and-run 한 번으로 검증·실행·증거를 모두 채운다", async () => {
@@ -574,8 +606,8 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
       raw: 실행성공,
       runSteps: [
         { actionIndex: 0, action: "select_service", label: "포장하기", success: true },
-        { actionIndex: 1, action: "select_menu", label: "매운 뼈 닭강정", success: true },
-        { actionIndex: 2, action: "select_option", label: "종이컵", success: true },
+        { actionIndex: 1, action: "select_option", label: "매운맛", success: true },
+        { actionIndex: 2, action: "select_option", label: "순살", success: true },
         { actionIndex: 3, action: "confirm_option", label: "OPTION_CONFIRM", success: true },
         { actionIndex: 4, action: "open_cart_review", label: "CART_REVIEW", success: true },
         { actionIndex: 5, action: "verify_cart", label: "CART_REVIEW", success: true },
@@ -584,8 +616,8 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     const e = await b.getEvidence("s1");
     expect(e.한일?.map((x) => x.text)).toEqual([
       "포장하기 골랐어요",
-      "매운 뼈 닭강정 골랐어요",
-      "종이컵 골랐어요",
+      "매운맛 골랐어요",
+      "순살 골랐어요",
       "옵션을 확정했어요",
       "장바구니를 열었어요",
       "장바구니를 확인했어요",
@@ -619,13 +651,13 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
       raw: 실행성공,
       runSteps: [
         { actionIndex: 2, action: "verify_cart", label: "CART_REVIEW", success: false },
-        { actionIndex: 0, action: "select_option", label: "1개", success: true },
+        { actionIndex: 0, action: "select_option", label: "2개", success: true },
         { actionIndex: 1, action: "confirm_option", label: "OPTION_CONFIRM", success: true },
       ],
     });
     const e = await b.getEvidence("s1");
     expect(e.한일).toEqual([
-      { text: "1개 골랐어요", ok: true },
+      { text: "2개 골랐어요", ok: true },
       { text: "옵션을 확정했어요", ok: true },
       { text: "장바구니를 확인했어요", ok: false },
     ]);
@@ -646,28 +678,70 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     expect(e.한일?.map((x) => x.text)).toEqual(["한 단계 진행했어요", "매운맛"]);
   });
 
-  it("대문자 선택값을 코드로 오해하지 않는다", async () => {
+  it("대문자여도 사용자가 고른 값이면 그대로 보여 준다", async () => {
     /*
-     * ICE.HOT.Q1 은 사용자가 실제로 고른 값이다. 모양만 보고 코드로 몰면
-     * "하나 골랐어요" 로 뭉개지고, 고른 것이 화면에서 사라진다.
-     * 고른 값을 담는 동작에서는 모양을 따지지 않는다.
+     * 모양(대문자)으로 코드인지 가리면 ICE 같은 진짜 고른 값이 뭉개진다.
+     * 모양이 아니라 **주문표에 있는 값인지**로 가른다.
      */
     const b = 붙이기();
     await 승인(b, {
       valid: true, raw: 실행성공,
       runSteps: [
-        { actionIndex: 0, action: "select_option", label: "ICE", success: true },
-        { actionIndex: 1, action: "select_option", label: "Q1", success: true },
-        { actionIndex: 2, action: "select_menu", label: "AMERICANO", success: true },
-        { actionIndex: 3, action: "select_service", label: "TAKE_OUT", success: true },
+        { actionIndex: 0, action: "select_option", label: "매운맛", success: true },
+        { actionIndex: 1, action: "select_service", label: "포장하기", success: true },
+      ],
+    }, { ...목주문표, selections: { ...목주문표.selections, "온도": ["ICE"] } });
+    expect((await b.getEvidence("s1")).한일?.map((x) => x.text)).toEqual([
+      "매운맛 골랐어요",
+      "포장하기 골랐어요",
+    ]);
+  });
+
+  it("모르는 값은 담지도 보여 주지도 않는다", async () => {
+    /*
+     * label 은 검증되지 않은 서버 입력이다. 그대로 통과시키면 서버가 무엇을
+     * 넣든 결과 화면과 메모리에 남는다 - 상품 ID · 화면 좌표 · 결제 문구까지.
+     * 우리가 아는 값(주문표에 고른 값 · 후보 이름)이 아니면 값을 지운다.
+     */
+    const b = 붙이기();
+    await 승인(b, {
+      valid: true, raw: 실행성공,
+      runSteps: [
+        { actionIndex: 0, action: "select_menu", label: "CHICKEN-001", success: true },
+        { actionIndex: 1, action: "select_option", label: "x=120,y=340", success: true },
+        { actionIndex: 2, action: "select_option", label: "서버가 보낸 모르는 값", success: true },
+        { actionIndex: 3, action: "unexpected_action", label: "서버가 보낸 모르는 값", success: true },
       ],
     });
-    expect((await b.getEvidence("s1")).한일?.map((x) => x.text)).toEqual([
-      "ICE 골랐어요",
-      "Q1 골랐어요",
-      "AMERICANO 골랐어요",
-      "TAKE_OUT 골랐어요",
+    const e = await b.getEvidence("s1");
+    const 통째로 = JSON.stringify(e.한일);
+    for (const 새면안되는것 of ["CHICKEN-001", "x=120", "340", "모르는 값"]) {
+      expect(통째로).not.toContain(새면안되는것);
+    }
+    // 무슨 일이 있었는지는 동작으로만 말한다. 지어내지 않는다.
+    expect(e.한일?.map((x) => x.text)).toEqual([
+      "하나 골랐어요", "하나 골랐어요", "하나 골랐어요", "한 단계 진행했어요",
     ]);
+  });
+
+  it("고르지 않은 대안 후보 이름은 '골랐어요' 가 되지 않는다", async () => {
+    /*
+     * 흰 목록에 후보 전체를 넣으면, 서버가 대안 후보 이름을 보낼 때 사용자가
+     * 고른 적 없는 메뉴를 골랐다고 말하게 된다. 담기로 한 하나만 넣는다.
+     */
+    const b = 붙이기({ "candidate-filters": {
+      eligibleCandidates: [
+        { candidateId: "CHICKEN-001", name: "매운 순살 닭강정", price: 6000, available: true },
+        { candidateId: "CHICKEN-003", name: "매운 뼈 닭강정", price: 5500, available: true },
+      ],
+      excludedCandidates: [],
+    } });
+    await 승인(b, {
+      valid: true, raw: 실행성공,
+      runSteps: [{ actionIndex: 0, action: "select_menu", label: "매운 뼈 닭강정", success: true }],
+    });
+    // 서버 1순위는 CHICKEN-001 이다. 대안(매운 뼈)의 이름은 통과하면 안 된다.
+    expect((await b.getEvidence("s1")).한일?.[0].text).toBe("하나 골랐어요");
   });
 
   it("고른 값 자리에는 아는화면 표를 끼워 넣지 않는다", async () => {
@@ -677,7 +751,7 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     await 승인(b, {
       valid: true, raw: 실행성공,
       runSteps: [{ actionIndex: 0, action: "select_option", label: "OPTION_CONFIRM", success: true }],
-    });
+    }, { ...목주문표, selections: { ...목주문표.selections, "확인": ["OPTION_CONFIRM"] } });
     expect((await b.getEvidence("s1")).한일?.[0].text).toBe("OPTION_CONFIRM 골랐어요");
   });
 

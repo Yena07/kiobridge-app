@@ -84,6 +84,29 @@ describe("연동기록 — 자유 입력은 본문에서도 가린다", () => {
     expect(연동기록.읽기()[0].응답).toContain("가리지 못했습니다");
   });
 
+  it("실행 단계의 label 도 가린다", () => {
+    /*
+     * 화면 쪽은 아는 값만 통과시키도록 막았지만, 이 기록은 응답 본문을 통째로
+     * 담는다. 서버가 상품 ID 나 좌표를 보내면 화면에는 안 떠도 여기 남는다.
+     */
+    연동기록.남기기({
+      방법: "POST", 경로: "/internal/orchestrator/approve", 상태: 200, 걸린시간: 1, 시각: Date.now(),
+      응답: JSON.stringify({
+        valid: true,
+        runSteps: [
+          { actionIndex: 0, action: "select_menu", label: "CHICKEN-001", success: true },
+          { actionIndex: 1, action: "select_option", label: "x=120,y=340", success: true },
+        ],
+      }),
+    });
+    const 응답 = 연동기록.읽기()[0].응답 ?? "";
+    expect(응답).not.toContain("CHICKEN-001");
+    expect(응답).not.toContain("x=120");
+    // 무엇을 했는지는 남는다. 흐름을 보는 데는 지장이 없다.
+    expect(응답).toContain("select_menu");
+    expect(응답).toContain('"label":"***"');
+  });
+
   it("JSON 이 아니면 아예 남기지 않는다", () => {
     const 남은 = 남기고읽기("<html>프록시가 끼워 넣은 것</html>");
     expect(남은).not.toContain("html");
