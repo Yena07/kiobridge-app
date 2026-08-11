@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { OrderSheet } from "@/domain/types";
-import { 기본접근성 } from "@/api/a11y";
+import { 기본도움설정 } from "@/api/a11y";
 import { 이어쓰기, type 이어쓸것 } from "./session";
 
 /*
@@ -63,7 +63,7 @@ const 채운값 = (덮을것: Partial<이어쓸것> = {}): 이어쓸것 => ({
   account: { userId: 7, loginId: "yena" },
   sheets: [주문표("p1"), 주문표("p2")],
   fromServer: ["p2"],
-  a11y: { ...기본접근성, largeText: true },
+  a11y: { ...기본도움설정, largeText: true },
   budget: null,
   planId: null,
   ...덮을것,
@@ -216,7 +216,13 @@ describe("손댄 값을 믿지 않는다", () => {
 
   it("접근성은 boolean 인 칸만 받고 나머지는 기본값이다", () => {
     망가진것({ a11y: { largeText: true, highContrast: "예", 없는칸: true } });
-    expect(이어쓰기.읽기()!.a11y).toEqual({ ...기본접근성, largeText: true });
+    expect(이어쓰기.읽기()!.a11y).toEqual({ ...기본도움설정, largeText: true });
+  });
+
+  it("소리 안내도 이어 쓴다", () => {
+    // 새로고침 한 번에 조용해지면, 켠 사람은 자기가 끈 줄 알고 다시 들어와 확인한다.
+    이어쓰기.쓰기(채운값({ a11y: { ...기본도움설정, voiceGuide: true } }));
+    expect(이어쓰기.읽기()!.a11y.voiceGuide).toBe(true);
   });
 
   it("가격 한도가 양의 정수가 아니면 안 정한 것으로 본다", () => {
@@ -238,7 +244,7 @@ describe("손댄 값을 믿지 않는다", () => {
 describe("남길 것이 없으면 아무것도 안 쓴다", () => {
   const 빈값 = 채운값({
     screen: "welcome", tab: "menu", name: "", account: null,
-    sheets: [], fromServer: [], a11y: { ...기본접근성 }, budget: null, planId: null,
+    sheets: [], fromServer: [], a11y: { ...기본도움설정 }, budget: null, planId: null,
   });
 
   it("빈 이용은 저장하지 않는다", () => {
@@ -262,7 +268,7 @@ describe("남길 것이 없으면 아무것도 안 쓴다", () => {
   });
 
   it("접근성만 켜 두어도 남긴다", () => {
-    이어쓰기.쓰기({ ...빈값, a11y: { ...기본접근성, largeText: true } });
+    이어쓰기.쓰기({ ...빈값, a11y: { ...기본도움설정, largeText: true } });
     expect(이어쓰기.읽기()!.a11y.largeText).toBe(true);
   });
 });

@@ -20,7 +20,8 @@ import {
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
-import { 접근성설정, type 접근성 } from "@/api/a11y";
+import { 접근성설정, type 도움설정 } from "@/api/a11y";
+import { 소리를낼수있나, 읽어주기, 그만읽기 } from "@/api/speech";
 import { 가격한도, 한도후보 } from "@/api/budget";
 import { 이어쓰기 } from "@/api/session";
 import { 백엔드가아는장소 } from "@/api/canonical";
@@ -1998,7 +1999,13 @@ function ToggleRow({
   );
 }
 
-interface 도움항목 { key: keyof 접근성; label: string; sub: string }
+interface 도움항목 {
+  key: keyof 도움설정;
+  label: string;
+  sub: string;
+  /** 있으면 이게 참일 때만 보여 준다. 못 하는 것을 스위치로 내밀지 않는다. */
+  될때만?: () => boolean;
+}
 
 /*
  * 일곱 항목을 여기 한 곳에만 둔다.
@@ -2016,6 +2023,14 @@ interface 도움항목 { key: keyof 접근성; label: string; sub: string }
 const 바로바꾸는것: 도움항목[] = [
   { key: "largeText", label: "큰 글씨", sub: "앱 전체의 글씨와 버튼을 크게 봐요" },
   { key: "highContrast", label: "고대비", sub: "글씨와 배경의 차이를 더 뚜렷하게 해요" },
+  /*
+   * 이 앱이 화면 글을 소리로 읽어 주고, 서버로는 preferredInput: "VOICE" 로 나간다.
+   * 두 가지를 다 하는 유일한 항목이라 이쪽 무리에 둔다.
+   *
+   * 브라우저가 speechSynthesis 를 안 주면 이 줄을 아예 안 보여 준다(쓸수있는것).
+   * 켰는데 아무 소리도 안 나면 사용자는 앱이 고장 났다고 생각한다.
+   */
+  { key: "voiceGuide", label: "소리로 읽어 주기", sub: "화면에 나온 안내를 소리로 읽어 드려요", 될때만: 소리를낼수있나 },
   { key: "simpleSteps", label: "쉬운 단계", sub: "이유 화면을 건너뛰고 바로 확인 화면으로 가요" },
   { key: "mobilitySupport", label: "시간 여유", sub: "연결 시간이 지나도 보던 화면을 멋대로 닫지 않아요" },
   { key: "staffAssistancePreferred", label: "직원 도움", sub: "승인 화면에도 직원에게 보여 달라는 안내를 띄워요" },
@@ -2023,14 +2038,19 @@ const 바로바꾸는것: 도움항목[] = [
 /** 켜도 이 앱 화면은 그대로다. 키오스크로 전해지기만 한다. */
 const 전해드릴것: 도움항목[] = [
   { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
-  { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 이 앱은 원래 소리를 쓰지 않아요" },
+  // '소리 대신 화면' 은 소리 안내를 못 듣는 분의 항목이다. 위의 '소리로 읽어 주기' 와
+  // 반대되는 것이 아니라 서로 다른 사정이라, 둘 다 켤 수 있게 둔다.
+  { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 키오스크에 그렇게 전해요" },
 ];
+
+/** 이 브라우저에서 실제로 되는 항목만 남긴다. */
+const 쓸수있는것 = (항목들: 도움항목[]): 도움항목[] => 항목들.filter((r) => !r.될때만 || r.될때만());
 
 /** 머리카락 굵기 선으로 이어 붙인 스위치 묶음. 두 화면이 같은 모양으로 쓴다. */
 function 도움목록({ 항목들, 설정, onChange }: {
   항목들: 도움항목[];
-  설정: 접근성;
-  onChange: (한칸: Partial<접근성>) => void;
+  설정: 도움설정;
+  onChange: (한칸: Partial<도움설정>) => void;
 }) {
   return (
     <div style={{ borderTop: `1px solid ${BORDER}` }}>
@@ -2065,8 +2085,8 @@ function 도움목록({ 항목들, 설정, onChange }: {
  * 화면이 하나 더 생긴다. 이 화면은 통째로 선택이라 그 말을 글로 적는다.
  */
 function SetupScreen({ 설정, onChange, onNext, onBack }: {
-  설정: 접근성;
-  onChange: (한칸: Partial<접근성>) => void;
+  설정: 도움설정;
+  onChange: (한칸: Partial<도움설정>) => void;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -2092,13 +2112,13 @@ function SetupScreen({ 설정, onChange, onNext, onBack }: {
         </p>
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
-        <도움목록 항목들={바로바꾸는것} 설정={설정} onChange={onChange} />
+        <도움목록 항목들={쓸수있는것(바로바꾸는것)} 설정={설정} onChange={onChange} />
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginTop: 24 }}>키오스크에 전해 드려요</h2>
         <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
-        <도움목록 항목들={전해드릴것} 설정={설정} onChange={onChange} />
+        <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
       </div>
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
@@ -2121,8 +2141,8 @@ function SetupScreen({ 설정, onChange, onNext, onBack }: {
  * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
  */
 function AccessibilityScreen({ 설정, onChange, onBack }: {
-  설정: 접근성;
-  onChange: (한칸: Partial<접근성>) => void;
+  설정: 도움설정;
+  onChange: (한칸: Partial<도움설정>) => void;
   onBack: () => void;
 }) {
   return (
@@ -2157,7 +2177,7 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         </p>
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
-        <도움목록 항목들={바로바꾸는것} 설정={설정} onChange={onChange} />
+        <도움목록 항목들={쓸수있는것(바로바꾸는것)} 설정={설정} onChange={onChange} />
 
         {/*
           이 한 줄은 문단이 아니라 제목의 일부다. 스위치와 제목 사이에 본문이
@@ -2178,7 +2198,7 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
-        <도움목록 항목들={전해드릴것} 설정={설정} onChange={onChange} />
+        <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
       </div>
     </div>
   );
@@ -3759,7 +3779,7 @@ export default function App() {
    * 상태를 여기 두지 않는 이유는 연동 계층(backend.ts)도 이 값을 읽어야 해서다 —
    * 서버로 보내는 표준형에 그대로 실린다. React 상태로만 두면 그쪽에서 못 읽는다.
    */
-  const [접근성값, set접근성값] = useState<접근성>(() => 접근성설정.읽기());
+  const [접근성값, set접근성값] = useState<도움설정>(() => 접근성설정.읽기());
   useEffect(() => 접근성설정.구독(() => set접근성값({ ...접근성설정.읽기() })), []);
   /*
    * 가격 한도. 저장소는 api/budget.ts 에 있고 화면은 그걸 비춘다 — 접근성과 같은 이유다.
@@ -4069,7 +4089,30 @@ export default function App() {
       대상.setAttribute("tabindex", "-1");
     }
     대상.focus({ preventScroll: true });
-  }, [screen, tab]);
+
+    /*
+     * 소리 안내를 켠 분에게는 같은 것을 소리로도 한 번 읽어 준다.
+     *
+     * 포커스가 가는 그 요소를 읽는다 - 스크린리더가 읽는 것과 같은 자리다.
+     * 따로 고르면 화면이 바뀔 때 눈으로 보는 것과 귀로 듣는 것이 갈린다.
+     *
+     * 제목만 읽고 본문은 안 읽는다. 화면 전체를 읽으면 다음 화면으로 넘어갈 때까지
+     * 계속 말하게 되고, 급한 사람은 말이 끝나기를 기다려야 한다. 어디에 왔는지만
+     * 알려 주고 나머지는 화면에 그대로 있다.
+     */
+    if (접근성값.voiceGuide) 읽어주기(대상.innerText || 대상.textContent || "");
+  }, [screen, tab, 접근성값.voiceGuide]);
+
+  /*
+   * 스위치를 끄거나 화면을 떠나면 읽던 것을 멈춘다.
+   *
+   * 안 멈추면 끈 뒤에도 하던 말을 끝까지 한다. 끄는 사람은 지금 조용해지기를
+   * 바라는 것이라, 그 한 문장이 가장 거슬린다.
+   */
+  useEffect(() => {
+    if (!접근성값.voiceGuide) 그만읽기();
+    return 그만읽기;
+  }, [접근성값.voiceGuide]);
 
   const inMain = screen === "saved";
 

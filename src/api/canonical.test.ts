@@ -119,6 +119,37 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
     ]);
   });
 
+  it("소리 안내는 accessibility 에 섞이지 않는다", () => {
+    /*
+     * 킷 스키마의 accessibility 는 additionalProperties: false 이고 일곱이 전부
+     * required 다. 여덟 번째 칸이 끼면 제출이 막힌다.
+     *
+     * 화면 쪽 설정(도움설정)에는 소리 안내가 있어서, 예전처럼 통째로 펼쳐
+     * 넘기면 그대로 딸려 나간다. 칸 이름을 적어 고르는 것이 그걸 막는다.
+     */
+    const c = toCanonicalProfile(주문표({}), { 접근성: { largeText: true, voiceGuide: true } });
+    expect(Object.keys(c.accessibility).sort()).toEqual([
+      "hearingSupport", "highContrast", "largeText", "mobilitySupport",
+      "simpleSteps", "staffAssistancePreferred", "visualGuidance",
+    ]);
+    expect(c.accessibility).not.toHaveProperty("voiceGuide");
+    expect(JSON.stringify(c.accessibility)).not.toContain("voiceGuide");
+  });
+
+  it("소리 안내를 켜면 preferredInput 이 VOICE 로 나간다", () => {
+    /*
+     * 킷 enum 에 원래 있던 값이다(TOUCH · VOICE · KEYBOARD · SWITCH · ASSISTED ·
+     * MULTIMODAL). 여태 "TOUCH" 로 박아 보내고 있었다. 로컬 백엔드로 확인했다 -
+     * status VALID, contractValidation.valid true.
+     */
+    expect(toCanonicalProfile(주문표({}), { 접근성: { voiceGuide: true } }).interaction.preferredInput).toBe("VOICE");
+  });
+
+  it("안 켜면 그대로 TOUCH 다", () => {
+    expect(toCanonicalProfile(주문표({})).interaction.preferredInput).toBe("TOUCH");
+    expect(toCanonicalProfile(주문표({}), { 접근성: { largeText: true } }).interaction.preferredInput).toBe("TOUCH");
+  });
+
   it("수집 시각을 넘기면 그걸 쓴다 — 시계에 기대지 않는다", () => {
     const t = "2026-08-01T05:30:00.000Z";
     expect(toCanonicalProfile(주문표({}), { collectedAt: t }).source.collectedAt).toBe(t);

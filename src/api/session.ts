@@ -1,5 +1,5 @@
 import type { MainTab, OrderSheet, PlaceType, Screen } from "@/domain/types";
-import { 기본접근성, type 접근성 } from "@/api/a11y";
+import { 기본도움설정, type 도움설정 } from "@/api/a11y";
 import type { Account } from "@/api/account";
 
 /**
@@ -69,7 +69,8 @@ export interface 이어쓸것 {
   sheets: OrderSheet[];
   /** 서버에서 불러온 주문표의 id. 로그아웃할 때 이것만 목록에서 뺀다. */
   fromServer: string[];
-  a11y: 접근성;
+  /** 도움 설정. 킷의 일곱 칸 + 소리 안내. */
+  a11y: 도움설정;
   /**
    * 이번 이용의 가격 한도(원). 안 정했으면 null 이다.
    *
@@ -146,11 +147,11 @@ const 계정읽기 = (v: unknown): Account | null => {
   return { userId: o.userId, loginId: o.loginId };
 };
 
-/** 일곱 칸을 하나씩 본다. boolean 이 아닌 칸은 기본값으로 둔다. */
-const 접근성읽기 = (v: unknown): 접근성 => {
+/** 여덟 칸을 하나씩 본다. boolean 이 아닌 칸은 기본값으로 둔다. */
+const 접근성읽기 = (v: unknown): 도움설정 => {
   const o = (typeof v === "object" && v !== null ? v : {}) as Record<string, unknown>;
-  const 값 = { ...기본접근성 };
-  for (const 칸 of Object.keys(기본접근성) as (keyof 접근성)[]) {
+  const 값 = { ...기본도움설정 };
+  for (const 칸 of Object.keys(기본도움설정) as (keyof 도움설정)[]) {
     if (typeof o[칸] === "boolean") 값[칸] = o[칸];
   }
   return 값;

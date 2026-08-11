@@ -1,4 +1,4 @@
-import { 기본접근성, type 접근성 } from "@/api/a11y";
+import { 기본접근성, type 접근성, type 도움설정 } from "@/api/a11y";
 import type { OrderSheet } from "@/domain/types";
 
 /**
@@ -31,7 +31,7 @@ export interface CanonicalProfile {
     hearingSupport: boolean; mobilitySupport: boolean; highContrast: boolean;
     staffAssistancePreferred: boolean;
   };
-  interaction: { preferredInput: "TOUCH"; language: "ko-KR"; confirmationRequired: boolean };
+  interaction: { preferredInput: "TOUCH" | "VOICE"; language: "ko-KR"; confirmationRequired: boolean };
   consent: { personalization: boolean; retentionPolicy: "SESSION_ONLY" };
 }
 
@@ -54,6 +54,21 @@ const 컵: Record<string, CupOption> = { "종이컵": "PAPER", "일반컵": "REG
 const 알레르기: Record<string, AllergenId> = {
   "땅콩": "PEANUT", "대두": "SOY", "우유": "MILK", "계란": "EGG", "밀": "WHEAT", "새우": "SHRIMP",
 };
+
+/**
+ * 킷이 아는 일곱 칸만 남긴다. 모르는 칸은 버린다.
+ *
+ * 화면 쪽 설정에 칸이 늘어도 계약으로는 안 나간다. 여기가 그 문을 지키는 곳이다.
+ */
+const 일곱칸만 = (v: 접근성 & Record<string, unknown>): CanonicalProfile["accessibility"] => ({
+  largeText: v.largeText,
+  simpleSteps: v.simpleSteps,
+  visualGuidance: v.visualGuidance,
+  hearingSupport: v.hearingSupport,
+  mobilitySupport: v.mobilitySupport,
+  highContrast: v.highContrast,
+  staffAssistancePreferred: v.staffAssistancePreferred,
+});
 
 const 고른값 = (p: OrderSheet, 축: string) => p.selections?.[축]?.[0];
 const 고른값들 = (p: OrderSheet, 축: string) => p.selections?.[축] ?? [];
@@ -82,7 +97,7 @@ export const 수량숫자 = (v: string | undefined): number | null => {
  */
 export function toCanonicalProfile(
   p: OrderSheet,
-  opts: { providerId?: string; collectedAt?: string; 접근성?: Partial<접근성>; personalization?: boolean } = {},
+  opts: { providerId?: string; collectedAt?: string; 접근성?: Partial<도움설정>; personalization?: boolean } = {},
 ): CanonicalProfile {
   return {
     profileId: p.id,
@@ -100,9 +115,28 @@ export function toCanonicalProfile(
      * 두었다 — "화면이 아직 묻지 않는 항목" 이라서였다. 이제 화면이 일곱 다 묻는다.
      * 안 켠 것은 여전히 false 다. 묻지 않은 것도, 안 켠 것도 true 로 보내지 않는다.
      */
-    accessibility: { ...기본접근성, ...opts.접근성 },
-    // 이 앱은 터치로 조작하고 화면 글은 한국어다. 승인은 사람이 반드시 누른다.
-    interaction: { preferredInput: "TOUCH", language: "ko-KR", confirmationRequired: true },
+    /*
+     * 킷이 아는 일곱 칸만 골라 담는다. 화면 쪽 설정(도움설정)에는 소리 안내가
+     * 하나 더 있는데, 그걸 여기로 흘리면 제출이 막힌다 — accessibility 는
+     * additionalProperties: false 라 여덟 번째 칸을 안 받는다.
+     *
+     * `{ ...기본접근성, ...opts.접근성 }` 로 펼치던 것을 칸 이름을 적어 고르는
+     * 방식으로 바꾼 이유가 이것이다. 펼치기는 무엇이 딸려 들어오는지 여기서
+     * 읽히지 않아서, 화면 쪽에 칸이 하나 늘면 조용히 같이 나간다.
+     */
+    accessibility: 일곱칸만({ ...기본접근성, ...opts.접근성 }),
+    /*
+     * 화면 글은 한국어고 승인은 사람이 반드시 누른다.
+     *
+     * preferredInput 은 여태 "TOUCH" 로 박혀 있었다. 소리로 듣기를 바라는 분이
+     * 접근성 화면에서 켜면 "VOICE" 로 나간다 — 킷 enum 에 원래 있던 값이고,
+     * 로컬 백엔드로 확인했다(status VALID · contractValidation.valid true).
+     */
+    interaction: {
+      preferredInput: opts.접근성?.voiceGuide ? "VOICE" : "TOUCH",
+      language: "ko-KR",
+      confirmationRequired: true,
+    },
     consent: {
       /*
        * 화면에 '개인화에 동의하십니까' 라는 항목은 없다. 대신 사용자가 조건을
@@ -247,7 +281,7 @@ export interface ContextNormalizationInput {
 
 export function toProfileNormalizationInput(
   p: OrderSheet,
-  opts: { collectedAt?: string; 접근성?: Partial<접근성> } = {},
+  opts: { collectedAt?: string; 접근성?: Partial<도움설정> } = {},
 ): ProfileNormalizationInput {
   const c = toCanonicalProfile(p, opts);
   // providerId 와 dataClassification 은 서버가 채운다. 보내지 않는다.

@@ -43,6 +43,22 @@ export interface 접근성 {
   staffAssistancePreferred: boolean;
 }
 
+/**
+ * 화면이 다루는 도움 설정. 킷의 일곱 칸에 소리 안내 하나를 더한 것이다.
+ *
+ * 소리 안내는 `accessibility` 안에 들어갈 수 없다 — 킷 스키마가
+ * `additionalProperties: false` 이고 일곱이 전부 required 라, 여덟 번째를 끼우면
+ * 제출이 막힌다. 계약에서 이 값의 제자리는 `interaction.preferredInput` 의
+ * "VOICE" 다(api/speech.ts 주석 참고).
+ *
+ * 그래서 타입을 나눠 둔다. **`접근성` 은 서버로 나가는 일곱 칸 그대로여야 한다** —
+ * 여기에 칸을 더하면 canonical.ts 가 그대로 실어 보내고 킷이 거절한다.
+ */
+export interface 도움설정 extends 접근성 {
+  /** 화면에 나온 안내를 소리로 읽어 준다. 서버로는 preferredInput: "VOICE" 로 나간다. */
+  voiceGuide: boolean;
+}
+
 export const 기본접근성: 접근성 = {
   largeText: false,
   highContrast: false,
@@ -53,17 +69,19 @@ export const 기본접근성: 접근성 = {
   staffAssistancePreferred: false,
 };
 
-let 값: 접근성 = { ...기본접근성 };
+export const 기본도움설정: 도움설정 = { ...기본접근성, voiceGuide: false };
+
+let 값: 도움설정 = { ...기본도움설정 };
 const 듣는이 = new Set<() => void>();
 
 export const 접근성설정 = {
-  읽기: (): 접근성 => 값,
-  바꾸기(한칸: Partial<접근성>): void {
+  읽기: (): 도움설정 => 값,
+  바꾸기(한칸: Partial<도움설정>): void {
     값 = { ...값, ...한칸 };
     for (const f of 듣는이) f();
   },
   비우기(): void {
-    값 = { ...기본접근성 };
+    값 = { ...기본도움설정 };
     for (const f of 듣는이) f();
   },
   /**
@@ -76,8 +94,8 @@ export const 접근성설정 = {
    * 알림이 필요한 값 바꾸기는 바꾸기·비우기 쪽이다. 이 함수를 그 자리에 쓰면
    * 화면이 안 따라온다.
    */
-  되살리기(한판: 접근성): void {
-    값 = { ...기본접근성, ...한판 };
+  되살리기(한판: 도움설정): void {
+    값 = { ...기본도움설정, ...한판 };
   },
   구독(f: () => void): () => void {
     듣는이.add(f);
