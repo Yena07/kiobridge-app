@@ -22,7 +22,7 @@ import {
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } from "@/api/a11y";
 import { 소리를낼수있나, 읽어주기, 그만읽기 } from "@/api/speech";
-import { 가격한도, 한도후보 } from "@/api/budget";
+import { 가격한도 } from "@/api/budget";
 import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
@@ -1091,7 +1091,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
           이용에 담긴다(한도고르기 주석).
         */}
         <div style={{ marginBottom: 24 }}>
-          <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={영어인가} />
+          <한도적기 예산={예산} on바꾸기={on예산} 영어인가={영어인가} />
         </div>
 
         <div style={{ marginBottom: 8 }}>
@@ -1347,34 +1347,77 @@ function OrderSheetCard({
  * 만들어 둔 주문표만 있는 사람도 바꿀 수 있어야 해서 도움 설정 화면에도 둔다.
  * 알레르기가 가입 때 묻고 설정에서 고치는 것과 같은 모양이다.
  */
-function 한도고르기({ 예산, on바꾸기, 영어인가 }: {
+function 한도적기({ 예산, on바꾸기, 영어인가, 칸id = "budget-input" }: {
   예산: number | null;
   on바꾸기: (원: number | null) => void;
   /** 금액 표기가 언어마다 달라서 여기까지 내려온다("6,000원" vs "KRW 6,000"). */
   영어인가: boolean;
+  /** 한 화면에 두 번 나오지 않지만, id 는 화면마다 다르게 줄 수 있어야 한다. */
+  칸id?: string;
 }) {
+  const [적은것, set적은것] = useState(예산 === null ? "" : String(예산));
+
+  /*
+   * 밖에서 값이 바뀌면 따라간다 — 로그아웃으로 비워지거나, 다른 화면에서 고친
+   * 경우다. 적는 중에는 안 건드린다: 지금 칸의 값이 이미 그 숫자면 그대로 둔다.
+   * (안 그러면 "8000" 을 적는 동안 매 글자마다 칸이 다시 쓰여 커서가 튄다.)
+   */
+  useEffect(() => {
+    set적은것((지금) => (숫자만읽기(지금) === 예산 ? 지금 : 예산 === null ? "" : String(예산)));
+  }, [예산]);
+
+  const 고치기 = (글: string) => {
+    /*
+     * 숫자만 남긴다. 사람은 "8,000" 이나 "8000원" 이라고 적는다. 그걸 틀렸다고
+     * 돌려보내는 대신 우리가 읽어 낸다. 앞의 0 은 버리고(0 8000 → 8000),
+     * 일곱 자리에서 끊는다 — 키오스크 한 끼에 천만 원은 오타다.
+     */
+    const 숫자 = 글.replace(/[^0-9]/g, "").replace(/^0+/, "").slice(0, 7);
+    set적은것(숫자);
+    on바꾸기(숫자 === "" ? null : Number(숫자));
+  };
+
   return (
     <div>
-      <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 6 }}>가격 한도 (선택)</h2>
-      <div className="flex flex-wrap" style={{ gap: 6 }}>
-        <Chip label="안 정함" selected={예산 === null} onClick={() => on바꾸기(null)} />
-        {한도후보.map((원) => (
-          <Chip
-            key={원}
-            label={돈(원, 영어인가)}
-            selected={예산 === 원}
-            onClick={() => on바꾸기(예산 === 원 ? null : 원)}
-          />
-        ))}
+      <label htmlFor={칸id} style={{ ...TYPE.label, color: TEXT_2, display: "block", marginBottom: 6 }}>
+        가격 한도 (선택)
+      </label>
+      <div className="flex items-center" style={{ gap: 8, backgroundColor: CANVAS, borderRadius: RADIUS.input, padding: "0 16px" }}>
+        <input
+          id={칸id}
+          /*
+           * type="number" 를 안 쓴다. 칸에 손을 얹고 휠을 굴리면 값이 말없이
+           * 바뀌고, 위아래 화살표는 손이 떨리는 사람에게 누르기 어려운 크기다.
+           * 숫자판은 inputMode 로 띄운다.
+           */
+          type="text"
+          inputMode="numeric"
+          value={적은것}
+          onChange={(e) => 고치기(e.target.value)}
+          placeholder="예: 8000"
+          aria-describedby={`${칸id}-help`}
+          style={{
+            flex: 1, minWidth: 0, ...TYPE.body, color: TEXT_1, fontFamily: FONT, ...NUM,
+            padding: "15px 0", border: "none", outline: "none", backgroundColor: "transparent",
+          }}
+        />
+        {/* 단위는 표에 넣지 않고 여기서 언어를 보고 적는다 — 돈() 과 같은 이유다. */}
+        <span aria-hidden="true" style={{ ...TYPE.body, color: TEXT_2 }}>{영어인가 ? "KRW" : "원"}</span>
       </div>
-      {예산 !== null && (
-        <p style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
-          {tf("{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.", { 금액: 돈(예산, 영어인가) })}
-        </p>
-      )}
+      <p id={`${칸id}-help`} style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
+        {예산 === null
+          ? "비워 두면 한도 없이 찾아요"
+          : tf("{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.", { 금액: 돈(예산, 영어인가) })}
+      </p>
     </div>
   );
 }
+
+/** 적힌 글에서 우리가 값으로 읽는 숫자. 못 읽으면 null 이다. */
+const 숫자만읽기 = (글: string): number | null => {
+  const 숫자 = 글.replace(/[^0-9]/g, "").replace(/^0+/, "");
+  return 숫자 === "" ? null : Number(숫자);
+};
 
 function SavedSheetsScreen({
   sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false,
@@ -2460,7 +2503,7 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, �
             한 번 정한 한도를 바꿀 길이 없다.
           */}
           <div style={{ marginTop: 24 }}>
-            <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={설정.language === "en-US"} />
+            <한도적기 예산={예산} on바꾸기={on예산} 영어인가={설정.language === "en-US"} />
           </div>
         </div>
       </div>

@@ -129,7 +129,9 @@ export const EN: Record<string, string> = {
   "이 주문표로 주문하기": "Order with this card",
   "삭제": "Delete",
   "가격 한도 (선택)": "Price limit (optional)",
-  "안 정함": "No limit",
+  // 직접 적는 칸이다. 단위(원 / KRW)는 표가 아니라 코드에서 언어를 보고 붙인다.
+  "예: 8000": "e.g. 8000",
+  "비워 두면 한도 없이 찾아요": "Leave it blank to search without a limit",
   "QR 찍기": "Scan QR",
   "내 주문표": "My cards",
   "계정": "Account",
