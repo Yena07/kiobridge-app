@@ -140,11 +140,13 @@ function ConsentCheck({ 동의함, on바꾸기, onDetail }: {
             style={{ width: 24, height: 24, accentColor: RULE, cursor: "pointer" }}
           />
         </span>
+        {/*
+          한 줄로 줄였다. 무엇을 모으는지는 옆의 '자세히' 가 여는 개인정보 화면이
+          말한다 — 체크 옆에 두 줄을 붙여 두면 읽지 않고 넘기게 되고, 정작 자세한
+          설명은 그 화면에 또 있다.
+        */}
         <span style={{ fontSize: 14, color: TEXT_1, lineHeight: 1.6, flex: 1 }}>
-          주문에 쓸 정보를 모으고 쓰는 데 동의합니다.
-          <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 2 }}>
-            메뉴 조건과 도움 설정이에요. 이름·전화번호는 받지 않아요.
-          </span>
+          개인정보 수집 동의서
         </span>
       </label>
       <button
@@ -2700,13 +2702,8 @@ function SetupScreen({ 설정, onChange, 알레르기, on알레르기, onNext, o
         <CenterHeadline
           kicker="accessibility"
           title={<>필요한 도움이<br />있으신가요?</>}
-          desc="켜는 즉시 이 화면이 바로 바뀌어요. 안 켜셔도 괜찮아요"
           spot={<GlassesSpot />}
         />
-
-        <p style={{ fontSize: 13, color: TEXT_2, margin: "24px 0 20px", lineHeight: 1.7, textAlign: "center" }}>
-          나중에 계정 화면에서 언제든 바꿀 수 있어요.
-        </p>
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
         <도움목록 항목들={쓸수있는것(바로바꾸는것)} 설정={설정} onChange={onChange} />
@@ -2746,15 +2743,9 @@ function SetupScreen({ 설정, onChange, 알레르기, on알레르기, onNext, o
  * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
  * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
  */
-function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, 예산, on예산, onBack }: {
+function AccessibilityScreen({ 설정, onChange, onBack }: {
   설정: 도움설정;
   onChange: (한칸: Partial<도움설정>) => void;
-  /** 가입 직후에 한 번 묻지만 여기서도 고칠 수 있어야 한다 — 한 번 묻고 끝나면 못 고친다. */
-  알레르기: AllergenId[];
-  on알레르기: (id: AllergenId) => void;
-  /** 주문표를 만들 때 묻지만 여기서도 고칠 수 있어야 한다 — 알레르기와 같은 이유다. */
-  예산: number | null;
-  on예산: (원: number | null) => void;
   onBack: () => void;
 }) {
   return (
@@ -2775,19 +2766,6 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, �
           다섯 문단이던 것을 둘로 줄였다. 지운 것이 아니라 합쳤다 -
           없어지면 안 되는 말들이다(어디까지 남는지 · 직원 도움).
         */}
-        {/*
-          예전에는 "새로고침하면 처음으로 돌아가요" 라고 적혀 있었다. 이제는 안 돌아간다.
-          도움이 필요해서 켠 설정이 새로고침 한 번에 꺼지던 것을 고쳤으니, 문장도 같이
-          고친다 - 안 고치면 켜 놓고도 꺼진 줄 알고 다시 들어와 확인하게 된다.
-        */}
-        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 10, lineHeight: 1.7 }}>
-          필요하신 것만 켜 주세요. 켠 것은 이 기기에만 남고, 이 창을 닫으면 처음으로 돌아가요.
-        </p>
-        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 20, lineHeight: 1.7 }}>
-          이 앱은 원래 큰 버튼과 또렷한 대비로 만들었고, 소리로만 알리는 것은 하나도 없어요.
-          어려우면 이 화면을 직원에게 보여 주세요.
-        </p>
-
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
         <도움목록 항목들={쓸수있는것(바로바꾸는것)} 설정={설정} onChange={onChange} />
 
@@ -2813,17 +2791,15 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, �
         <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
         <언어고르기 고른것={설정.language} on바꾸기={(v) => onChange({ language: v })} />
 
-        <div style={{ marginTop: 28, paddingTop: 24, borderTop: `2px solid ${RULE}` }}>
-          <알레르기고르기 고른것={알레르기} on뒤집기={on알레르기} />
-          {/*
-            한도는 주문표를 만들 때 묻는다. 여기는 고치는 자리다 — 만들어 둔
-            주문표만 쓰는 사람은 만들기 화면에 갈 일이 없어서, 여기가 없으면
-            한 번 정한 한도를 바꿀 길이 없다.
-          */}
-          <div style={{ marginTop: 24 }}>
-            <한도적기 예산={예산} on바꾸기={on예산} 영어인가={설정.language === "en-US"} />
-          </div>
-        </div>
+        {/*
+          알레르기와 가격 한도는 여기 없다.
+          
+          계약에서 자리가 다르다 — 이 화면의 것들은 accessibility 와 interaction 에
+          들어가고, 저 둘은 hardConstraints 다. 도움이 필요한 정도를 말하는 값과,
+          이번 주문에서 무엇을 빼라는 값은 같은 화면에 있을 것이 아니다.
+          
+          알레르기는 가입할 때, 가격 한도는 주문표를 만들 때 묻는다.
+        */}
       </div>
     </div>
   );
@@ -5311,10 +5287,6 @@ export default function App() {
           {screen === "a11y" && (
             <AccessibilityScreen
               설정={접근성값}
-              알레르기={알레르기}
-              on알레르기={(id) => 알레르기설정.뒤집기(id)}
-              예산={예산}
-              on예산={(원) => 가격한도.바꾸기(원)}
               onChange={(한칸) => 접근성설정.바꾸기(한칸)}
               onBack={() => { setScreen("saved"); setTab("account"); }}
             />
