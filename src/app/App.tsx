@@ -22,6 +22,8 @@ import {
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } from "@/api/a11y";
 import { 소리를낼수있나, 읽어주기, 그만읽기, 화면글 } from "@/api/speech";
+import { 들을수있나, 들어보기, type 못들은이유 } from "@/api/listen";
+import { 말에서고르기, type 들은결과 } from "@/api/voice";
 import { 가격한도 } from "@/api/budget";
 import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
@@ -970,6 +972,161 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 let 주문표일련번호 = 0;
 const newSheetId = () => `p${Date.now()}_${++주문표일련번호}`;
 
+/**
+ * 말로 주문표를 채운다.
+ *
+ * ── 안내를 먼저 보여 준다 ───────────────────────────────────────────────────
+ *
+ * '말하세요' 만 띄우면 사람은 무엇을 어떻게 말해야 할지 모른다. 특히 처음 쓰는
+ * 사람은 기계에게 말하는 법을 따로 배웠다고 여겨서, 틀릴까 봐 아예 안 쓴다.
+ * 그래서 **예문을 먼저 보여 주고, 다 말하지 않아도 된다고 알려 준다.**
+ *
+ * ── 들은 것을 보여 주고 나서 채운다 ─────────────────────────────────────────
+ *
+ * 바로 채우지 않는다. 무엇을 어떻게 알아들었는지 보여 주고, 사용자가 확인한
+ * 뒤에 채운다. 잘못 들었을 때 사용자가 그 사실을 알 수 있어야 한다 — 값만
+ * 슬쩍 바뀌면 왜 그렇게 됐는지 알 길이 없다.
+ *
+ * ── 못 알아들은 축은 비워 둔다 ──────────────────────────────────────────────
+ *
+ * 말 안 한 것을 우리가 고르지 않는다(api/voice.ts). 화면도 그대로 말한다 —
+ * "이건 못 들었어요" 라고 적고, 손으로 고르라고 남겨 둔다.
+ */
+function 말로채우기({ place, 언어, on받기 }: {
+  place: PlaceType;
+  언어: string;
+  on받기: (들은것: 들은결과) => void;
+}) {
+  const [상태, set상태] = useState<"쉬는중" | "듣는중" | "보여주는중">("쉬는중");
+  const [결과, set결과] = useState<들은결과 | null>(null);
+  const [못들음, set못들음] = useState<못들은이유 | null>(null);
+  const 듣던것 = useRef<{ 그만두기: () => void } | null>(null);
+
+  // 화면을 떠나면 듣던 것을 멈춘다. 안 멈추면 마이크가 계속 켜져 있다.
+  useEffect(() => () => 듣던것.current?.그만두기(), []);
+
+  // 이 기기에서 안 되면 아예 안 내민다. 눌렀는데 아무 일도 안 일어나는 단추가
+  // 제일 나쁘다 — 소리 안내 스위치를 숨기는 것과 같은 판단이다.
+  if (!들을수있나()) return null;
+
+  const 듣기시작 = () => {
+    set못들음(null);
+    set결과(null);
+    set상태("듣는중");
+    듣던것.current = 들어보기(언어, (r) => {
+      듣던것.current = null;
+      if ("들은말" in r) {
+        set결과(말에서고르기(r.들은말, place));
+        set상태("보여주는중");
+      } else {
+        set못들음(r.못들은이유);
+        set상태("쉬는중");
+      }
+    });
+  };
+
+  const 상자 = { borderRadius: RADIUS.card, backgroundColor: SURFACE, padding: 20, marginBottom: 28 } as const;
+
+  if (상태 === "듣는중") {
+    return (
+      <div style={상자} role="status">
+        <p style={{ ...TYPE.label, color: TEXT_1, marginBottom: 10 }}>듣고 있어요</p>
+        {/*
+          말하는 법은 듣는 동안에도 보인다. 누르고 나서 무슨 말을 해야 할지
+          떠올리는 사람이 많아서, 안내를 앞 화면에만 두면 늦다.
+        */}
+        <p style={{ ...TYPE.caption, color: TEXT_2, lineHeight: 1.7 }}>
+          이렇게 말씀해 보세요<br />
+          <strong style={{ fontWeight: 600, color: TEXT_1 }}>“매운 닭강정 포장으로 두 개”</strong>
+        </p>
+        <p style={{ fontSize: 13, color: TEXT_2, marginTop: 10, lineHeight: 1.7 }}>
+          한 번에 다 말하지 않으셔도 돼요. 나머지는 손으로 고르시면 돼요.
+        </p>
+        <div style={{ marginTop: 16 }}>
+          <OutlineBtn onClick={() => 듣던것.current?.그만두기()}>다 말했어요</OutlineBtn>
+        </div>
+      </div>
+    );
+  }
+
+  if (상태 === "보여주는중" && 결과) {
+    const 고른축 = Object.keys(결과.고른값);
+    return (
+      <div style={상자}>
+        <p style={{ ...TYPE.label, color: TEXT_1, marginBottom: 10 }}>이렇게 들었어요</p>
+        {/* 들은 대로를 그대로 보여 준다. 잘못 들었으면 여기서 보인다. */}
+        <p data-원문 style={{ ...TYPE.body, color: TEXT_1, marginBottom: 14 }}>“{결과.들은말}”</p>
+
+        {고른축.length > 0 && (
+          <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 10 }}>
+            {고른축.map((축) => (
+              <span key={축} style={{
+                fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
+                backgroundColor: PAPER, color: TEXT_1,
+              }}>
+                {축} {결과.고른값[축].join(", ")}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/*
+          못 들은 축을 감추지 않는다. 감추면 사용자는 우리가 뭘 골라 놨는지 모른
+          채로 넘어간다. 무엇이 비었는지 알아야 손으로 채울 수 있다.
+        */}
+        {결과.못들은축.length > 0 && (
+          <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7 }}>
+            {tf("{축}은(는) 못 들었어요. 아래에서 골라 주세요.", { 축: 결과.못들은축.join(", ") })}
+          </p>
+        )}
+        {고른축.length === 0 && place === null && (
+          <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7 }}>
+            장소를 고르시면 맵기·형태 같은 것도 말로 채울 수 있어요.
+          </p>
+        )}
+
+        <div className="flex" style={{ gap: 8, marginTop: 16 }}>
+          <div style={{ flex: 1 }}>
+            <OutlineBtn onClick={() => { on받기(결과); set상태("쉬는중"); }}>이대로 채우기</OutlineBtn>
+          </div>
+          <div style={{ flex: 1 }}>
+            <OutlineBtn onClick={듣기시작}>다시 말하기</OutlineBtn>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={상자}>
+      <p style={{ ...TYPE.label, color: TEXT_1, marginBottom: 6 }}>말로 채우기</p>
+      <p style={{ ...TYPE.caption, color: TEXT_2, lineHeight: 1.7, marginBottom: 4 }}>
+        “매운 닭강정 포장으로 두 개” 처럼 말씀하시면 아래 칸이 채워져요.
+      </p>
+      <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7 }}>
+        한 번에 다 말하지 않으셔도 돼요. 들은 것만 채우고, 나머지는 손으로 고르시면 돼요.
+      </p>
+      {/*
+        안 될 때는 왜 안 되는지 말한다. '다시 시도' 만 띄우면 같은 조건에서 또
+        눌러 보게 되고, 권한이 막힌 경우에는 몇 번을 눌러도 같다.
+      */}
+      {못들음 !== null && (
+        <p role="alert" style={{ fontSize: 13, color: FAIL, marginTop: 10, lineHeight: 1.7 }}>
+          {못들음 === "권한없음"
+            ? "마이크를 쓸 수 없어요. 브라우저 설정에서 마이크를 허용해 주시거나, 아래에서 손으로 골라 주세요."
+            : 못들음 === "소리없음"
+              ? "잘 안 들렸어요. 조금 더 크게 다시 말씀해 주세요."
+              : "지금은 말로 채울 수 없어요. 아래에서 손으로 골라 주세요."}
+        </p>
+      )}
+      {/* 마이크 그림은 우리 아이콘 묶음에 없다. 글자만으로도 무엇을 하는 단추인지 분명하다. */}
+      <div style={{ marginTop: 16 }}>
+        <OutlineBtn onClick={듣기시작}>말하기</OutlineBtn>
+      </div>
+    </div>
+  );
+}
+
 function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예산, 영어인가, 고칠것 = null }: {
   onNext: (p: OrderSheet) => void;
   onBack: () => void;
@@ -1078,6 +1235,21 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
       </div>
 
       <div className="flex-1 overflow-y-auto pb-4" style={{ minHeight: 0, paddingLeft: GAP.screenX, paddingRight: GAP.screenX }}>
+        {/*
+          말로 채우는 길. 손으로 고르는 길은 아래에 그대로 있다 — 이건 대신하는
+          길이 아니라 더해 주는 길이다. 마이크가 안 되는 기기에서는 안 보인다.
+        */}
+        <말로채우기
+          place={place}
+          언어={영어인가 ? "en-US" : "ko-KR"}
+          on받기={(들은것) => {
+            // 이름은 비어 있을 때만 채운다. 적어 둔 것을 말 한마디로 덮으면 안 된다.
+            if (!menuName.trim()) setMenuName(들은것.들은말.slice(0, MENU_NAME_MAX));
+            // 고른 값은 덮는다. 방금 말한 것이 더 최신이다.
+            setSelections((prev) => ({ ...prev, ...들은것.고른값 }));
+          }}
+        />
+
         <div style={{ marginBottom: 28 }}>
           <SectionLabel text="메뉴 이름" required 칸id={이름칸id} />
           <input

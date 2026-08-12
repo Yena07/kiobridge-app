@@ -149,6 +149,30 @@ export const EN: Record<string, string> = {
   "필수": "Required",
   "선택": "Optional",
   "저장하고 시작하기": "Save and start",
+  // ─── 말로 채우기 ──────────────────────────────────────────────────────────
+  "말로 채우기": "Fill it by voice",
+  "“매운 닭강정 포장으로 두 개” 처럼 말씀하시면 아래 칸이 채워져요.":
+    "Say something like “two spicy boneless, to go” and we will fill in the fields below.",
+  "한 번에 다 말하지 않으셔도 돼요. 들은 것만 채우고, 나머지는 손으로 고르시면 돼요.":
+    "You do not have to say it all at once. We fill in what we heard; pick the rest by hand.",
+  "말하기": "Speak",
+  "듣고 있어요": "Listening",
+  "이렇게 말씀해 보세요": "Try saying it like this",
+  "한 번에 다 말하지 않으셔도 돼요. 나머지는 손으로 고르시면 돼요.":
+    "You do not have to say it all at once. Pick the rest by hand.",
+  "다 말했어요": "I am done",
+  "이렇게 들었어요": "This is what we heard",
+  "이대로 채우기": "Use this",
+  "다시 말하기": "Say it again",
+  "{축}은(는) 못 들었어요. 아래에서 골라 주세요.": "We did not catch {축}. Please pick it below.",
+  "장소를 고르시면 맵기·형태 같은 것도 말로 채울 수 있어요.":
+    "Pick a place and you can fill in things like spice level by voice too.",
+  "마이크를 쓸 수 없어요. 브라우저 설정에서 마이크를 허용해 주시거나, 아래에서 손으로 골라 주세요.":
+    "We cannot use the microphone. Allow it in your browser settings, or pick by hand below.",
+  "잘 안 들렸어요. 조금 더 크게 다시 말씀해 주세요.":
+    "We did not catch that. Please say it again a little louder.",
+  "지금은 말로 채울 수 없어요. 아래에서 손으로 골라 주세요.":
+    "Voice is not available right now. Please pick by hand below.",
   // 저장해 둔 주문표를 다시 열어 고칠 때의 문구.
   "주문표 고치기": "Edit this card",
   "고치고 저장하면 이 주문표가 바뀌어요": "Saving replaces this card",
