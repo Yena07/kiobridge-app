@@ -27,7 +27,7 @@ import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
-import { 영어로바꾸기, 안바뀐것, 돈 } from "@/i18n/apply";
+import { 영어로바꾸기, 되돌리기, 안바뀐것, 돈 } from "@/i18n/apply";
 import { tf } from "@/i18n/t";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
@@ -806,7 +806,7 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
     >
       <Pictogram name="handsClapping" size={72} color={TEXT_1} />
       <h1 style={{ ...TYPE.title, color: TEXT_1, marginTop: 32 }}>
-        반가워요, <span style={{ color: TEXT_1 }}>{name}</span>님!
+        반가워요, <span data-원문 style={{ color: TEXT_1 }}>{name}</span>님!
       </h1>
       <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>
         자주 시키는 주문을 저장해 두면<br />키오스크 앞에서 바로 꺼내 쓸 수 있어요
@@ -1237,7 +1237,7 @@ function OrderSheetCard({
             >
               {sheet.place ? PLACE_ICONS[sheet.place] : <Pictogram name="squaresFour" size={19} />}
             </div>
-            <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1 }}>{sheet.menuName}</span>
+            <span data-원문 style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1 }}>{sheet.menuName}</span>
           </div>
           <div
             aria-hidden="true"
@@ -1284,7 +1284,7 @@ function OrderSheetCard({
 
         {/* 반투명 흰색(70%)은 초록 위에서 3.31:1 이라 읽히지 않는다. 흰색은 5.08:1 이다. */}
         {sheet.memo && (
-          <p style={{ fontSize: 14, color: selected ? PAPER : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{sheet.memo}</p>
+          <p style={{ fontSize: 14, color: selected ? PAPER : TEXT_2, lineHeight: 1.5, marginTop: 12 }} data-원문>{sheet.memo}</p>
         )}
       </label>
 
@@ -2818,7 +2818,7 @@ function OptionCard({
           가장 먼저 읽어야 하는 값이라 한 줄로 세우고, 배지는 아래로 내린다.
         */}
         <span style={{ minWidth: 0, textAlign: "left" }}>
-        <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, display: "block" }}>{name}</span>
+        <span data-원문 style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, display: "block" }}>{name}</span>
         {/*
           위트 액센트 하나. 뜻은 옆의 '조건 일치' 라는 글자가 지고 있고 이 그림은
           거들기만 한다 - 이모지는 기기마다 모양이 다르고 스크린리더가 이름을
@@ -3194,7 +3194,7 @@ function OrderConfirmScreen({
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-2" style={{ marginTop: 20, paddingBottom: 16 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: PAPER, backgroundColor: RULE, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 주문표</span>
-          <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
+          <span data-원문 style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
         </div>
         <div style={{ height: 1, backgroundColor: BORDER, marginLeft: -GAP.screenX, marginRight: -GAP.screenX }} />
       </div>
@@ -4434,7 +4434,14 @@ export default function App() {
    * 매핑이 통째로 깨진다(i18n/apply.ts 주석).
    */
   useLayoutEffect(() => {
-    if (접근성값.language !== "en-US") return;
+    /*
+     * 한국어로 돌아오면 우리가 바꾼 자리를 우리 손으로 되돌린다.
+     *
+     * 여기서 그냥 나가면 화면은 영어로 남는다. React 는 자기가 그린 한국어가
+     * 아직 화면에 있다고 여기기 때문에 다시 쓰지 않는다 — 설정만 ko-KR 이고
+     * 글자는 영어인 채로, 새로고침 전에는 돌아올 길이 없었다(#34 리뷰).
+     */
+    if (접근성값.language !== "en-US") { 되돌리기(); return; }
     const 틀 = 화면영역.current?.closest<HTMLElement>("[data-frame]") ?? document.body;
     영어로바꾸기(틀);
 
