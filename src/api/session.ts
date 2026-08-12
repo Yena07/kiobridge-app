@@ -1,5 +1,5 @@
 import type { MainTab, OrderSheet, PlaceType, Screen } from "@/domain/types";
-import { 기본도움설정, type 도움설정 } from "@/api/a11y";
+import { 기본도움설정, 아는언어인가, type 도움설정 } from "@/api/a11y";
 import { 아는알레르기 } from "@/api/allergy";
 import type { Account } from "@/api/account";
 
@@ -161,8 +161,11 @@ const 접근성읽기 = (v: unknown): 도움설정 => {
   const o = (typeof v === "object" && v !== null ? v : {}) as Record<string, unknown>;
   const 값 = { ...기본도움설정 };
   for (const 칸 of Object.keys(기본도움설정) as (keyof 도움설정)[]) {
-    if (typeof o[칸] === "boolean") 값[칸] = o[칸];
+    if (칸 !== "language" && typeof o[칸] === "boolean") 값[칸] = o[칸];
   }
+  // 언어만 boolean 이 아니다. 아는 값일 때만 받는다 — 손대서 아무 문자열이나
+  // 넣어 두면 서버의 BCP 47 검사에 걸려 주문 자체가 안 된다.
+  if (아는언어인가(o.language)) 값.language = o.language;
   return 값;
 };
 
@@ -179,7 +182,20 @@ const 남길것이있나 = (v: 이어쓸것): boolean =>
   || v.planId !== null
   || v.budget !== null
   || v.allergies.length > 0
-  || Object.values(v.a11y).some(Boolean);
+  || 도움설정을건드렸나(v.a11y);
+
+/**
+ * 도움 설정을 하나라도 기본값에서 바꿨는가.
+ *
+ * Object.values(...).some(Boolean) 로 훑던 것을 칸별로 본다. language 가 들어오면서
+ * 그 방식이 깨졌다 — 기본값 "ko-KR" 이 truthy 라, 아무것도 안 건드린 사람도
+ * '남길 것이 있다' 가 되어 빈 이용이 전부 저장됐다.
+ *
+ * 켠 것과 고른 것을 나눠 본다. 켜는 값은 true 인지, 고르는 값은 기본과 다른지.
+ */
+const 도움설정을건드렸나 = (a: 도움설정): boolean =>
+  (Object.keys(기본도움설정) as (keyof 도움설정)[]).some((칸) =>
+    칸 === "language" ? a.language !== 기본도움설정.language : a[칸] === true);
 
 export const 이어쓰기 = {
   /**

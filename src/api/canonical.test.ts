@@ -179,6 +179,31 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
     expect(toCanonicalProfile(주문표({}), { 접근성: { largeText: true } }).interaction.preferredInput).toBe("TOUCH");
   });
 
+  it("고른 언어가 interaction.language 로 나간다", () => {
+    /*
+     * 계약은 BCP 47 꼴이면 무엇이든 받는다. 로컬 백엔드로 넷 다 확인했다 —
+     * ko-KR · en-US · zh-CN · vi-VN 전부 status VALID.
+     * 화면이 안 물어서 여태 "ko-KR" 로만 나가고 있었다.
+     */
+    for (const code of ["ko-KR", "en-US", "zh-CN", "vi-VN"] as const) {
+      expect(toCanonicalProfile(주문표({}), { 접근성: { language: code } }).interaction.language).toBe(code);
+    }
+  });
+
+  it("안 고르면 한국어다", () => {
+    expect(toCanonicalProfile(주문표({})).interaction.language).toBe("ko-KR");
+  });
+
+  it("언어도 accessibility 에 섞이지 않는다", () => {
+    // voiceGuide 와 같은 이유다. 일곱 칸은 additionalProperties: false 다.
+    const c = toCanonicalProfile(주문표({}), { 접근성: { language: "zh-CN", voiceGuide: true } });
+    expect(Object.keys(c.accessibility).sort()).toEqual([
+      "hearingSupport", "highContrast", "largeText", "mobilitySupport",
+      "simpleSteps", "staffAssistancePreferred", "visualGuidance",
+    ]);
+    expect(JSON.stringify(c.accessibility)).not.toContain("language");
+  });
+
   it("수집 시각을 넘기면 그걸 쓴다 — 시계에 기대지 않는다", () => {
     const t = "2026-08-01T05:30:00.000Z";
     expect(toCanonicalProfile(주문표({}), { collectedAt: t }).source.collectedAt).toBe(t);
