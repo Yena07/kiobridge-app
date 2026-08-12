@@ -26,7 +26,8 @@ import { 가격한도, 한도후보 } from "@/api/budget";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
-import { 영어로바꾸기, 안바뀐것 } from "@/i18n/apply";
+import { 영어로바꾸기, 안바뀐것, 돈 } from "@/i18n/apply";
+import { tf } from "@/i18n/t";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
 
@@ -1181,7 +1182,8 @@ function OrderSheetCard({
         <button
           type="button"
           // 삭제는 되돌릴 수 없다. 고르는 쪽보다 더 정확히 말해 줘야 한다.
-          aria-label={`${듣는이름(sheet)} 주문표 삭제`}
+          /* 쉼표로 띄운다. 스크린리더가 한 박자 쉬어 읽고, 옮길 때도 토막마다 걸린다. */
+          aria-label={`${듣는이름(sheet)}, 주문표 삭제`}
           onClick={onDelete}
           style={{
             // 높이만 44 였고 폭이 30 이었다. 밑줄은 글자에만 걸리므로
@@ -1211,7 +1213,12 @@ function OrderSheetCard({
  * 주문표가 아니라 이번 이용에 딸린 값이라 여기(주문 직전)에 둔다. 주문표에 넣으면
  * 예산은 그날그날 다른데 저장해 둔 조건에 굳어 버린다.
  */
-function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바꾸기: (원: number | null) => void }) {
+function 한도고르기({ 예산, on바꾸기, 영어인가 }: {
+  예산: number | null;
+  on바꾸기: (원: number | null) => void;
+  /** 금액 표기가 언어마다 달라서 여기까지 내려온다("6,000원" vs "KRW 6,000"). */
+  영어인가: boolean;
+}) {
   return (
     <div>
       <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 6 }}>가격 한도 (선택)</h2>
@@ -1220,7 +1227,7 @@ function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바
         {한도후보.map((원) => (
           <Chip
             key={원}
-            label={`${원.toLocaleString("ko-KR")}원`}
+            label={돈(원, 영어인가)}
             selected={예산 === 원}
             onClick={() => on바꾸기(예산 === 원 ? null : 원)}
           />
@@ -1228,7 +1235,7 @@ function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바
       </div>
       {예산 !== null && (
         <p style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
-          {예산.toLocaleString("ko-KR")}원보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.
+          {tf("{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.", { 금액: 돈(예산, 영어인가) })}
         </p>
       )}
     </div>
@@ -1236,7 +1243,7 @@ function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바
 }
 
 function SavedSheetsScreen({
-  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false, 예산, on예산,
+  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false, 예산, on예산, 영어인가,
 }: {
   sheets: OrderSheet[];
   onAddSheet: () => void;
@@ -1245,6 +1252,8 @@ function SavedSheetsScreen({
   showOrder?: boolean;
   예산: number | null;
   on예산: (원: number | null) => void;
+  /** 금액 표기가 언어마다 다르다. 한도고르기 까지 내려간다. */
+  영어인가: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(sheets[0]?.id ?? null);
 
@@ -1314,7 +1323,7 @@ function SavedSheetsScreen({
       <StickyFooter>
         {/* 주문 버튼이 보일 때만 묻는다. 연결도 안 된 화면에서 예산부터 물으면 뜬금없다. */}
         {showOrder && 고른것 && 백엔드가아는장소(고른것) && (
-          <한도고르기 예산={예산} on바꾸기={on예산} />
+          <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={영어인가} />
         )}
         {/*
           아직 연결되지 않은 장소는 주문으로 보내지 않는다.
@@ -4476,6 +4485,7 @@ export default function App() {
               showOrder={fromQr}
               예산={예산}
               on예산={(원) => 가격한도.바꾸기(원)}
+              영어인가={접근성값.language === "en-US"}
             />
           )}
           {screen === "order-confirm" && pairingId && orderSheet && (

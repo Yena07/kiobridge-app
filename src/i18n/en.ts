@@ -278,5 +278,34 @@ export const EN: Record<string, string> = {
   "형태 — 1개 선택": "Bone or boneless — pick one",
   "컵 — 1개 선택": "Cup — pick one",
   "수량 — 1개 선택": "Quantity — pick one",
+  "QR 코드를 인식했어요": "QR code recognized",
+  "QR 코드 스캔": "QR code scanner",
+  "QR 스캔 닫기": "Close the scanner",
+  // 한 덩어리로 오는 자리. 줄 단위 항목만으로는 안 맞아서 줄바꿈째 넣는다.
+  "키오스크의 QR 코드를\n카메라에 맞춰주세요": "Point your camera\nat the kiosk’s QR code",
+  "{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.":
+    "We’ll leave out anything above {금액}. If nothing is left, we’ll tell you so.",
   "주문표 삭제": "Delete order card",
+  // ─── QR 다시 찍기 갈래 ────────────────────────────────────────────────────
+  "QR 코드를": "Scan the",
+  "찍어 주세요": "QR code",
+  "키오스크 화면이나 기계에 붙어 있어요": "It’s on the kiosk screen or stuck to the machine",
+  "찍지 않아도": "Even without scanning, you can review your saved",
+  "에서 저장한 조건을 먼저 확인할 수 있어요": "first",
+  "QR 다시 스캔하기": "Scan the QR code again",
+  "연결이 끊어졌어요": "The connection ended",
+  "연결 시간이 지났어요": "The session timed out",
+  // ─── 이유 화면 ────────────────────────────────────────────────────────────
+  //
+  // 서버가 준 문장(추천 이유·제외 사유)은 일부러 안 넣는다. 이 앱은 그걸 그대로
+  // 인용한다는 원칙을 지켜 왔고, 우리가 영어로 바꾸면 서버가 한 말인지 우리가
+  // 지어낸 말인지 다시 알 수 없다. 서버가 영어로 줄 수 있게 되면 그때 받아 쓴다.
+  //
+  // 메뉴 이름도 안 넣는다. 사용자는 이 이름을 키오스크 화면과 맞춰 봐야 하는데,
+  // 옮기면 화면에 있는 이름과 달라져서 맞춰 볼 수가 없다.
+  "반영:": "Used:",
+  "제외:": "Left out:",
+  "이유": "reason",
+  "개 더 보기": "more",
+  "비슷한 메뉴 후보": "Similar menu options",
 };

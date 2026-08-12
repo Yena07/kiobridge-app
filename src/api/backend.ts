@@ -9,6 +9,7 @@ import { KioBridgeError, clearSheets, type KioBridgeApi } from "@/api/client";
 import { STEPS } from "@/domain/catalog";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정 } from "@/api/a11y";
+import { 돈 } from "@/i18n/apply";
 import { 가격한도 } from "@/api/budget";
 import { 알레르기설정 } from "@/api/allergy";
 
@@ -967,7 +968,14 @@ function 확인표(c: KitCandidate | undefined, p: OrderSheet): MappedOption[] {
   return 행;
 }
 
-const 원 = (n: number | undefined) => (typeof n === "number" ? `${n.toLocaleString("ko-KR")}원` : "");
+/*
+ * 값 표기. 우리가 만드는 글자라 화면 언어를 따라간다("6,000원" vs "KRW 6,000").
+ *
+ * 통화는 원 그대로다 — 이 앱은 한국 키오스크 앞에서 쓰는 것이고, 환산해서 적으면
+ * 화면의 값과 키오스크 화면의 값이 달라진다.
+ */
+const 원 = (n: number | undefined) =>
+  typeof n === "number" ? 돈(n, 접근성설정.읽기().language === "en-US") : "";
 
 /**
  * 받침이 있으면 '은', 없으면 '는'.

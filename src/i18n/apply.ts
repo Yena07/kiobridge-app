@@ -29,6 +29,18 @@ import { EN } from "@/i18n/en";
  * 넣어 두었다. 새로 생기면 `안바뀐것()` 이 잡아 준다.
  */
 
+/**
+ * 금액을 지금 언어로 적는다.
+ *
+ * 표에 넣을 수 없는 값이다 — 숫자가 매번 다르다. 단위가 붙는 자리도 언어마다
+ * 다르다("6,000원" vs "KRW 6,000"). 그래서 만드는 쪽에서 언어를 보고 적는다.
+ *
+ * 통화는 원 그대로다. 이 앱은 한국 키오스크 앞에서 쓰는 것이고, 환산해서 적으면
+ * 화면의 값과 키오스크의 값이 달라진다.
+ */
+export const 돈 = (n: number, 영어: boolean): string =>
+  영어 ? `KRW ${n.toLocaleString("en-US")}` : `${n.toLocaleString("ko-KR")}원`;
+
 /** 글자를 바꿀 곳. 화면 텍스트와, 눈에 안 보이지만 읽히는 것들. */
 const 속성들 = ["aria-label", "placeholder", "title", "alt"] as const;
 
