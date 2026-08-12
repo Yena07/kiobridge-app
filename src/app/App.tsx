@@ -310,10 +310,26 @@ function WelcomeScreen({ onStart, onLogin, 동의함, on동의, onPrivacy }: {
   onPrivacy: () => void;
 }) {
   return (
-    <div className="flex flex-col h-full kb-paper">
-      {/* 첫 화면은 사진 한 장으로 "어디서 쓰는 앱인지"를 설명한다.
-          아래쪽을 흰색으로 흘려보내 사진과 본문의 경계를 지운다. */}
-      <div className="shrink-0 relative" style={{ height: "42%", minHeight: 0, overflow: "hidden" }}>
+    <div className="flex flex-col h-full kb-paper" style={{ overflowY: "auto" }}>
+      {/*
+        첫 화면은 사진 한 장으로 "어디서 쓰는 앱인지"를 설명한다.
+        아래쪽을 흰색으로 흘려보내 사진과 본문의 경계를 지운다.
+
+        자리가 모자라면 **사진이 먼저 양보한다.** 예전에는 사진을 42% 로 박아 두고
+        (shrink-0) 가운데 칸을 flex-1 로 뒀는데, flex-1 은 바탕 크기가 0 이라
+        가운데 칸이 '남은 만큼' 만 받았다. 동의 문구가 한 줄 늘어 아래 칸이 커지면
+        남는 자리가 글보다 작아지고, 그러면 글이 칸 밖으로 나가 아래 칸을 덮었다.
+        동의를 안 한 첫 화면에서 안내 문구가 소개 문장 위에 겹쳐 보였다.
+
+        사진은 없어도 뜻이 통하는 그림이고 글은 아니다. 그래서 줄어드는 쪽을
+        사진으로 정한다. 160 아래로는 안 줄인다 — 그보다 작으면 무슨 장면인지
+        알아볼 수 없어서 있으나 마나다.
+
+        더 짧은 화면(작은 폰 세로 667 같은)에서는 사진을 다 줄여도 모자란다.
+        그때는 겹치거나 잘리는 대신 **화면이 스크롤된다**(위 kb-paper 칸의
+        overflowY). 로그인 단추가 화면 밖에 남아 못 누르는 것이 제일 나쁘다.
+      */}
+      <div className="relative" style={{ height: "42%", minHeight: 160, flexShrink: 1, overflow: "hidden" }}>
         <img
           src={kioskHeroImg}
           alt=""
@@ -336,7 +352,11 @@ function WelcomeScreen({ onStart, onLogin, 동의함, on동의, onPrivacy }: {
         />
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: 0, padding: `0 ${GAP.screenX}px`, marginTop: -12 }}>
+      {/*
+        flex: "1 0 auto" 다. 남으면 늘어나되(1) 줄지는 않고(0), 바탕 크기는 글의
+        실제 높이(auto)다. 이 셋이 다 있어야 이 칸의 글이 자리 계산에 들어간다.
+      */}
+      <div className="flex flex-col items-center justify-center" style={{ flex: "1 0 auto", padding: `0 ${GAP.screenX}px 14px`, marginTop: -12 }}>
         <Pictogram name="handPointing" size={54} color={TEXT_1} />
         <div style={{ marginTop: 18 }}>
           <AppLogo size={40} />
@@ -346,7 +366,8 @@ function WelcomeScreen({ onStart, onLogin, 동의함, on동의, onPrivacy }: {
         </p>
       </div>
 
-      <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-3">
+      {/* 누를 것이 있는 칸이라 줄이지 않는다. 자리가 모자라면 사진이 양보한다. */}
+      <div style={{ padding: `0 ${GAP.screenX}px 32px`, flexShrink: 0 }} className="flex flex-col gap-3">
         {/*
           동의를 먼저 받는다. 게스트로 시작하는 것도 정보를 쓰는 일이라 같이 막는다 —
           로그인한 사람에게만 물으면, 정작 가장 많이 쓰일 길에서는 안 묻는 셈이 된다.
