@@ -20,7 +20,7 @@ import {
   LOGIN_ID_MAX, PASSWORD_MIN, MENU_NAME_MAX, MEMO_MAX, type Account,
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
-import { 접근성설정, type 도움설정 } from "@/api/a11y";
+import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } from "@/api/a11y";
 import { 소리를낼수있나, 읽어주기, 그만읽기 } from "@/api/speech";
 import { 가격한도, 한도후보 } from "@/api/budget";
 import { 이어쓰기 } from "@/api/session";
@@ -2008,8 +2008,11 @@ function ToggleRow({
   );
 }
 
+/** 도움설정 중 켜고 끄는 칸만. language 는 스위치가 아니라 고르는 값이라 뺀다. */
+type 스위치칸 = { [K in keyof 도움설정]: 도움설정[K] extends boolean ? K : never }[keyof 도움설정];
+
 interface 도움항목 {
-  key: keyof 도움설정;
+  key: 스위치칸;
   label: string;
   sub: string;
   /** 있으면 이게 참일 때만 보여 준다. 못 하는 것을 스위치로 내밀지 않는다. */
@@ -2054,6 +2057,51 @@ const 전해드릴것: 도움항목[] = [
 
 /** 이 브라우저에서 실제로 되는 항목만 남긴다. */
 const 쓸수있는것 = (항목들: 도움항목[]): 도움항목[] => 항목들.filter((r) => !r.될때만 || r.될때만());
+
+/**
+ * 안내받고 싶은 언어를 고르는 줄.
+ *
+ * 스위치가 아니라 넷 중 하나라서 칩으로 둔다. 이름은 그 언어로 적는다 —
+ * 한국어를 못 읽는 분이 자기 언어를 찾아야 하는 목록인데 "영어" 라고 적어 두면
+ * 정작 그 줄을 찾아야 할 사람이 못 읽는다.
+ *
+ * **이 앱 화면은 안 바뀐다.** 키오스크에 전하기만 한다. 그래서 '전해 드려요'
+ * 무리에 두고, 화면이 안 바뀐다는 말을 위에 적어 둔다 — 골랐는데 아무 일도
+ * 안 일어나면 사용자는 앱이 고장 났다고 생각한다.
+ */
+function 언어고르기({ 고른것, on바꾸기 }: { 고른것: 언어코드; on바꾸기: (v: 언어코드) => void }) {
+  return (
+    <div style={{ paddingTop: 16 }}>
+      <span style={{ display: "block", fontSize: 17, fontWeight: 700, color: TEXT_1, letterSpacing: "-0.02em" }}>
+        안내 언어
+      </span>
+      <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 4, marginBottom: 10 }}>
+        키오스크에 이 언어로 안내해 달라고 전해요
+      </span>
+      <div className="flex flex-wrap" style={{ gap: 6 }} role="radiogroup" aria-label="안내 언어">
+        {언어목록.map(({ code, label }) => (
+          <button
+            key={code}
+            type="button"
+            role="radio"
+            aria-checked={고른것 === code}
+            lang={code}
+            onClick={() => on바꾸기(code)}
+            style={{
+              minHeight: 44, padding: "10px 18px", borderRadius: RADIUS.pill,
+              fontSize: 15, fontWeight: 700, fontFamily: FONT, letterSpacing: "-0.01em",
+              backgroundColor: 고른것 === code ? RULE : CANVAS,
+              color: 고른것 === code ? PAPER : TEXT_CHIP,
+              border: "none", cursor: "pointer", transition: "all 0.15s",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** 머리카락 굵기 선으로 이어 붙인 스위치 묶음. 두 화면이 같은 모양으로 쓴다. */
 function 도움목록({ 항목들, 설정, onChange }: {
@@ -2128,6 +2176,7 @@ function SetupScreen({ 설정, onChange, onNext, onBack }: {
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
         <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
+        <언어고르기 고른것={설정.language} on바꾸기={(v) => onChange({ language: v })} />
       </div>
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
@@ -2208,6 +2257,7 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
           앱 화면은 그대로예요. 지금은 전해 주기만 해요.
         </p>
         <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
+        <언어고르기 고른것={설정.language} on바꾸기={(v) => onChange({ language: v })} />
       </div>
     </div>
   );

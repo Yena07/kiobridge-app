@@ -51,6 +51,14 @@ export const 읽어주기 = (글: string): void => {
   try {
     globalThis.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(말);
+    /*
+     * 안내 언어를 골라도 여기는 늘 ko-KR 이다.
+     *
+     * 읽는 것이 화면에 있는 한국어 글이기 때문이다. 고른 언어를 여기 넣으면
+     * 중국어 목소리가 한국어 글자를 읽으려 들어서 알아들을 수 없는 소리가 난다.
+     * 언어 선택은 키오스크에 전하는 값이지 이 앱의 글을 바꾸는 값이 아니다
+     * (a11y.ts 의 language 주석).
+     */
     u.lang = "ko-KR";
     // 기본 속도는 이 앱을 쓰는 분들에게 빠르다. 조금 늦춘다.
     u.rate = 0.95;
