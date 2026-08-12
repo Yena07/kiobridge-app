@@ -1471,6 +1471,13 @@ function 한도적기({ 예산, on바꾸기, 영어인가 }: {
     <div>
       <label htmlFor={칸id} style={{ ...TYPE.label, color: TEXT_2, display: "block", marginBottom: 6 }}>
         가격 한도 (선택)
+        {/*
+          눈으로는 칸 오른쪽의 "원" 이 단위를 알려 주지만, 그건 장식이라
+          aria-hidden 이다. 소리로만 듣는 사람은 이 칸이 원 단위인지 만 원
+          단위인지 알 수 없다. 잘못 적으면 후보가 통째로 걸러지는 값이라
+          라벨에서 한 번 말해 준다(#98 리뷰).
+        */}
+        <span className="sr-only">{영어인가 ? " in won" : " 원 단위"}</span>
       </label>
       <div className="flex items-center" style={{ gap: 8, backgroundColor: CANVAS, borderRadius: RADIUS.input, padding: "0 16px" }}>
         <input
@@ -3590,7 +3597,8 @@ function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
         <span style={{ ...TYPE.caption, color: TEXT_2 }}>
           {/* 조각으로 나누면 어순이 깨진다("What the kiosk did 10steps"). 한 문장으로 만든다. */}
           {tf("키오스크가 한 일 {n}가지", { n: done.length })}
-          {실패 > 0 && <b style={{ fontWeight: 700, color: WARN }}> · {실패}가지 실패</b>}
+          {/* 숫자가 끼는 문장이라 조각으로 쪼개진다. tf() 로 통째로 옮긴다(#98 리뷰). */}
+          {실패 > 0 && <b style={{ fontWeight: 700, color: WARN }}> · {tf("{n}가지 실패", { n: 실패 })}</b>}
           <span style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>{" "}{펼침 ? "접기" : "보기"}</span>
         </span>
       </button>

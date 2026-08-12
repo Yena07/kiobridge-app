@@ -40,6 +40,9 @@ export const EN: Record<string, string> = {
   "비밀번호": "Password",
   "비밀번호 다시 적기": "Re-enter password",
   "보기": "Show",
+  "접기": "Hide",
+  // 숫자가 끼어 조각으로 쪼개지는 문장. tf() 로 통째로 옮긴다.
+  "{n}가지 실패": "{n} failed",
   "숨기기": "Hide",
   "확인하는 중": "Checking",
   "아이디와 비밀번호를 적으면 로그인할 수 있어요": "Enter your ID and password to log in",

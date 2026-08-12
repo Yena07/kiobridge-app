@@ -110,6 +110,19 @@ const 옮기기 = (글: string): string | null => {
  * (되풀이해서 불러도 안전하다 — 화면이 다시 그려질 때마다 부른다).
  */
 export const 영어로바꾸기 = (뿌리: HTMLElement): void => {
+  /*
+   * 화면에서 떨어져 나간 노드를 놓아 준다.
+   *
+   * 되돌릴 자리를 적어 두는 Map 의 열쇠가 DOM 노드다. 강한 참조라, React 가
+   * 노드를 걷어 내도 이 Map 이 붙잡고 있으면 회수되지 않는다. 이 함수는 화면이
+   * 다시 그려질 때마다 불리므로, 영어를 켜 둔 채 화면을 옮겨 다닐수록 사라진
+   * 노드가 쌓인다. 비우는 것은 한국어로 되돌릴 때뿐이라 그때까지 계속 는다.
+   *
+   * 매번 훑어도 싸다 — 지금 화면에 있는 만큼만 들어 있기 때문이다(#98 리뷰).
+   */
+  for (const 노드 of 바꾼글자.keys()) if (!노드.isConnected) 바꾼글자.delete(노드);
+  for (const el of 바꾼속성.keys()) if (!el.isConnected) 바꾼속성.delete(el);
+
   const 훑기 = document.createTreeWalker(뿌리, NodeFilter.SHOW_TEXT);
   const 바꿀것: [Text, string][] = [];
   for (let n = 훑기.nextNode(); n; n = 훑기.nextNode()) {
@@ -166,7 +179,20 @@ const 그대로둘말 = (뿌리: Element): Set<string> => {
   const 것들 = new Set<string>();
   for (const 안 of 뿌리.querySelectorAll("[data-원문]")) {
     const 말 = (안.textContent ?? "").trim();
-    if (말) 것들.add(말);
+    if (!말) continue;
+    것들.add(말);
+    /*
+     * 토막도 같이 지킨다. 모으는 단위와 지키는 단위가 달라서다.
+     *
+     * 여기서는 요소 하나의 글자를 통째로 담는데, 라벨을 옮기는 쪽은 그 라벨을
+     * ", " 로 쪼개어 조각마다 표를 본다. 메모를 "얼음 적게, 포장하기" 로 적어
+     * 두면 통째로는 안 걸리고 '포장하기' 조각만 따로 걸려서, 사용자가 적은 말의
+     * 절반이 Take out 이 된다(#98 리뷰).
+     */
+    for (const 조각 of 말.split(", ")) {
+      const t = 조각.trim();
+      if (t) 것들.add(t);
+    }
   }
   return 것들;
 };
