@@ -10,6 +10,7 @@ import { STEPS } from "@/domain/catalog";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정 } from "@/api/a11y";
 import { 가격한도 } from "@/api/budget";
+import { 알레르기설정 } from "@/api/allergy";
 
 /**
  * 팀 API 명세서의 경로와 1:1 로 맞춘 계층.
@@ -1217,7 +1218,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기() });
     // 가격 한도가 바뀌면 후보 자체가 달라진다(넘는 것은 제외된다). 키에 들어가므로
     // 한도를 고치면 캐시가 자동으로 갈라진다 — 접근성 설정과 같은 방식이다.
-    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p, { 예산: 가격한도.읽기() }).contextInput)}`;
+    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p, { 예산: 가격한도.읽기(), 알레르기: 알레르기설정.읽기() }).contextInput)}`;
     마지막키.set(p.id, 키);
     return 키;
   };
@@ -1263,7 +1264,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
        */
       reconfirmationFields?: { path?: string; reasonCode?: string; message?: string }[];
       contractValidation?: { valid: boolean; errors?: { message?: string }[] };
-    }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p, { 예산: 가격한도.읽기() }) });
+    }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p, { 예산: 가격한도.읽기(), 알레르기: 알레르기설정.읽기() }) });
 
     /*
      * 재확인을 먼저 가른다. 순서가 뒤집혀 있어서 이 분기가 죽어 있었다.

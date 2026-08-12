@@ -53,6 +53,35 @@ describe("선택지를 enum 으로 옮긴다", () => {
     expect(c.hardConstraints.allergenIds).toEqual(["PEANUT", "SOY", "MILK", "EGG", "WHEAT", "SHRIMP"]);
   });
 
+  it("주문표의 알레르기와 늘 피하는 것을 합친다 — 덮지 않는다", () => {
+    /*
+     * 알레르기는 주문마다 달라지는 값이 아니라 그 사람에 대한 사실이다. 주문표에만
+     * 두면 새 주문표마다 다시 골라야 하고, 한 번 빠뜨리면 그 주문표로 주문할 때
+     * 안 걸러진다.
+     *
+     * 합치면 걸러지는 후보가 늘어날 뿐 줄지 않는다 — 어느 쪽을 빠뜨려도 안전한
+     * 방향으로만 틀린다. 덮어쓰면 한쪽이 사라져서 정작 걸러야 할 것이 안 걸러진다.
+     */
+    const c = toChickenStoreContext(
+      주문표({ "알레르기 (꼭 빼주세요)": ["땅콩"] }),
+      { 알레르기: ["MILK", "SHRIMP"] },
+    );
+    expect(c.hardConstraints.allergenIds.sort()).toEqual(["MILK", "PEANUT", "SHRIMP"]);
+  });
+
+  it("양쪽에 같은 것이 있어도 한 번만 보낸다", () => {
+    const c = toChickenStoreContext(
+      주문표({ "알레르기 (꼭 빼주세요)": ["땅콩", "우유"] }),
+      { 알레르기: ["PEANUT", "MILK"] },
+    );
+    expect(c.hardConstraints.allergenIds).toEqual(["PEANUT", "MILK"]);
+  });
+
+  it("늘 피하는 것만 있어도 나간다 — 주문표에 안 골랐어도", () => {
+    const c = toChickenStoreContext(주문표({}), { 알레르기: ["EGG"] });
+    expect(c.hardConstraints.allergenIds).toEqual(["EGG"]);
+  });
+
   it("모르는 알레르기도 버리지 않고 UNKNOWN 으로 보낸다", () => {
     // 조용히 버리면 그 사람의 알레르기가 서버에 전달되지 않는다.
     // 절대 조건이라 '모른다' 는 사실이라도 서버가 알아야 한다.

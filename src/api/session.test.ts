@@ -72,6 +72,7 @@ const 채운값 = (덮을것: Partial<이어쓸것> = {}): 이어쓸것 => ({
   sheets: [주문표("p1"), 주문표("p2")],
   fromServer: ["p2"],
   a11y: { ...기본도움설정, largeText: true },
+  allergies: [],
   budget: null,
   planId: null,
   ...덮을것,
@@ -102,10 +103,10 @@ describe("남으면 안 되는 것", () => {
    * 남기는가' 를 바꾼 것이니, session.ts 의 설명과 개인정보 화면 문구를
    * 같이 고쳤는지 다시 보라는 뜻이다.
    */
-  it("적어 두는 칸은 정해진 아홉 개뿐이다", () => {
+  it("적어 두는 칸은 정해진 열 개뿐이다", () => {
     이어쓰기.쓰기(채운값());
     expect(Object.keys(적힌것()).sort()).toEqual(
-      ["a11y", "account", "budget", "fromServer", "name", "planId", "screen", "sheets", "tab"],
+      ["a11y", "account", "allergies", "budget", "fromServer", "name", "planId", "screen", "sheets", "tab"],
     );
   });
 
@@ -252,6 +253,21 @@ describe("손댄 값을 믿지 않는다", () => {
     }
   });
 
+  it("알레르기는 아는 여섯만 받는다", () => {
+    /*
+     * 모르는 값이 섞이면 canonical 이 UNKNOWN 으로 옮기고, 서버는 그걸
+     * '확인 못 한 절대 조건' 으로 보고 주문을 아예 막는다. 손댄 값 하나로
+     * 주문 자체가 안 되게 만들지 않는다.
+     */
+    망가진것({ allergies: ["PEANUT", "메밀", "BUCKWHEAT", 1, null, "SHRIMP"] });
+    expect(이어쓰기.읽기()!.allergies).toEqual(["PEANUT", "SHRIMP"]);
+  });
+
+  it("알레르기를 골라 두면 그대로 되살린다", () => {
+    이어쓰기.쓰기(채운값({ allergies: ["PEANUT", "MILK"] }));
+    expect(이어쓰기.읽기()!.allergies).toEqual(["PEANUT", "MILK"]);
+  });
+
   it("가격 한도를 정해 두면 그대로 되살린다", () => {
     // 조용히 풀리면 아까 안 보이던 메뉴가 갑자기 보이고 사용자는 이유를 알 수 없다.
     이어쓰기.쓰기(채운값({ budget: 8000 }));
@@ -262,7 +278,7 @@ describe("손댄 값을 믿지 않는다", () => {
 describe("남길 것이 없으면 아무것도 안 쓴다", () => {
   const 빈값 = 채운값({
     screen: "welcome", tab: "menu", name: "", account: null,
-    sheets: [], fromServer: [], a11y: { ...기본도움설정 }, budget: null, planId: null,
+    sheets: [], fromServer: [], a11y: { ...기본도움설정 }, allergies: [], budget: null, planId: null,
   });
 
   it("빈 이용은 저장하지 않는다", () => {

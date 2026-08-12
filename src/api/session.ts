@@ -1,5 +1,6 @@
 import type { MainTab, OrderSheet, PlaceType, Screen } from "@/domain/types";
 import { 기본도움설정, type 도움설정 } from "@/api/a11y";
+import { 아는알레르기 } from "@/api/allergy";
 import type { Account } from "@/api/account";
 
 /**
@@ -71,6 +72,14 @@ export interface 이어쓸것 {
   fromServer: string[];
   /** 도움 설정. 킷의 일곱 칸 + 소리 안내. */
   a11y: 도움설정;
+  /**
+   * 이 사람이 늘 피해야 하는 것. 주문표의 알레르기와 합쳐서 서버로 나간다.
+   *
+   * 이번 이용에만 남는다. 알레르기는 그 사람에 대한 사실이라 오래 붙들고 싶어지지만,
+   * 이 앱은 창을 닫으면 아무것도 안 남기겠다고 약속했다. 다음 사람이 이 기기를
+   * 열었을 때 앞사람의 알레르기가 남아 있으면 그건 약속을 어기는 것이다.
+   */
+  allergies: string[];
   /**
    * 이번 이용의 가격 한도(원). 안 정했으면 null 이다.
    *
@@ -169,6 +178,7 @@ const 남길것이있나 = (v: 이어쓸것): boolean =>
   || v.sheets.length > 0
   || v.planId !== null
   || v.budget !== null
+  || v.allergies.length > 0
   || Object.values(v.a11y).some(Boolean);
 
 export const 이어쓰기 = {
@@ -236,6 +246,8 @@ export const 이어쓰기 = {
       sheets,
       fromServer,
       a11y: 접근성읽기(o.a11y),
+      // 아는 여섯만 받는다. 모르는 값이 섞이면 서버가 UNKNOWN 으로 읽고 주문을 막는다.
+      allergies: Array.isArray(o.allergies) ? o.allergies.filter(아는알레르기) : [],
       // 계약이 minimum: 0 인 number 다. 양의 정수가 아니면 안 정한 것으로 본다 —
       // 손대서 음수를 넣어 두면 서버가 400 으로 되돌려서 주문 자체가 안 된다.
       budget: typeof o.budget === "number" && Number.isInteger(o.budget) && o.budget > 0
