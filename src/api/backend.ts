@@ -3,6 +3,7 @@ import type {
 } from "@/domain/types";
 import {
   toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput, 우리말들,
+  type ContextNormalizationInput,
   type CanonicalProfile, type ChickenStoreSessionContext,
 } from "@/api/canonical";
 import { KioBridgeError, clearSheets, type KioBridgeApi } from "@/api/client";
@@ -1211,14 +1212,29 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
    * 제출할 수 있다. 그때는 키를 pairingId(또는 서버 sessionId)로 옮겨야 한다.
    */
 
-  const 캐시키 = (environmentId: string, p: OrderSheet) => {
+  /**
+   * @param contextInput 이미 만들어 둔 것을 받는다. **여기서 다시 만들지 않는다.**
+   *
+   * 예전에는 이 안에서 한 번, 요청을 보낼 때 또 한 번 만들었다. 그 사이에
+   * `await` 이 하나 있어서, 그동안 사용자가 알레르기나 가격 한도를 바꾸면
+   * **키와 실제 보낸 값이 서로 다른 조건을 가리켰다.**
+   *
+   * 알레르기가 빠진 맥락이 '알레르기가 있는' 키에 저장되고, 다음에 같은 키로
+   * 찾으면 그 맥락이 그대로 쓰인다 — 걸러졌어야 할 후보가 안 걸러진다.
+   * 알레르기는 빠뜨려도 되는 값이 아니다.
+   */
+  const 캐시키 = (
+    environmentId: string,
+    p: OrderSheet,
+    contextInput: ContextNormalizationInput["contextInput"],
+  ) => {
     // collectedAt 은 부를 때마다 달라진다(현재 시각). 키에 넣으면 캐시가 한 번도
     // 안 맞는다. 결과를 바꾸는 건 고른 조건과 접근성 설정이라 그것만 넣는다.
     // 접근성 설정이 바뀌면 표준형도 달라진다. 키에 그대로 들어가므로 캐시가 자동으로 갈린다.
     const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기() });
-    // 가격 한도가 바뀌면 후보 자체가 달라진다(넘는 것은 제외된다). 키에 들어가므로
-    // 한도를 고치면 캐시가 자동으로 갈라진다 — 접근성 설정과 같은 방식이다.
-    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(toContextNormalizationInput(p, { 예산: 가격한도.읽기(), 알레르기: 알레르기설정.읽기() }).contextInput)}`;
+    // 가격 한도.알레르기가 바뀌면 후보 자체가 달라진다. 키에 들어가므로 고치면
+    // 캐시가 자동으로 갈라진다 — 접근성 설정과 같은 방식이다.
+    const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(contextInput)}`;
     마지막키.set(p.id, 키);
     return 키;
   };
@@ -1236,7 +1252,15 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 정규화 = async (environmentId: string, p: OrderSheet) => {
     // 같은 주문표라도 붙은 키오스크가 다르면 표준형이 달라질 수 있다.
     // 주문표 내용을 고쳤을 때도 낡은 값을 쓰면 안 된다. 둘 다 키에 넣는다.
-    const 키 = 캐시키(environmentId, p);
+    /*
+     * 정규화에 넣을 값을 여기서 **한 번만** 만든다. 아래 요청과 위 캐시키가 같은
+     * 객체를 봐야 한다 — 두 번 만들면 그 사이의 설정 변경이 둘을 갈라놓는다.
+     */
+    const 정규화입력 = toContextNormalizationInput(p, {
+      예산: 가격한도.읽기(),
+      알레르기: 알레르기설정.읽기(),
+    });
+    const 키 = 캐시키(environmentId, p, 정규화입력.contextInput);
     const 있음 = 정규화됨.get(키);
     if (있음) return 있음;
 
@@ -1264,7 +1288,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
        */
       reconfirmationFields?: { path?: string; reasonCode?: string; message?: string }[];
       contractValidation?: { valid: boolean; errors?: { message?: string }[] };
-    }>("/api/v1/session-context-normalizations", { environmentId, ...toContextNormalizationInput(p, { 예산: 가격한도.읽기(), 알레르기: 알레르기설정.읽기() }) });
+    }>("/api/v1/session-context-normalizations", { environmentId, ...정규화입력 });
 
     /*
      * 재확인을 먼저 가른다. 순서가 뒤집혀 있어서 이 분기가 죽어 있었다.

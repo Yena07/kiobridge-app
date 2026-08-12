@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApi, createTeamBackend, type Backend, type EvidenceSummary, type RecommendationResult } from "./backend";
 import { KioBridgeError, getSheet, registerSheet } from "./client";
 import type { OrderSheet } from "@/domain/types";
+import { 알레르기설정 } from "@/api/allergy";
 
 // 백엔드가 아직 없으므로, 명세서대로 응답하는 가짜를 만들어 조립이 맞는지 본다.
 // 이 테스트가 통과한다는 건 "백엔드가 명세대로 주면 화면이 돈다" 는 뜻이다.
@@ -719,6 +720,36 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     // 추천 응답이 대안으로 올려보내도 다시 걸러진다.
     const rec = await b.recommend({ environmentId: "chicken-store", profileId: "p1", survivingCandidateIds: [], profile: 목주문표 });
     expect(rec.alternativeCandidateIds).toEqual([]);
+  });
+
+  it("정규화 도중에 알레르기가 바뀌어도 키와 보낸 값이 갈라지지 않는다", async () => {
+    /*
+     * 예전에는 캐시키를 만들 때 한 번, 요청을 보낼 때 또 한 번 값을 읽었다.
+     * 그 사이에 await 이 있어서, 그동안 알레르기를 바꾸면 **키와 실제 보낸 값이
+     * 서로 다른 조건을 가리켰다.** 알레르기가 빠진 맥락이 '알레르기가 있는' 키에
+     * 저장되고, 다음에 같은 키로 찾으면 걸러졌어야 할 후보가 안 걸러진다.
+     *
+     * 첫 요청(profile-normalizations)이 나가는 순간 알레르기를 비워서 그 틈을
+     * 흉내 낸다. 두 번째 요청에는 처음 값이 실려야 한다.
+     */
+    알레르기설정.되살리기(["PEANUT"]);
+    const 보낸것: Record<string, unknown>[] = [];
+    globalThis.fetch = vi.fn(async (u: unknown, init?: RequestInit) => {
+      const 주소 = String(u);
+      const 본문 = JSON.parse(String(init?.body ?? "{}"));
+      보낸것.push({ 주소, 본문 });
+      // 첫 요청이 나가자마자 설정이 바뀐 상황
+      if (주소.includes("profile-normalizations")) 알레르기설정.비우기();
+      return 응답(경로별응답({})(주소, 본문));
+    }) as unknown as typeof fetch;
+
+    const b = createTeamBackend("");
+    await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
+
+    const 맥락 = 보낸것.find((x) => String(x.주소).includes("session-context-normalizations"));
+    expect((맥락?.본문 as { contextInput: { allergenIds: string[] } }).contextInput.allergenIds)
+      .toEqual(["PEANUT"]);
+    알레르기설정.비우기();
   });
 
   it("규칙축에 없는 errorCode 면 축을 짚지 않고 뭉뚱그린다", async () => {
