@@ -112,6 +112,19 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
     expect(s).not.toContain("010-");
   });
 
+  it("동의를 받은 것만 personalization: true 로 나간다", () => {
+    /*
+     * 예전에는 여기가 true 로 박혀 있었다. 화면이 안 묻는데 서버에는 "동의받았다" 고
+     * 보내고 있었던 셈이다. 이제 화면이 묻고(api/consent.ts) 그 값이 여기로 온다.
+     *
+     * 기본값도 false 다. 안 넘기면 못 받은 것이므로, 못 받은 동의를 받은 것처럼
+     * 보내지 않는다.
+     */
+    expect(toCanonicalProfile(주문표({}), { personalization: true }).consent.personalization).toBe(true);
+    expect(toCanonicalProfile(주문표({}), { personalization: false }).consent.personalization).toBe(false);
+    expect(toCanonicalProfile(주문표({})).consent.personalization).toBe(false);
+  });
+
   it("보관 정책이 화면의 실제 동작과 같다", () => {
     // 주문표는 이 탭이 살아 있는 동안만 남고 창을 닫으면 사라진다. SESSION_ONLY 가 사실이다.
     // 새로고침을 넘겨 이어 쓰는 것은 세션이 끝나는 것이 아니라 이 값과 어긋나지 않는다.

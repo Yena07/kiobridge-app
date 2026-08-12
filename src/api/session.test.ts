@@ -72,6 +72,7 @@ const 채운값 = (덮을것: Partial<이어쓸것> = {}): 이어쓸것 => ({
   sheets: [주문표("p1"), 주문표("p2")],
   fromServer: ["p2"],
   a11y: { ...기본도움설정, largeText: true },
+  consent: true,
   allergies: [],
   budget: null,
   planId: null,
@@ -106,7 +107,7 @@ describe("남으면 안 되는 것", () => {
   it("적어 두는 칸은 정해진 열 개뿐이다", () => {
     이어쓰기.쓰기(채운값());
     expect(Object.keys(적힌것()).sort()).toEqual(
-      ["a11y", "account", "allergies", "budget", "fromServer", "name", "planId", "screen", "sheets", "tab"],
+      ["a11y", "account", "allergies", "budget", "consent", "fromServer", "name", "planId", "screen", "sheets", "tab"],
     );
   });
 
@@ -263,6 +264,19 @@ describe("손댄 값을 믿지 않는다", () => {
     }
   });
 
+  it("동의는 boolean true 일 때만 받는다", () => {
+    /*
+     * 손댄 값으로 동의를 만들지 않는다. "true" · 1 · {} 는 자바스크립트에서 truthy 라,
+     * 값이 있는지만 보면 개인정보 동의를 문자열 하나로 만들어 낼 수 있다.
+     */
+    for (const 나쁜값 of ["true", 1, {}, [], "예"]) {
+      망가진것({ consent: 나쁜값 });
+      expect(이어쓰기.읽기()!.consent).toBe(false);
+    }
+    망가진것({ consent: true });
+    expect(이어쓰기.읽기()!.consent).toBe(true);
+  });
+
   it("알레르기는 아는 여섯만 받는다", () => {
     /*
      * 모르는 값이 섞이면 canonical 이 UNKNOWN 으로 옮기고, 서버는 그걸
@@ -288,7 +302,8 @@ describe("손댄 값을 믿지 않는다", () => {
 describe("남길 것이 없으면 아무것도 안 쓴다", () => {
   const 빈값 = 채운값({
     screen: "welcome", tab: "menu", name: "", account: null,
-    sheets: [], fromServer: [], a11y: { ...기본도움설정 }, allergies: [], budget: null, planId: null,
+    sheets: [], fromServer: [], a11y: { ...기본도움설정 },
+    consent: false, allergies: [], budget: null, planId: null,
   });
 
   it("빈 이용은 저장하지 않는다", () => {
