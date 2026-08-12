@@ -780,7 +780,7 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
          */}
         <CenterHeadline
           title={<>반갑습니다!<br />어떻게 불러드릴까요?</>}
-          desc="부르는 말만 쓰여요. 실제 이름이 아니어도 괜찮아요"
+          desc="실제 이름 말고, 불리고 싶은 말을 적어 주세요"
         />
 
         <label htmlFor="name-input" className="sr-only">부를 호칭</label>
@@ -791,6 +791,15 @@ function NameScreen({ onNext, onBack }: { onNext: (name: string) => void; onBack
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="예: 할머니, 김씨"
+          /*
+           * 호칭 길이로 잘라 둔다(#96 리뷰).
+           *
+           * 실제 이름인지 아닌지는 코드가 가려낼 수 없다 — '김씨' 도 호칭이고
+           * 성씨이기도 하다. 대신 이 칸이 **호칭 말고 다른 것을 담을 수 없게**
+           * 만든다. 열두 자면 부르는 말은 다 들어가지만 주소나 전화번호,
+           * 주민등록번호는 들어가지 않는다.
+           */
+          maxLength={12}
           data-autofocus
           style={{
             width: "100%", marginTop: 36, textAlign: "center",
@@ -3995,8 +4004,15 @@ export default function App() {
    */
   const [이어받은] = useState(() => {
     const v = 이어쓰기.읽기();
-    if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); 개인정보동의.되살리기(v.consent); }
-    if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); 알레르기설정.되살리기(v.allergies); }
+    // 되살릴 곳이 한 자리뿐이어야 한다. 두 줄로 갈라 두면 새 값이 생겼을 때
+    // 한쪽에만 넣는 날이 오고, 그날 빠지는 것이 알레르기면 걸러졌어야 할 후보가
+    // 새로고침 뒤에 그냥 올라온다(#96 리뷰).
+    if (v) {
+      접근성설정.되살리기(v.a11y);
+      가격한도.되살리기(v.budget);
+      개인정보동의.되살리기(v.consent);
+      알레르기설정.되살리기(v.allergies);
+    }
     return v;
   });
   const [screen, setScreen] = useState<Screen>(이어받은?.screen ?? "welcome");
@@ -4393,6 +4409,17 @@ export default function App() {
      * 어느 쪽이 나쁜지는 분명하다.
      */
     알레르기설정.비우기();
+    /*
+     * 가격 한도도 같은 이유로 비운다(#96 리뷰).
+     *
+     * 한도는 화면에 늘 보이는 값이 아니라 후보를 조용히 잘라 내는 값이다.
+     * 남겨 두면 다음 사람은 앞사람의 지갑 사정으로 걸러진 목록을 보고, 왜
+     * 어떤 메뉴가 안 나오는지 알 방법이 없다.
+     *
+     * 도움 설정(큰 글씨·고대비 등)은 그대로 둔다. 그건 화면을 보면 켜져 있는 게
+     * 바로 보이는 값이라, 다음 사람이 모르고 쓰게 되는 종류가 아니다.
+     */
+    가격한도.비우기();
     // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
     // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
     // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
