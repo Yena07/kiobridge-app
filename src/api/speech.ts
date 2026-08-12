@@ -38,34 +38,78 @@ export const 소리를낼수있나 = (): boolean => {
 };
 
 /**
- * 한 문장을 읽는다. 읽던 것이 있으면 끊고 이걸 읽는다.
+ * 읽어 준다.
  *
- * 끊는 이유 — 화면이 바뀌면 앞 화면 안내는 이미 지난 얘기다. 쌓아 두면 세 화면을
- * 지나온 뒤에도 첫 화면을 읽고 있고, 사용자는 지금 어디인지 알 수 없게 된다.
+ * `이어서` 가 아니면 읽던 것을 끊는다. 화면이 바뀌면 앞 화면 안내는 이미 지난
+ * 얘기다. 쌓아 두면 세 화면을 지나온 뒤에도 첫 화면을 읽고 있고, 사용자는 지금
+ * 어디인지 알 수 없게 된다.
+ *
+ * 반대로 **같은 화면에 새 내용이 붙었을 때는 끊지 않는다**(`이어서`). 제외 이유가
+ * 늦게 도착했다고 읽던 후보 설명을 잘라 버리면, 듣는 사람은 문장 하나를 통째로
+ * 잃는다. 그때는 뒤에 붙여 읽는다.
  *
  * 실패해도 던지지 않는다. 소리는 더해 주는 것이지 이 앱이 하는 일이 아니다.
  */
-export const 읽어주기 = (글: string): void => {
-  const 말 = 글.replace(/\s+/g, " ").trim();
+export const 읽어주기 = (
+  글: string,
+  { 언어 = "ko-KR", 이어서 = false }: { 언어?: string; 이어서?: boolean } = {},
+): void => {
+  const 말 = 글
+    .replace(/\s+/g, " ")
+    // 줄을 ". " 로 이어 붙이는데, 마침표로 끝나는 줄 뒤에서는 점이 둘이 된다.
+    // ("...닫으면 처음으로 돌아가요.. 이 앱은") 버전 표기(1.0.0)는 점 사이에
+    // 숫자가 있어 여기 안 걸린다.
+    .replace(/\.\s*\./g, ".")
+    .trim();
   if (!말 || !소리를낼수있나()) return;
   try {
-    globalThis.speechSynthesis.cancel();
+    if (!이어서) globalThis.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(말);
     /*
-     * 안내 언어를 골라도 여기는 늘 ko-KR 이다.
+     * 화면에 나온 글을 그대로 읽는 것이라, 목소리도 그 글의 언어여야 한다.
      *
-     * 읽는 것이 화면에 있는 한국어 글이기 때문이다. 고른 언어를 여기 넣으면
-     * 중국어 목소리가 한국어 글자를 읽으려 들어서 알아들을 수 없는 소리가 난다.
-     * 언어 선택은 키오스크에 전하는 값이지 이 앱의 글을 바꾸는 값이 아니다
-     * (a11y.ts 의 language 주석).
+     * 예전에는 늘 ko-KR 이었다. 그때는 화면이 언제나 한국어였기 때문이다. 지금은
+     * 안내 언어를 영어로 두면 화면 글이 영어라, ko-KR 목소리에게 영어 문장을
+     * 주면 알아들을 수 없는 소리가 난다. 반대도 마찬가지다.
+     *
+     * 그래서 부르는 쪽이 '지금 화면의 언어' 를 준다(a11y 의 language).
      */
-    u.lang = "ko-KR";
+    u.lang = 언어;
     // 기본 속도는 이 앱을 쓰는 분들에게 빠르다. 조금 늦춘다.
     u.rate = 0.95;
     globalThis.speechSynthesis.speak(u);
   } catch {
     /* 목소리가 없거나 브라우저가 막았다. 화면 글은 그대로 있다. */
   }
+};
+
+/**
+ * 화면에서 읽어 줄 글을 줄 단위로 모은다.
+ *
+ * 눈으로 보이는 것만 모은다 — 안 보이는 것을 읽으면 화면과 소리가 어긋난다.
+ * 빼는 것은 셋이다.
+ *
+ *   - `data-devlog`  개발용 연동 기록. 사용자에게 하는 말이 아니다.
+ *   - `aria-hidden`  장식이라고 우리가 표시해 둔 것. 스크린리더도 안 읽는다.
+ *   - 자리를 차지하지 않는 것(getClientRects 가 빈 것). 접힌 목록·가려진 화면이다.
+ *
+ * 줄 단위로 돌려주는 이유는, 같은 화면에서 **새로 붙은 줄만** 골라 읽기 위해서다.
+ * 통째로 비교하면 글자 하나만 달라져도 화면 전체를 다시 읽는다.
+ */
+export const 화면글 = (뿌리: HTMLElement): string[] => {
+  const 줄: string[] = [];
+  const 훑기 = document.createTreeWalker(뿌리, NodeFilter.SHOW_TEXT);
+  for (let n = 훑기.nextNode(); n; n = 훑기.nextNode()) {
+    const 말 = (n.nodeValue ?? "").replace(/\s+/g, " ").trim();
+    if (!말) continue;
+    const el = n.parentElement;
+    if (!el) continue;
+    if (el.closest("[data-devlog]")) continue;
+    if (el.closest('[aria-hidden="true"]')) continue;
+    if (el.getClientRects().length === 0) continue;
+    줄.push(말);
+  }
+  return 줄;
 };
 
 /** 읽던 것을 멈춘다. 스위치를 끄거나 화면을 떠날 때 부른다. */

@@ -21,7 +21,7 @@ import {
 } from "@/api/account";
 import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } from "@/api/a11y";
-import { 소리를낼수있나, 읽어주기, 그만읽기 } from "@/api/speech";
+import { 소리를낼수있나, 읽어주기, 그만읽기, 화면글 } from "@/api/speech";
 import { 가격한도 } from "@/api/budget";
 import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
@@ -4560,18 +4560,70 @@ export default function App() {
     }
     대상.focus({ preventScroll: true });
 
-    /*
-     * 소리 안내를 켠 분에게는 같은 것을 소리로도 한 번 읽어 준다.
-     *
-     * 포커스가 가는 그 요소를 읽는다 - 스크린리더가 읽는 것과 같은 자리다.
-     * 따로 고르면 화면이 바뀔 때 눈으로 보는 것과 귀로 듣는 것이 갈린다.
-     *
-     * 제목만 읽고 본문은 안 읽는다. 화면 전체를 읽으면 다음 화면으로 넘어갈 때까지
-     * 계속 말하게 되고, 급한 사람은 말이 끝나기를 기다려야 한다. 어디에 왔는지만
-     * 알려 주고 나머지는 화면에 그대로 있다.
-     */
-    if (접근성값.voiceGuide) 읽어주기(대상.innerText || 대상.textContent || "");
+    // 소리는 아래 '화면을 읽어 준다' 효과가 맡는다. 여기는 포커스만 옮긴다.
   }, [screen, tab, 개인정보겹, 접근성값.voiceGuide]);
+
+  /*
+   * ── 화면을 읽어 준다 ─────────────────────────────────────────────────────
+   *
+   * 예전에는 제목 한 줄만 읽었다. 어디에 왔는지는 알려 주지만, **정작 알아야 할
+   * 것은 안 읽었다** — 왜 이 메뉴를 골랐는지(선호 이유), 무엇이 왜 빠졌는지
+   * (제외 이유), 지금 연결이 어디까지 갔는지. 눈으로 못 읽는 사람에게 그 셋은
+   * 화면에 있으나 없으나 같았다.
+   *
+   * 그래서 화면에 보이는 것을 다 읽는다.
+   *
+   * 읽는 자리가 둘이다.
+   *
+   *   ① 화면이 바뀌면  — 앞의 말을 끊고 처음부터 다 읽는다.
+   *   ② 같은 화면에서 무언가 새로 뜨면 — 새로 뜬 줄만 뒤에 붙여 읽는다.
+   *
+   * ② 가 이 기능의 핵심이다. 제외 이유나 연결 상태는 화면을 바꾸지 않고 나중에
+   * 도착한다. 그때 화면 전체를 다시 읽으면 방금 들은 말을 또 듣고, 앞의 말을
+   * 끊으면 문장 하나를 통째로 잃는다. 새로 뜬 줄만, 읽던 말 뒤에 붙인다.
+   */
+  const 읽은줄 = useRef<string[]>([]);
+  const 읽을틀 = () => 화면영역.current?.closest<HTMLElement>("[data-frame]") ?? null;
+
+  useEffect(() => {
+    if (!접근성값.voiceGuide) { 읽은줄.current = []; return; }
+    const 틀 = 읽을틀();
+    if (!틀) return;
+    /*
+     * 한 박자 뒤에 읽는다. 화면이 막 바뀐 순간에는 영어 옮기기(useLayoutEffect)와
+     * 첫 그리기가 아직 안 끝나 있을 수 있다. 그때 읽으면 영어 화면을 한국어로
+     * 읽거나, 반쯤 그려진 화면을 읽는다.
+     */
+    const 표 = setTimeout(() => {
+      const 줄 = 화면글(틀);
+      읽은줄.current = 줄;
+      읽어주기(줄.join(". "), { 언어: 접근성값.language });
+    }, 120);
+    return () => clearTimeout(표);
+  }, [screen, tab, 개인정보겹, 접근성값.voiceGuide, 접근성값.language]);
+
+  useEffect(() => {
+    if (!접근성값.voiceGuide) return;
+    const 틀 = 읽을틀();
+    if (!틀) return;
+    /*
+     * 잠깐 기다렸다가 본다. 한 번 바뀔 때 DOM 은 여러 번 움직이고, 움직일 때마다
+     * 읽으면 한 문장이 조각조각 끊겨 나온다. 조용해진 다음에 한 번만 읽는다.
+     */
+    let 표: ReturnType<typeof setTimeout> | undefined;
+    const 지켜보기 = new MutationObserver(() => {
+      clearTimeout(표);
+      표 = setTimeout(() => {
+        const 지금 = 화면글(틀);
+        const 이미읽은것 = new Set(읽은줄.current);
+        const 새것 = 지금.filter((줄) => !이미읽은것.has(줄));
+        읽은줄.current = 지금;
+        if (새것.length > 0) 읽어주기(새것.join(". "), { 언어: 접근성값.language, 이어서: true });
+      }, 350);
+    });
+    지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
+    return () => { clearTimeout(표); 지켜보기.disconnect(); };
+  }, [접근성값.voiceGuide, 접근성값.language]);
 
   /*
    * 스위치를 끄거나 화면을 떠나면 읽던 것을 멈춘다.
