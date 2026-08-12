@@ -92,6 +92,7 @@ export const 읽어주기 = (
  *   - `data-devlog`  개발용 연동 기록. 사용자에게 하는 말이 아니다.
  *   - `aria-hidden`  장식이라고 우리가 표시해 둔 것. 스크린리더도 안 읽는다.
  *   - `inert`        겹 아래에 덮인 화면. 스크린리더가 못 읽도록 막아 둔 자리다.
+ *   - `data-소리생략` 읽을 값어치가 없는 자리(앱 이름·개발 막대·하단 탭).
  *                    소리 안내만 그 약속을 깨면 안 된다(#36 리뷰).
  *   - 자리를 차지하지 않는 것(getClientRects 가 빈 것). 접힌 목록·가려진 화면이다.
  *
@@ -115,6 +116,14 @@ export const 화면글 = (뿌리: HTMLElement, { 바뀌는것빼고 = false } = 
     if (el.closest("[data-devlog]")) continue;
     if (el.closest('[aria-hidden="true"]')) continue;
     if (el.closest("[inert]")) continue;
+    /*
+     * 읽을 값어치가 없는 자리. 앱 이름, 개발용 연동 막대, 화면마다 똑같은 하단 탭.
+     *
+     * 눈으로는 어디에 왔는지 알려 주는 표시지만, 귀로는 화면이 바뀔 때마다
+     * "kio bridge ... QR 찍기 내 주문표 계정" 을 다시 듣게 된다. 매번 같은 말이라
+     * 알려 주는 것이 없고, 정작 알아야 할 말이 그 사이에 묻힌다.
+     */
+    if (el.closest("[data-소리생략]")) continue;
     if (바뀌는것빼고 && el.closest("[data-소리조용]")) continue;
     if (el.getClientRects().length === 0) continue;
     줄.push(말);

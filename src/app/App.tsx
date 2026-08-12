@@ -48,6 +48,9 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
   const color = light ? ON_DARK : TEXT_1;
   return (
     <div
+      /* 화면마다 "kio bridge" 를 다시 듣지 않는다. 눈으로는 어디에 왔는지 알려
+         주는 표시지만, 귀로는 매번 같은 말이라 알려 주는 것이 없다. */
+      data-소리생략
       aria-label="키오브릿지"
       style={{
         fontFamily: SERIF, fontSize: size, lineHeight: 1, color,
@@ -1875,7 +1878,9 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
     { id: "account", icon: <Pictogram name="userCircle" size={25} />, label: "계정" },
   ];
   return (
-    <nav aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: PAPER, paddingBottom: 12 }}>
+    /* 화면마다 끝에 "QR 찍기 내 주문표 계정" 이 붙어 읽혔다. 늘 같은 자리에
+       있는 것이라, 새 화면에 왔다는 소식에 끼워 읽을 값어치가 없다. */
+    <nav data-소리생략 aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: PAPER, paddingBottom: 12 }}>
       {items.map(({ id, label }) => {
         const active = tab === id;
         return (
@@ -4155,7 +4160,8 @@ function 연동표시({ onOpenLog, onOpenSide }: { onOpenLog: () => void; onOpen
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#37d67a", flexShrink: 0 }} />
-        <strong style={{ fontSize: 13 }}>실서버에 붙어 있습니다</strong>
+        {/* 개발용 막대다. 사용자에게 하는 말이 아니다. */}
+        <strong data-소리생략 style={{ fontSize: 13 }}>실서버에 붙어 있습니다</strong>
         <span style={{ marginLeft: "auto", color: "#9a9aa2" }}>{성공}/{목록.length} {펼침 ? "▾" : "▸"}</span>
       </button>
       {!펼침 ? null : (
@@ -4955,12 +4961,21 @@ export default function App() {
      * 첫 그리기가 아직 안 끝나 있을 수 있다. 그때 읽으면 영어 화면을 한국어로
      * 읽거나, 반쯤 그려진 화면을 읽는다.
      */
+    /*
+     * 화면이 바뀌면 **먼저 입을 다문다.**
+     *
+     * 앞 화면을 통째로 읽는 중이었다면 그 말은 이미 지난 얘기다. 예전에는 새
+     * 화면의 읽기가 시작될 때에야 끊겼는데, 그 사이 120ms 동안 지나간 화면을
+     * 계속 읽었고, 새 화면에 읽을 것이 없으면 아예 안 끊겼다.
+     */
+    그만읽기();
     const 표 = setTimeout(() => {
       const 줄 = 화면글(틀);
       읽은줄.current = 줄;
       읽어주기(줄.join(". "), { 언어: 접근성값.language });
     }, 120);
-    return () => clearTimeout(표);
+    // 떠날 때도 멈춘다. 다음 화면이 읽기 시작하기 전에 조용해진다.
+    return () => { clearTimeout(표); 그만읽기(); };
   }, [screen, tab, 개인정보겹, 접근성값.voiceGuide, 접근성값.language]);
 
   useEffect(() => {
