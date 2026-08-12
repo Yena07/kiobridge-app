@@ -1,4 +1,5 @@
 import { DETAIL_OPTIONS } from "@/domain/catalog";
+import { EN } from "@/i18n/en";
 import type { PlaceType } from "@/domain/types";
 
 /**
@@ -65,10 +66,61 @@ const 아니라는말: Record<string, string[]> = {
   "먹고 가기": ["먹고 가지 않", "안 먹고"],
 };
 
+/**
+ * 영어로 말했을 때 알아들을 말.
+ *
+ * 영어 화면에서는 인식기도 en-US 로 듣는다. 그런데 위의 표는 우리말뿐이라,
+ * 영어 화면의 예문("two spicy boneless, to go")을 그대로 말하면 **모든 축이
+ * 비었다.** 영어로 쓰는 사람에게는 이 기능이 아예 없는 것과 같았다(#39 리뷰).
+ *
+ * 값의 영어 이름은 이미 화면 표에 있다(i18n/en.ts). 새로 적지 않고 그걸 쓴다 —
+ * 두 곳에 적으면 언젠가 갈라진다. 표에 없는 말만 여기에 더한다.
+ */
+const 영어로다르게 : Record<string, string[]> = {
+  "포장하기": ["to go", "takeout", "take out", "take-out", "to-go"],
+  "먹고 가기": ["eat in", "dine in", "dine-in", "here"],
+  "순한맛": ["mild", "not spicy", "no spice"],
+  "보통맛": ["medium"],
+  "매운맛": ["spicy", "hot"],
+  "뼈": ["bone in", "bone-in", "with bone"],
+  "순살": ["boneless", "no bone"],
+  "종이컵": ["paper cup", "paper"],
+  "일반컵": ["regular cup", "regular"],
+  "1개": ["one", "1"],
+  "2개": ["two", "2"],
+  "3개": ["three", "3"],
+};
+
+const 영어로아니라는말: Record<string, string[]> = {
+  "매운맛": ["not spicy", "no spice", "mild"],
+  "뼈": ["boneless", "no bone", "bone-free"],
+};
+
+/**
+ * 영어는 **낱말째로** 본다.
+ *
+ * 글자만 겹치는 것을 세면 안 된다. `boneless` 안에는 `one` 이 들어 있어서,
+ * "two spicy boneless" 를 말하면 수량이 1개와 2개 둘 다에 걸려 축이 통째로
+ * 비었다(#39 리뷰). 우리말에는 이 문제가 없다 — "포장" 이 "포장하기" 안에
+ * 들어 있는 것은 우리가 바라는 바다.
+ */
+const 낱말로있나 = (글: string, 말: string): boolean => {
+  const 그대로 = 말.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${그대로}([^a-z0-9]|$)`).test(글);
+};
+
 /** 이 값을 말한 것으로 볼 수 있나. 값 자체나, 달리 부르는 말이 글에 있으면 그렇다. */
-const 말했나 = (글: string, 값: string): boolean =>
-  !(아니라는말[값] ?? []).some((말) => 글.includes(말))
-  && (글.includes(값) || (다르게부르는말[값] ?? []).some((말) => 글.includes(말)));
+const 말했나 = (글: string, 값: string, 영어인가: boolean): boolean => {
+  if (영어인가) {
+    const 소문자 = 글.toLowerCase();
+    if ((영어로아니라는말[값] ?? []).some((말) => 낱말로있나(소문자, 말))) return false;
+    const 표에있는말 = (EN[값] ?? "").toLowerCase();
+    return (표에있는말 !== "" && 낱말로있나(소문자, 표에있는말))
+      || (영어로다르게[값] ?? []).some((말) => 낱말로있나(소문자, 말));
+  }
+  return !(아니라는말[값] ?? []).some((말) => 글.includes(말))
+    && (글.includes(값) || (다르게부르는말[값] ?? []).some((말) => 글.includes(말)));
+};
 
 export interface 들은결과 {
   /** 우리 목록에서 고른 값. 화면이 쓰는 우리말 그대로다. */
@@ -76,10 +128,24 @@ export interface 들은결과 {
   /** 말에 아예 안 나온 축. 화면이 "안 정함" 으로 보여 준다. */
   못들은축: string[];
   /**
-   * 무엇을 주문하려는지. 메뉴 이름 칸에 넣을 후보다.
+   * 말은 했는데 우리가 고르지 못한 축.
    *
-   * 말 전체를 그대로 준다. **우리가 요약하거나 다듬지 않는다** — 사용자가 적는
-   * 자리에 앱이 지어낸 말을 넣지 않는다. 화면이 그대로 보여 주고 고치게 한다.
+   * 못들은축 과 나눠서 준다. 화면이 다르게 말해야 하기 때문이다 — 앞엣것은
+   * "안 말하셨어요", 이것은 "말씀은 들었는데 어느 쪽인지 못 골랐어요" 다.
+   * 뭉뚱그리면 "순한맛으로 할까 매운맛으로 할까" 를 말한 사람에게 못 들었다고
+   * 하게 되고, 사용자는 다시 또박또박 말해 보다가 같은 답을 받는다(#39 리뷰).
+   */
+  모호한축: string[];
+  /**
+   * 들은 말 그대로.
+   *
+   * **어느 칸에도 저장하지 않는다.** 화면에 "이렇게 들었어요" 로 보여 주는 데만
+   * 쓰고, 확인을 누르면 사라진다.
+   *
+   * 예전에는 이 값을 메뉴 이름 칸에 넣었다. 자유 발화라 "저 김순자인데요 매운
+   * 닭강정 주세요" 같은 말이 그대로 주문표에 저장되고, 로그인한 사람은 서버까지
+   * 올라갔다. 메뉴 이름 칸에는 메모와 달리 개인정보 검사도 없다. 실제 이름·전화
+   * 번호는 받지도 저장하지도 않는다는 규칙을 정면으로 어기는 자리였다(#39 리뷰).
    */
   들은말: string;
 }
@@ -90,22 +156,21 @@ export interface 들은결과 {
  * 한 축에 여러 값이 걸리면 **그 축은 통째로 비운다.** "순한맛으로 할까 매운맛으로
  * 할까" 를 듣고 하나를 고르면 그건 우리가 정한 것이다. 못 고른 것으로 두고 묻는다.
  */
-export const 말에서고르기 = (들은말: string, place: PlaceType): 들은결과 => {
+export const 말에서고르기 = (들은말: string, place: PlaceType, 영어인가 = false): 들은결과 => {
   const 글 = 들은말.replace(/\s+/g, " ").trim();
   const 축들 = place ? DETAIL_OPTIONS[place] : [];
   const 고른값: Record<string, string[]> = {};
   const 못들은축: string[] = [];
+  const 모호한축: string[] = [];
 
   for (const 축 of 축들) {
-    const 걸린것 = 축.choices.filter((값) => 말했나(글, 값));
-    if (걸린것.length === 1) {
-      고른값[축.label] = [걸린것[0]];
-    } else {
-      // 0개면 말 안 한 것, 2개 이상이면 무엇을 말했는지 우리가 정할 수 없는 것.
-      // 둘 다 사용자에게 묻는다 — 어느 쪽이든 우리가 고르면 안 된다.
-      못들은축.push(축.label);
-    }
+    const 걸린것 = 축.choices.filter((값) => 말했나(글, 값, 영어인가));
+    if (걸린것.length === 1) 고른값[축.label] = [걸린것[0]];
+    // 0개면 안 말한 것, 2개 이상이면 말은 했는데 어느 쪽인지 우리가 정할 수 없는
+    // 것. 어느 쪽이든 우리가 고르지 않지만, 화면이 다르게 말해야 해서 나눠 준다.
+    else if (걸린것.length === 0) 못들은축.push(축.label);
+    else 모호한축.push(축.label);
   }
 
-  return { 고른값, 못들은축, 들은말: 글 };
+  return { 고른값, 못들은축, 모호한축, 들은말: 글 };
 };
