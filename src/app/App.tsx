@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronLeft, Check } from "lucide-react";
 
 import { Pictogram } from "@/design/Pictogram";
@@ -26,6 +26,7 @@ import { 가격한도, 한도후보 } from "@/api/budget";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
+import { 영어로바꾸기, 안바뀐것 } from "@/i18n/apply";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
 
@@ -4241,6 +4242,46 @@ export default function App() {
   //
   // 적을 게 없는 화면에서는 첫 제목으로 보내 "여기가 어디인지" 부터 들려준다.
   const 화면영역 = useRef<HTMLDivElement>(null);
+  /**
+   * 고른 언어로 화면 글자를 바꾼다.
+   *
+   * useLayoutEffect 다 — 그린 뒤 눈에 보이기 전에 끝내야 우리말이 한 번 번쩍이지
+   * 않는다. 화면이 다시 그려질 때마다 다시 부른다. 이미 바뀐 글자는 표에 없어서
+   * 그대로 있으므로 되풀이해도 안전하다.
+   *
+   * 글자만 만진다. 주문표에 저장되는 값도, 서버로 나가는 값도 계속 우리말이다 —
+   * canonical.ts 가 그 우리말을 enum 으로 옮기고 있어서 저장값을 건드리면
+   * 매핑이 통째로 깨진다(i18n/apply.ts 주석).
+   */
+  useLayoutEffect(() => {
+    if (접근성값.language !== "en-US") return;
+    const 틀 = 화면영역.current?.closest<HTMLElement>("[data-frame]") ?? document.body;
+    영어로바꾸기(틀);
+
+    /*
+     * 화면 안쪽에서 일어난 변화도 잡는다.
+     *
+     * 이 효과는 App 이 다시 그려질 때만 돈다. 그런데 장소를 고르면 세부 옵션이
+     * 나타나는 것처럼, **자식 화면이 제 상태만 바꾸는 경우에는 App 이 안 그려진다.**
+     * 그러면 새로 뜬 부분만 우리말로 남는다 — 실제로 그랬다.
+     *
+     * 그래서 틀 안을 지켜보다가 무언가 붙으면 다시 옮긴다. 우리가 바꾼 글자는
+     * 표에 없으므로 두 번째 바퀴에서는 아무것도 안 바뀌고 멈춘다. 그래도 우리
+     * 손질이 다시 자기를 깨우지 않도록 옮기는 동안에는 잠깐 떼어 둔다.
+     */
+    const 지켜보기 = new MutationObserver(() => {
+      지켜보기.disconnect();
+      영어로바꾸기(틀);
+      지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
+    });
+    지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
+    return () => 지켜보기.disconnect();
+  });
+  // 무엇이 아직 우리말로 남았는지 콘솔에서 확인하는 손잡이. 화면은 안 건드린다.
+  useEffect(() => {
+    (globalThis as unknown as { __안바뀐것?: () => string[] }).__안바뀐것 = () =>
+      안바뀐것(화면영역.current?.closest<HTMLElement>("[data-frame]") ?? document.body);
+  }, []);
   useEffect(() => {
     const 뿌리 = 화면영역.current;
     if (!뿌리) return;
@@ -4324,6 +4365,8 @@ export default function App() {
       */}
       <div style={{ width: "100%", maxWidth: FRAME_W, height: FRAME_H }}>
         <div
+          data-frame
+
           ref={화면영역}
           /*
            * 고대비는 색 토큰을 갈아 끼워서 만든다. tokens.ts 의 PALETTE_STYLES 가

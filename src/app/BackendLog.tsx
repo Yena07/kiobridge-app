@@ -379,6 +379,8 @@ export default function BackendLog({ onClose, 나란히 = false }: { onClose?: (
 
   return (
     <div
+      data-devlog
+
       ref={뿌리}
       {...(나란히 ? {} : { tabIndex: -1, role: "dialog" as const, "aria-modal": true, "aria-label": "백엔드에서 온 것" })}
       style={나란히 ? {
