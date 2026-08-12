@@ -466,7 +466,18 @@ describe("evidence 를 화면이 아는 상태로 옮긴다", () => {
 // 화면이 아는 값으로 옮겨지는지 본다. 명세와 구현이 달라서 둘 다 필요하다.
 
 const 원래fetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = 원래fetch; });
+afterEach(() => {
+  globalThis.fetch = 원래fetch;
+  /*
+   * 알레르기설정 은 모듈 저장소라 시험 사이에 그대로 남는다. 시험 하나가 중간에
+   * 실패하면 켜 둔 값이 다음 시험으로 새어 나가고, 엉뚱한 시험이 알 수 없는
+   * 이유로 깨진다 — 그때는 실패한 시험이 아니라 뒤따르는 시험을 들여다보게 된다.
+   *
+   * 시험 안에서 try/finally 로 감싸는 것보다 여기서 한 번에 치우는 편이 낫다.
+   * 앞으로 생길 시험까지 덮는다.
+   */
+  알레르기설정.비우기();
+});
 
 const 응답 = (body: unknown, status = 200) =>
   ({ ok: status < 400, status, text: async () => JSON.stringify(body), json: async () => body }) as Response;
@@ -749,7 +760,7 @@ describe("팀 백엔드가 실제로 주는 모양을 화면 값으로 옮긴다
     const 맥락 = 보낸것.find((x) => String(x.주소).includes("session-context-normalizations"));
     expect((맥락?.본문 as { contextInput: { allergenIds: string[] } }).contextInput.allergenIds)
       .toEqual(["PEANUT"]);
-    알레르기설정.비우기();
+    // 치우는 것은 afterEach 가 한다. 여기서 부르면 실패로 빠져나갈 때 안 불린다.
   });
 
   it("규칙축에 없는 errorCode 면 축을 짚지 않고 뭉뚱그린다", async () => {
