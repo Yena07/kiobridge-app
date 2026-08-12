@@ -3,7 +3,7 @@ import type {
 } from "@/domain/types";
 import {
   toChickenStoreContext, toContextNormalizationInput, toProfileNormalizationInput, 우리말들,
-  type ContextNormalizationInput,
+  type ContextNormalizationInput, type ProfileNormalizationInput,
   type CanonicalProfile, type ChickenStoreSessionContext,
 } from "@/api/canonical";
 import { KioBridgeError, clearSheets, type KioBridgeApi } from "@/api/client";
@@ -1235,12 +1235,13 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
   const 캐시키 = (
     environmentId: string,
     p: OrderSheet,
+    profileInput: ProfileNormalizationInput,
     contextInput: ContextNormalizationInput["contextInput"],
   ) => {
     // collectedAt 은 부를 때마다 달라진다(현재 시각). 키에 넣으면 캐시가 한 번도
     // 안 맞는다. 결과를 바꾸는 건 고른 조건과 접근성 설정이라 그것만 넣는다.
     // 접근성 설정이 바뀌면 표준형도 달라진다. 키에 그대로 들어가므로 캐시가 자동으로 갈린다.
-    const { collectedAt: _버림, ...주문표 } = toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기(), personalization: 개인정보동의.읽기() });
+    const { collectedAt: _버림, ...주문표 } = profileInput;
     // 가격 한도.알레르기가 바뀌면 후보 자체가 달라진다. 키에 들어가므로 고치면
     // 캐시가 자동으로 갈라진다 — 접근성 설정과 같은 방식이다.
     const 키 = `${environmentId}|${JSON.stringify(주문표)}|${JSON.stringify(contextInput)}`;
@@ -1264,12 +1265,19 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     /*
      * 정규화에 넣을 값을 여기서 **한 번만** 만든다. 아래 요청과 위 캐시키가 같은
      * 객체를 봐야 한다 — 두 번 만들면 그 사이의 설정 변경이 둘을 갈라놓는다.
+     *
+     * 프로필 쪽도 같은 규칙이다. 지금은 두 자리 사이에 await 이 없어서 갈라질
+     * 일이 없지만, 나중에 하나라도 끼면 캐시키와 보내는 값이 어긋난다(#96 리뷰).
      */
+    const 프로필입력 = toProfileNormalizationInput(p, {
+      접근성: 접근성설정.읽기(),
+      personalization: 개인정보동의.읽기(),
+    });
     const 정규화입력 = toContextNormalizationInput(p, {
       예산: 가격한도.읽기(),
       알레르기: 알레르기설정.읽기(),
     });
-    const 키 = 캐시키(environmentId, p, 정규화입력.contextInput);
+    const 키 = 캐시키(environmentId, p, 프로필입력, 정규화입력.contextInput);
     const 있음 = 정규화됨.get(키);
     if (있음) return 있음;
 
@@ -1280,7 +1288,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       environmentId,
       // 큰 글씨를 켜 놓고 주문해도 서버가 몰랐다 — opts 를 안 넘겨서 일곱이 전부
       // false 로 나가고 있었다. 화면이 묻는 값을 그대로 보낸다.
-      profileInput: toProfileNormalizationInput(p, { 접근성: 접근성설정.읽기(), personalization: 개인정보동의.읽기() }),
+      profileInput: 프로필입력,
     });
 
     const sr = await 보내기<{

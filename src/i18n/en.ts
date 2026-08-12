@@ -61,8 +61,9 @@ export const EN: Record<string, string> = {
   // ─── 호칭 · 환영 ──────────────────────────────────────────────────────────
   "반갑습니다!": "Nice to meet you!",
   "어떻게 불러드릴까요?": "What should we call you?",
-  "부르는 말만 쓰여요. 실제 이름이 아니어도 괜찮아요":
-    "Only used to greet you. It doesn’t have to be your real name",
+  // 팀 #96 리뷰에서 "아니어도 괜찮아요" 를 "실제 이름 말고" 로 바꿨다. 표도 같이 옮긴다.
+  "실제 이름 말고, 불리고 싶은 말을 적어 주세요":
+    "Not your real name — write what you’d like to be called",
   "부를 호칭": "What to call you",
   "계속하기": "Continue",
   "반가워요,": "Nice to meet you,",
