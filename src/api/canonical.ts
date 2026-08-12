@@ -168,7 +168,7 @@ export function toCanonicalProfile(
 /** 닭강정집 세션 맥락. 다른 장소는 백엔드에 대응 타입이 아직 없다. */
 export function toChickenStoreContext(
   p: OrderSheet,
-  opts: { 예산?: number | null } = {},
+  opts: { 예산?: number | null; 알레르기?: AllergenId[] } = {},
 ): ChickenStoreSessionContext {
   return {
     intent: { task: "ORDER_FOOD" },
@@ -183,7 +183,17 @@ export function toChickenStoreContext(
     hardConstraints: {
       // 알레르기는 절대 조건이다. 모르는 값을 조용히 버리면 그 사람의 알레르기가
       // 서버에 전달되지 않는다. UNKNOWN 으로라도 보내서 서버가 알게 한다.
-      allergenIds: 고른값들(p, "알레르기 (꼭 빼주세요)").map((v) => 알레르기[v] ?? "UNKNOWN"),
+      /*
+       * 주문표에 고른 것과, 이 사람이 늘 피하는 것(api/allergy.ts)을 **합친다.**
+       *
+       * 덮지 않고 합치는 이유 — 합치면 걸러지는 후보가 늘어날 뿐 줄지 않는다.
+       * 어느 쪽을 빠뜨려도 안전한 방향으로만 틀린다. 덮어쓰면 한쪽이 사라져서
+       * 정작 걸러야 할 것이 안 걸러진다.
+       */
+      allergenIds: [...new Set([
+        ...고른값들(p, "알레르기 (꼭 빼주세요)").map((v) => 알레르기[v] ?? "UNKNOWN"),
+        ...(opts.알레르기 ?? []),
+      ])],
       /*
        * 이번 이용의 가격 한도(api/budget.ts). 안 정했으면 null 이다.
        *
@@ -302,7 +312,7 @@ export function toProfileNormalizationInput(
 
 export function toContextNormalizationInput(
   p: OrderSheet,
-  opts: { capturedAt?: string; 예산?: number | null } = {},
+  opts: { capturedAt?: string; 예산?: number | null; 알레르기?: AllergenId[] } = {},
 ): ContextNormalizationInput {
   const ctx = toChickenStoreContext(p, opts);
   const { quantity, ...나머지 } = ctx.preferences;

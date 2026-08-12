@@ -24,6 +24,8 @@ import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } f
 import { 소리를낼수있나, 읽어주기, 그만읽기 } from "@/api/speech";
 import { 가격한도, 한도후보 } from "@/api/budget";
 import { 개인정보동의 } from "@/api/consent";
+import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
+import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
@@ -2170,6 +2172,41 @@ const 전해드릴것: 도움항목[] = [
 const 쓸수있는것 = (항목들: 도움항목[]): 도움항목[] => 항목들.filter((r) => !r.될때만 || r.될때만());
 
 /**
+ * 늘 피해야 하는 것을 고르는 줄.
+ *
+ * 주문표에도 알레르기 축이 있는데 여기서 또 묻는 이유 — **알레르기는 주문마다
+ * 달라지는 값이 아니라 그 사람에 대한 사실**이다. 주문표에만 두면 새 주문표를
+ * 만들 때마다 다시 골라야 하고, 한 번 빠뜨리면 그 주문표로 주문할 때 안 걸러진다.
+ * 빠뜨려도 되는 값이 아니라서 한 번 묻고 계속 쓴다.
+ *
+ * 서버로 나갈 때 주문표 쪽과 **합쳐진다**(canonical.ts). 덮지 않으므로 어느 쪽을
+ * 빠뜨려도 걸러지는 후보가 줄지는 않는다.
+ *
+ * 여섯뿐인 이유는 킷 계약이 여섯만 알아서다. 표에 없는 것을 고르게 하면
+ * UNKNOWN 으로 나가고 서버가 주문을 아예 막는다.
+ */
+function 알레르기고르기({ 고른것, on뒤집기 }: { 고른것: AllergenId[]; on뒤집기: (id: AllergenId) => void }) {
+  return (
+    <div>
+      <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>못 드시는 것</h2>
+      <p style={{ fontSize: 12, color: TEXT_2, marginBottom: 8, lineHeight: 1.6 }}>
+        고르시면 그게 들어간 메뉴는 추천에서 아예 빼요. 없으시면 안 고르셔도 돼요.
+      </p>
+      <div className="flex flex-wrap" style={{ gap: 6 }} role="group" aria-label="못 드시는 것">
+        {알레르기목록.map(({ id, label }) => (
+          <Chip
+            key={id}
+            label={label}
+            selected={고른것.includes(id)}
+            onClick={() => on뒤집기(id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * 안내받고 싶은 언어를 고르는 줄.
  *
  * 스위치가 아니라 넷 중 하나라서 칩으로 둔다. 이름은 그 언어로 적는다 —
@@ -2252,9 +2289,11 @@ function 도움목록({ 항목들, 설정, onChange }: {
  * 둘이 똑같은 일(다음 화면으로 가기)을 하게 되고, 무엇을 눌러야 하는지 묻는
  * 화면이 하나 더 생긴다. 이 화면은 통째로 선택이라 그 말을 글로 적는다.
  */
-function SetupScreen({ 설정, onChange, onNext, onBack }: {
+function SetupScreen({ 설정, onChange, 알레르기, on알레르기, onNext, onBack }: {
   설정: 도움설정;
   onChange: (한칸: Partial<도움설정>) => void;
+  알레르기: AllergenId[];
+  on알레르기: (id: AllergenId) => void;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -2288,6 +2327,14 @@ function SetupScreen({ 설정, onChange, onNext, onBack }: {
         </p>
         <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
         <언어고르기 고른것={설정.language} on바꾸기={(v) => onChange({ language: v })} />
+
+        {/*
+          알레르기는 '도움 설정' 이 아니라 안전에 관한 값이라 선 아래에 따로 둔다.
+          스위치 묶음에 섞으면 켜고 끄는 편의 항목처럼 읽힌다.
+        */}
+        <div style={{ marginTop: 28, paddingTop: 24, borderTop: `2px solid ${RULE}` }}>
+          <알레르기고르기 고른것={알레르기} on뒤집기={on알레르기} />
+        </div>
       </div>
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }}>
@@ -2309,9 +2356,12 @@ function SetupScreen({ 설정, onChange, onNext, onBack }: {
  * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
  * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
  */
-function AccessibilityScreen({ 설정, onChange, onBack }: {
+function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, onBack }: {
   설정: 도움설정;
   onChange: (한칸: Partial<도움설정>) => void;
+  /** 가입 직후에 한 번 묻지만 여기서도 고칠 수 있어야 한다 — 한 번 묻고 끝나면 못 고친다. */
+  알레르기: AllergenId[];
+  on알레르기: (id: AllergenId) => void;
   onBack: () => void;
 }) {
   return (
@@ -2369,6 +2419,10 @@ function AccessibilityScreen({ 설정, onChange, onBack }: {
         </p>
         <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
         <언어고르기 고른것={설정.language} on바꾸기={(v) => onChange({ language: v })} />
+
+        <div style={{ marginTop: 28, paddingTop: 24, borderTop: `2px solid ${RULE}` }}>
+          <알레르기고르기 고른것={알레르기} on뒤집기={on알레르기} />
+        </div>
       </div>
     </div>
   );
@@ -3906,6 +3960,7 @@ export default function App() {
   const [이어받은] = useState(() => {
     const v = 이어쓰기.읽기();
     if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); 개인정보동의.되살리기(v.consent); }
+    if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); 알레르기설정.되살리기(v.allergies); }
     return v;
   });
   const [screen, setScreen] = useState<Screen>(이어받은?.screen ?? "welcome");
@@ -3983,6 +4038,12 @@ export default function App() {
    */
   const [개인정보겹, set개인정보겹] = useState(false);
   useEffect(() => 개인정보동의.구독(() => set동의(개인정보동의.읽기())), []);
+  /*
+   * 늘 피해야 하는 것. 저장소는 api/allergy.ts 에 있고 화면은 그걸 비춘다 —
+   * 연동 계층도 이 값을 읽어야 한다(주문표의 알레르기와 합쳐서 서버로 나간다).
+   */
+  const [알레르기, set알레르기] = useState<AllergenId[]>(() => 알레르기설정.읽기());
+  useEffect(() => 알레르기설정.구독(() => set알레르기([...알레르기설정.읽기()])), []);
   useEffect(() => 가격한도.구독(() => set예산(가격한도.읽기())), []);
   const largeText = 접근성값.largeText;
   /*
@@ -4031,9 +4092,9 @@ export default function App() {
     이어쓰기.쓰기({
       screen, tab, name, account: 계정, sheets,
       fromServer: [...서버에서온것.current],
-      a11y: 접근성값, consent: 동의, budget: 예산, planId,
+      a11y: 접근성값, consent: 동의, allergies: 알레르기, budget: 예산, planId,
     });
-  }, [screen, tab, name, 계정, sheets, 접근성값, 동의, 예산, planId]);
+  }, [screen, tab, name, 계정, sheets, 접근성값, 동의, 알레르기, 예산, planId]);
 
   const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
@@ -4284,6 +4345,18 @@ export default function App() {
      * 비우기로 한 것과 같은 판단이다(#33 리뷰).
      */
     개인정보동의.비우기();
+    /*
+     * 알레르기도 비운다.
+     *
+     * 로그아웃은 이 기기를 다음 사람에게 넘기는 자리이기도 하다. 남겨 두면 다음
+     * 사람의 주문이 **앞사람의 알레르기로** 걸러지고, 정작 자기 것은 안 걸러진다.
+     * 화면에는 알레르기가 설정된 것처럼 보이니 더 나쁘다 — 걸러지는 줄 알고
+     * 승인한다.
+     *
+     * 다시 고르는 값이 여섯 칸뿐인 것과, 안 걸러져서 못 먹는 것을 먹는 것 중
+     * 어느 쪽이 나쁜지는 분명하다.
+     */
+    알레르기설정.비우기();
     // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
     // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
     // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
@@ -4517,6 +4590,8 @@ export default function App() {
           {screen === "setup" && (
             <SetupScreen
               설정={접근성값}
+              알레르기={알레르기}
+              on알레르기={(id) => 알레르기설정.뒤집기(id)}
               // 계정 화면의 접근성 설정과 같은 저장소에 쓴다. 여기서 켠 것이
               // 거기서도 켜져 있어야 한다 — 두 화면이 같은 스위치를 다루므로.
               onChange={(한칸) => 접근성설정.바꾸기(한칸)}
@@ -4611,6 +4686,9 @@ export default function App() {
                   // 동의도 되돌린다. 이 기기를 다음에 쓰는 사람이 앞사람의 동의로
                   // 앱에 들어가면 그건 동의를 받은 것이 아니다.
                   개인정보동의.비우기();
+                  // 알레르기도 지운다. 남겨 두면 다음 사람이 앞사람의 알레르기로
+                  // 걸러진 목록을 보게 되고, 정작 자기 것은 안 걸러진다.
+                  알레르기설정.비우기();
                   서버까지지우기();
                   /*
                    * 서버에 올라간 주문표도 지운다 (팀 #79 의 DELETE).
@@ -4652,6 +4730,8 @@ export default function App() {
           {screen === "a11y" && (
             <AccessibilityScreen
               설정={접근성값}
+              알레르기={알레르기}
+              on알레르기={(id) => 알레르기설정.뒤집기(id)}
               onChange={(한칸) => 접근성설정.바꾸기(한칸)}
               onBack={() => { setScreen("saved"); setTab("account"); }}
             />
