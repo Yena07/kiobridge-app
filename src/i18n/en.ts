@@ -164,9 +164,10 @@ export const EN: Record<string, string> = {
   "이렇게 들었어요": "This is what we heard",
   "이대로 채우기": "Use this",
   "다시 말하기": "Say it again",
-  "{축}은(는) 못 들었어요. 아래에서 골라 주세요.": "We did not catch {축}. Please pick it below.",
-  "{축}은(는) 말씀은 들었는데 어느 쪽인지 못 골랐어요. 아래에서 골라 주세요.":
-    "We heard you mention {축} but could not tell which one. Please pick it below.",
+  "못 들은 것 — {축}. 아래에서 골라 주세요.": "We did not catch these — {축}. Please pick them below.",
+  "말씀은 들었는데 어느 쪽인지 못 골랐어요 — {축}. 아래에서 골라 주세요.":
+    "We heard you mention these but could not tell which — {축}. Please pick them below.",
+  "장소가 바뀌어 못 채워요": "Place changed — cannot fill",
   "장소를 고르시면 맵기·형태 같은 것도 말로 채울 수 있어요.":
     "Pick a place and you can fill in things like spice level by voice too.",
   "마이크를 쓸 수 없어요. 브라우저 설정에서 마이크를 허용해 주시거나, 아래에서 손으로 골라 주세요.":

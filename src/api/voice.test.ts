@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { 말에서고르기 } from "./voice";
+import { 말에서고르기, 말로채울수있나 } from "./voice";
 
 /*
  * 이 파일이 지키는 것 하나 — **말하지 않은 조건이 주문표에 섞이지 않는다.**
@@ -115,5 +115,27 @@ describe("말에서 고르기 — 고르기만 하고 만들지 않는다", () =
     const r = 말에서고르기("새우 알레르기 있어요. 해산물은 빼 주세요", "음식점");
     expect(Object.keys(r.고른값)).not.toContain("알레르기");
     for (const 값 of Object.values(r.고른값)) expect(값).not.toContain("새우");
+  });
+});
+
+describe("못 알아듣는 자리에서는 안 내민다", () => {
+  it("우리말은 어느 장소든 된다", () => {
+    for (const 곳 of ["카페", "음식점", "병원", "관공서"] as const) {
+      expect(말로채울수있나(곳, false)).toBe(true);
+    }
+  });
+
+  it("영어는 값의 영어 이름이 있는 장소에서만 된다", () => {
+    // 표에 닭강정집 값만 들어 있다. 카페의 '아메리카노'·'Short' 나 병원의
+    // '초진' 은 없어서, 영어로 말하면 한 축도 못 채운다. 그런 자리에서는
+    // 단추를 안 내민다 — 눌렀는데 아무것도 안 채워지면 사용자는 자기가 잘못
+    // 말한 줄 안다.
+    expect(말로채울수있나("음식점", true)).toBe(true);
+    expect(말로채울수있나("카페", true)).toBe(false);
+  });
+
+  it("장소를 안 골랐으면 안 내민다", () => {
+    expect(말로채울수있나(null, false)).toBe(false);
+    expect(말로채울수있나(null, true)).toBe(false);
   });
 });

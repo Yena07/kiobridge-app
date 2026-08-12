@@ -23,14 +23,14 @@ import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } from "@/api/a11y";
 import { 소리를낼수있나, 읽어주기, 그만읽기, 화면글 } from "@/api/speech";
 import { 들을수있나, 들어보기, type 못들은이유 } from "@/api/listen";
-import { 말에서고르기, type 들은결과 } from "@/api/voice";
+import { 말에서고르기, 말로채울수있나, type 들은결과 } from "@/api/voice";
 import { 가격한도 } from "@/api/budget";
 import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
 import { 영어로바꾸기, 되돌리기, 안바뀐것, 돈 } from "@/i18n/apply";
-import { tf } from "@/i18n/t";
+import { t, tf } from "@/i18n/t";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
 
@@ -998,7 +998,9 @@ function 말로채우기({ place, 언어, on받기 }: {
   on받기: (들은것: 들은결과) => void;
 }) {
   const [상태, set상태] = useState<"쉬는중" | "듣는중" | "보여주는중">("쉬는중");
-  const [결과, set결과] = useState<들은결과 | null>(null);
+  // 결과와 **그때의 장소**를 같이 들고 있는다. 확인을 누르는 순간에 장소가
+  // 달라져 있으면, 그 장소에 있지도 않은 축을 넣게 된다(#39 리뷰).
+  const [결과, set결과] = useState<{ 값: 들은결과; 장소: PlaceType } | null>(null);
   const [못들음, set못들음] = useState<못들은이유 | null>(null);
   const 듣던것 = useRef<{ 그만두기: () => void } | null>(null);
   // 몇 번째 듣기인지. 늦게 온 앞의 결과를 버리는 데 쓴다.
@@ -1013,6 +1015,9 @@ function 말로채우기({ place, 언어, on받기 }: {
   // 이 기기에서 안 되면 아예 안 내민다. 눌렀는데 아무 일도 안 일어나는 단추가
   // 제일 나쁘다 — 소리 안내 스위치를 숨기는 것과 같은 판단이다.
   if (!들을수있나()) return null;
+  // 이 장소를 이 언어로 못 알아들으면 안 내민다. 눌렀는데 아무것도 안 채워지면
+  // 사용자는 자기가 잘못 말한 줄 안다 — 우리가 못 알아듣는 것인데도.
+  if (!말로채울수있나(place, 언어 === "en-US")) return null;
 
   const 듣기시작 = () => {
     set못들음(null);
@@ -1040,7 +1045,7 @@ function 말로채우기({ place, 언어, on받기 }: {
         return;
       }
       if ("들은말" in r) {
-        set결과(말에서고르기(r.들은말, 시작할때장소, 언어 === "en-US"));
+        set결과({ 값: 말에서고르기(r.들은말, 시작할때장소, 언어 === "en-US"), 장소: 시작할때장소 });
         set상태("보여주는중");
       } else {
         set못들음(r.못들은이유);
@@ -1074,12 +1079,15 @@ function 말로채우기({ place, 언어, on받기 }: {
   }
 
   if (상태 === "보여주는중" && 결과) {
-    const 고른축 = Object.keys(결과.고른값);
+    const 들은것 = 결과.값;
+    // 결과를 보여 주는 동안에도 장소는 바뀔 수 있다. 그때는 채우지 못하게 막는다.
+    const 장소그대로 = 결과.장소 === place;
+    const 고른축 = Object.keys(들은것.고른값);
     return (
       <div style={상자}>
         <p style={{ ...TYPE.label, color: TEXT_1, marginBottom: 10 }}>이렇게 들었어요</p>
         {/* 들은 대로를 그대로 보여 준다. 잘못 들었으면 여기서 보인다. */}
-        <p data-원문 style={{ ...TYPE.body, color: TEXT_1, marginBottom: 14 }}>“{결과.들은말}”</p>
+        <p data-원문 style={{ ...TYPE.body, color: TEXT_1, marginBottom: 14 }}>“{들은것.들은말}”</p>
 
         {고른축.length > 0 && (
           <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 10 }}>
@@ -1088,7 +1096,7 @@ function 말로채우기({ place, 언어, on받기 }: {
                 fontSize: 13, fontWeight: 500, padding: "4px 11px", borderRadius: RADIUS.pill,
                 backgroundColor: PAPER, color: TEXT_1,
               }}>
-                {축} {결과.고른값[축].join(", ")}
+                {t(축)} {들은것.고른값[축].map(t).join(", ")}
               </span>
             ))}
           </div>
@@ -1098,18 +1106,19 @@ function 말로채우기({ place, 언어, on받기 }: {
           못 들은 축을 감추지 않는다. 감추면 사용자는 우리가 뭘 골라 놨는지 모른
           채로 넘어간다. 무엇이 비었는지 알아야 손으로 채울 수 있다.
         */}
-        {결과.못들은축.length > 0 && (
+        {들은것.못들은축.length > 0 && (
           <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7 }}>
-            {tf("{축}은(는) 못 들었어요. 아래에서 골라 주세요.", { 축: 결과.못들은축.join(", ") })}
+            {/* 조사를 자리표시자로 붙이면 "맵기은(는)" 이 된다. 조사가 필요 없는 문장으로 쓴다. */}
+            {tf("못 들은 것 — {축}. 아래에서 골라 주세요.", { 축: 들은것.못들은축.map(t).join(", ") })}
           </p>
         )}
         {/*
           말은 했는데 못 고른 축은 다르게 말한다. 못 들었다고 하면 사용자는 다시
           또박또박 말해 보고 같은 답을 받는다. 무엇이 문제였는지 알려 준다.
         */}
-        {결과.모호한축.length > 0 && (
+        {들은것.모호한축.length > 0 && (
           <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7 }}>
-            {tf("{축}은(는) 말씀은 들었는데 어느 쪽인지 못 골랐어요. 아래에서 골라 주세요.", { 축: 결과.모호한축.join(", ") })}
+            {tf("말씀은 들었는데 어느 쪽인지 못 골랐어요 — {축}. 아래에서 골라 주세요.", { 축: 들은것.모호한축.map(t).join(", ") })}
           </p>
         )}
         {고른축.length === 0 && place === null && (
@@ -1120,7 +1129,9 @@ function 말로채우기({ place, 언어, on받기 }: {
 
         <div className="flex" style={{ gap: 8, marginTop: 16 }}>
           <div style={{ flex: 1 }}>
-            <OutlineBtn onClick={() => { on받기(결과); set상태("쉬는중"); }}>이대로 채우기</OutlineBtn>
+            <OutlineBtn onClick={() => { if (장소그대로) on받기(들은것); set상태("쉬는중"); }}>
+              {장소그대로 ? "이대로 채우기" : "장소가 바뀌어 못 채워요"}
+            </OutlineBtn>
           </div>
           <div style={{ flex: 1 }}>
             <OutlineBtn onClick={듣기시작}>다시 말하기</OutlineBtn>

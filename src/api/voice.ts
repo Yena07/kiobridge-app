@@ -122,6 +122,25 @@ const 말했나 = (글: string, 값: string, 영어인가: boolean): boolean => 
     && (글.includes(값) || (다르게부르는말[값] ?? []).some((말) => 글.includes(말)));
 };
 
+/**
+ * 이 장소를 이 언어로 알아들을 수 있나.
+ *
+ * 우리말은 어느 장소든 된다 — 값 자체가 우리말이라 글자로 맞춰 볼 수 있다.
+ * 영어는 다르다. 값의 영어 이름은 화면 표에서 가져오는데, 그 표에는 닭강정집
+ * 값만 들어 있다. 카페의 "아메리카노"·"Short" 나 병원의 "초진" 은 표에 없어서,
+ * 영어로 말하면 **한 축도 못 채운다**(#39 리뷰).
+ *
+ * 못 알아듣는 자리에서는 단추를 안 내민다. 눌렀는데 아무것도 안 채워지면
+ * 사용자는 자기가 잘못 말한 줄 안다 — 우리가 못 알아듣는 것인데도.
+ */
+export const 말로채울수있나 = (place: PlaceType, 영어인가: boolean): boolean => {
+  const 축들 = place ? DETAIL_OPTIONS[place] : [];
+  if (축들.length === 0) return false;
+  if (!영어인가) return true;
+  // 축마다 영어로 알아들을 말이 하나라도 있어야 한다.
+  return 축들.every((축) => 축.choices.some((값) => (EN[값] ?? "") !== "" || (영어로다르게[값] ?? []).length > 0));
+};
+
 export interface 들은결과 {
   /** 우리 목록에서 고른 값. 화면이 쓰는 우리말 그대로다. */
   고른값: Record<string, string[]>;
