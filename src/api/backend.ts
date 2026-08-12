@@ -1382,9 +1382,18 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const 합계 = typeof r.total === "number"
       ? r.total
       : items.reduce((s, i) => s + (Number(i?.price) || 0) * (Number(i?.quantity) || 0), 0);
+    /*
+     * 값 표기만 언어를 따라간다. 나머지 세 문장은 우리말 그대로 두고 화면 쪽에서
+     * 옮긴다(i18n/en.ts) — 여기서 옮기면 같은 문장을 두 곳에서 관리하게 된다.
+     */
+    const 영어 = 접근성설정.읽기().language === "en-US";
+    /*
+     * 개수도 여기서 만든다. "1개" 를 표에 넣으면 수량 칩의 "1개" 까지 같이 바뀐다 —
+     * 같은 우리말이 자리마다 다른 영어가 되는 곳은 표로 풀 수 없다.
+     */
     return {
-      itemCountText: `${개수}개`,
-      totalText: `${합계.toLocaleString("ko-KR")}원`,
+      itemCountText: 영어 ? `${개수} item${개수 === 1 ? "" : "s"}` : `${개수}개`,
+      totalText: 돈(합계, 영어),
       evidenceLabel: "화면 인식으로 확인됨",
       handoff: "키오스크 화면에서 장바구니를 확인해 주세요",
     };

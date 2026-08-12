@@ -305,7 +305,31 @@ export const EN: Record<string, string> = {
   // 옮기면 화면에 있는 이름과 달라져서 맞춰 볼 수가 없다.
   "반영:": "Used:",
   "제외:": "Left out:",
-  "이유": "reason",
-  "개 더 보기": "more",
   "비슷한 메뉴 후보": "Similar menu options",
+  // ─── 결과 화면 ────────────────────────────────────────────────────────────
+  "담긴 내역": "What went in",
+  "담긴 내역을 불러오지 못했어요": "We couldn’t load what went in",
+  "화면 인식으로 확인됨": "Confirmed by reading the screen",
+  "키오스크가 보내온 결과": "What the kiosk sent back",
+  "키오스크 화면에서 장바구니를 확인해 주세요": "Please check the cart on the kiosk screen",
+  "이유 {n}개 더 보기": "See {n} more reasons",
+  // ─── 오류 문구 ────────────────────────────────────────────────────────────
+  //
+  // 화면에 그대로 뜨는 말이라 옮긴다. 서버가 준 문장(추천 이유 등)과 달리
+  // 이건 우리가 지은 말이다.
+  "메뉴를 먼저 찾아야 해요": "We need to find the menu first",
+  "주문표를 찾을 수 없어요": "We can’t find that order card",
+  "연결이 만료됐어요. QR을 다시 찍어 주세요": "The session expired. Please scan the QR code again",
+  "저장하신 조건을 서버가 읽지 못했어요": "The server couldn’t read your saved preferences",
+  "저장하신 조건을 다시 확인해 주세요": "Please check your saved preferences again",
+  "저장하신 알레르기 중에 저희가 확인하지 못한 것이 있어요. 주문표에서 다시 골라 주시거나 직원에게 도움을 청해 주세요.":
+    "There’s an allergy we couldn’t confirm. Please pick it again on your order card, or ask a staff member for help.",
+  "진행 상황을 확인할 수 없어요": "We can’t check the progress",
+  "서버에 남은 정보를 지우지 못했어요": "We couldn’t erase what’s left on the server",
+  "요청을 처리하지 못했어요": "We couldn’t complete that request",
+  "잠시 후 다시 시도해 주세요": "Please try again in a moment",
+  "안전을 위해 중단되었습니다": "Stopped for safety",
+  "예상하지 못한 화면이 감지되어 작동을 멈췄어요.": "We stopped because the screen wasn’t what we expected.",
+  "직원 초기화를 기다려 주세요": "Please wait for a staff member to reset it",
+  "키오스크가 한 일 {n}가지": "{n} things the kiosk did",
 };

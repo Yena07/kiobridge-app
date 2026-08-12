@@ -2749,7 +2749,11 @@ function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; 
         {첫줄.text}
         {남은 > 0 && (
           <span style={{ color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3 }}>
-            {" "}이유 {남은}개 더 보기
+            {/*
+              조각으로 나눠 옮기면 어순이 깨진다("reason 2more"). 자리표시자를 둔
+              한 문장으로 만들어 언어마다 제 어순을 갖게 한다.
+            */}
+            {" "}{tf("이유 {n}개 더 보기", { n: 남은 })}
           </span>
         )}
       </span>
@@ -3417,7 +3421,8 @@ function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
         {/* 키오스크가 대신 눌러 준 일이라 handPointing 을 쓴다. 새 아이콘은 두지 않는다. */}
         <Pictogram name="handPointing" size={17} color={TEXT_2} />
         <span style={{ ...TYPE.caption, color: TEXT_2 }}>
-          키오스크가 한 일 {done.length}가지
+          {/* 조각으로 나누면 어순이 깨진다("What the kiosk did 10steps"). 한 문장으로 만든다. */}
+          {tf("키오스크가 한 일 {n}가지", { n: done.length })}
           {실패 > 0 && <b style={{ fontWeight: 700, color: WARN }}> · {실패}가지 실패</b>}
           <span style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>{" "}{펼침 ? "접기" : "보기"}</span>
         </span>
