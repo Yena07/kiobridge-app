@@ -240,10 +240,10 @@ describe("손댄 값을 믿지 않는다", () => {
   });
 
   it("안내 언어도 이어 쓰되, 아는 값일 때만 받는다", () => {
-    이어쓰기.쓰기(채운값({ a11y: { ...기본도움설정, language: "vi-VN" } }));
-    expect(이어쓰기.읽기()!.a11y.language).toBe("vi-VN");
+    이어쓰기.쓰기(채운값({ a11y: { ...기본도움설정, language: "en-US" } }));
+    expect(이어쓰기.읽기()!.a11y.language).toBe("en-US");
     // 손대서 아무 문자열이나 넣어 두면 서버의 BCP 47 검사에 걸려 주문이 안 된다.
-    for (const 나쁜값 of ["ja-JP", "아무거나", "", 1, null, true]) {
+    for (const 나쁜값 of ["ja-JP", "zh-CN", "아무거나", "", 1, null, true]) {
       망가진것({ a11y: { ...기본도움설정, language: 나쁜값 } });
       expect(이어쓰기.읽기()!.a11y.language).toBe("ko-KR");
     }

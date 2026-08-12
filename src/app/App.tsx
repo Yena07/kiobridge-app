@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronLeft, Check } from "lucide-react";
 
 import { Pictogram } from "@/design/Pictogram";
@@ -27,6 +27,8 @@ import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
+import { 영어로바꾸기, 되돌리기, 안바뀐것, 돈 } from "@/i18n/apply";
+import { tf } from "@/i18n/t";
 import { 백엔드가아는장소 } from "@/api/canonical";
 import BackendLog from "@/app/BackendLog";
 
@@ -804,7 +806,7 @@ function GreetingScreen({ name, onNext }: { name: string; onNext: () => void }) 
     >
       <Pictogram name="handsClapping" size={72} color={TEXT_1} />
       <h1 style={{ ...TYPE.title, color: TEXT_1, marginTop: 32 }}>
-        반가워요, <span style={{ color: TEXT_1 }}>{name}</span>님!
+        반가워요, <span data-원문 style={{ color: TEXT_1 }}>{name}</span>님!
       </h1>
       <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 10 }}>
         자주 시키는 주문을 저장해 두면<br />키오스크 앞에서 바로 꺼내 쓸 수 있어요
@@ -1235,7 +1237,7 @@ function OrderSheetCard({
             >
               {sheet.place ? PLACE_ICONS[sheet.place] : <Pictogram name="squaresFour" size={19} />}
             </div>
-            <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1 }}>{sheet.menuName}</span>
+            <span data-원문 style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1 }}>{sheet.menuName}</span>
           </div>
           <div
             aria-hidden="true"
@@ -1282,7 +1284,7 @@ function OrderSheetCard({
 
         {/* 반투명 흰색(70%)은 초록 위에서 3.31:1 이라 읽히지 않는다. 흰색은 5.08:1 이다. */}
         {sheet.memo && (
-          <p style={{ fontSize: 14, color: selected ? PAPER : TEXT_2, lineHeight: 1.5, marginTop: 12 }}>{sheet.memo}</p>
+          <p style={{ fontSize: 14, color: selected ? PAPER : TEXT_2, lineHeight: 1.5, marginTop: 12 }} data-원문>{sheet.memo}</p>
         )}
       </label>
 
@@ -1291,7 +1293,8 @@ function OrderSheetCard({
         <button
           type="button"
           // 삭제는 되돌릴 수 없다. 고르는 쪽보다 더 정확히 말해 줘야 한다.
-          aria-label={`${듣는이름(sheet)} 주문표 삭제`}
+          /* 쉼표로 띄운다. 스크린리더가 한 박자 쉬어 읽고, 옮길 때도 토막마다 걸린다. */
+          aria-label={`${듣는이름(sheet)}, 주문표 삭제`}
           onClick={onDelete}
           style={{
             // 높이만 44 였고 폭이 30 이었다. 밑줄은 글자에만 걸리므로
@@ -1321,7 +1324,12 @@ function OrderSheetCard({
  * 주문표가 아니라 이번 이용에 딸린 값이라 여기(주문 직전)에 둔다. 주문표에 넣으면
  * 예산은 그날그날 다른데 저장해 둔 조건에 굳어 버린다.
  */
-function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바꾸기: (원: number | null) => void }) {
+function 한도고르기({ 예산, on바꾸기, 영어인가 }: {
+  예산: number | null;
+  on바꾸기: (원: number | null) => void;
+  /** 금액 표기가 언어마다 달라서 여기까지 내려온다("6,000원" vs "KRW 6,000"). */
+  영어인가: boolean;
+}) {
   return (
     <div>
       <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 6 }}>가격 한도 (선택)</h2>
@@ -1330,7 +1338,7 @@ function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바
         {한도후보.map((원) => (
           <Chip
             key={원}
-            label={`${원.toLocaleString("ko-KR")}원`}
+            label={돈(원, 영어인가)}
             selected={예산 === 원}
             onClick={() => on바꾸기(예산 === 원 ? null : 원)}
           />
@@ -1338,7 +1346,7 @@ function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바
       </div>
       {예산 !== null && (
         <p style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
-          {예산.toLocaleString("ko-KR")}원보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.
+          {tf("{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.", { 금액: 돈(예산, 영어인가) })}
         </p>
       )}
     </div>
@@ -1346,7 +1354,7 @@ function 한도고르기({ 예산, on바꾸기 }: { 예산: number | null; on바
 }
 
 function SavedSheetsScreen({
-  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false, 예산, on예산,
+  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false, 예산, on예산, 영어인가,
 }: {
   sheets: OrderSheet[];
   onAddSheet: () => void;
@@ -1355,6 +1363,8 @@ function SavedSheetsScreen({
   showOrder?: boolean;
   예산: number | null;
   on예산: (원: number | null) => void;
+  /** 금액 표기가 언어마다 다르다. 한도고르기 까지 내려간다. */
+  영어인가: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(sheets[0]?.id ?? null);
 
@@ -1424,7 +1434,7 @@ function SavedSheetsScreen({
       <StickyFooter>
         {/* 주문 버튼이 보일 때만 묻는다. 연결도 안 된 화면에서 예산부터 물으면 뜬금없다. */}
         {showOrder && 고른것 && 백엔드가아는장소(고른것) && (
-          <한도고르기 예산={예산} on바꾸기={on예산} />
+          <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={영어인가} />
         )}
         {/*
           아직 연결되지 않은 장소는 주문으로 보내지 않는다.
@@ -2739,7 +2749,11 @@ function ReasonSummary({ reasons, onOpen }: { reasons?: RecommendationReason[]; 
         {첫줄.text}
         {남은 > 0 && (
           <span style={{ color: TEXT_2, textDecoration: "underline", textUnderlineOffset: 3 }}>
-            {" "}이유 {남은}개 더 보기
+            {/*
+              조각으로 나눠 옮기면 어순이 깨진다("reason 2more"). 자리표시자를 둔
+              한 문장으로 만들어 언어마다 제 어순을 갖게 한다.
+            */}
+            {" "}{tf("이유 {n}개 더 보기", { n: 남은 })}
           </span>
         )}
       </span>
@@ -2804,7 +2818,7 @@ function OptionCard({
           가장 먼저 읽어야 하는 값이라 한 줄로 세우고, 배지는 아래로 내린다.
         */}
         <span style={{ minWidth: 0, textAlign: "left" }}>
-        <span style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, display: "block" }}>{name}</span>
+        <span data-원문 style={{ ...TYPE.bodyBold, color: selected ? PAPER : TEXT_1, display: "block" }}>{name}</span>
         {/*
           위트 액센트 하나. 뜻은 옆의 '조건 일치' 라는 글자가 지고 있고 이 그림은
           거들기만 한다 - 이모지는 기기마다 모양이 다르고 스크린리더가 이름을
@@ -3180,7 +3194,7 @@ function OrderConfirmScreen({
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-2" style={{ marginTop: 20, paddingBottom: 16 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: PAPER, backgroundColor: RULE, padding: "4px 11px", borderRadius: RADIUS.pill }}>내 주문표</span>
-          <span style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
+          <span data-원문 style={{ ...TYPE.bodyBold, color: TEXT_1 }}>{sheet.menuName}</span>
         </div>
         <div style={{ height: 1, backgroundColor: BORDER, marginLeft: -GAP.screenX, marginRight: -GAP.screenX }} />
       </div>
@@ -3407,7 +3421,8 @@ function DoneSteps({ done }: { done: { text: string; ok: boolean }[] }) {
         {/* 키오스크가 대신 눌러 준 일이라 handPointing 을 쓴다. 새 아이콘은 두지 않는다. */}
         <Pictogram name="handPointing" size={17} color={TEXT_2} />
         <span style={{ ...TYPE.caption, color: TEXT_2 }}>
-          키오스크가 한 일 {done.length}가지
+          {/* 조각으로 나누면 어순이 깨진다("What the kiosk did 10steps"). 한 문장으로 만든다. */}
+          {tf("키오스크가 한 일 {n}가지", { n: done.length })}
           {실패 > 0 && <b style={{ fontWeight: 700, color: WARN }}> · {실패}가지 실패</b>}
           <span style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>{" "}{펼침 ? "접기" : "보기"}</span>
         </span>
@@ -4407,6 +4422,53 @@ export default function App() {
   //
   // 적을 게 없는 화면에서는 첫 제목으로 보내 "여기가 어디인지" 부터 들려준다.
   const 화면영역 = useRef<HTMLDivElement>(null);
+  /**
+   * 고른 언어로 화면 글자를 바꾼다.
+   *
+   * useLayoutEffect 다 — 그린 뒤 눈에 보이기 전에 끝내야 우리말이 한 번 번쩍이지
+   * 않는다. 화면이 다시 그려질 때마다 다시 부른다. 이미 바뀐 글자는 표에 없어서
+   * 그대로 있으므로 되풀이해도 안전하다.
+   *
+   * 글자만 만진다. 주문표에 저장되는 값도, 서버로 나가는 값도 계속 우리말이다 —
+   * canonical.ts 가 그 우리말을 enum 으로 옮기고 있어서 저장값을 건드리면
+   * 매핑이 통째로 깨진다(i18n/apply.ts 주석).
+   */
+  useLayoutEffect(() => {
+    /*
+     * 한국어로 돌아오면 우리가 바꾼 자리를 우리 손으로 되돌린다.
+     *
+     * 여기서 그냥 나가면 화면은 영어로 남는다. React 는 자기가 그린 한국어가
+     * 아직 화면에 있다고 여기기 때문에 다시 쓰지 않는다 — 설정만 ko-KR 이고
+     * 글자는 영어인 채로, 새로고침 전에는 돌아올 길이 없었다(#34 리뷰).
+     */
+    if (접근성값.language !== "en-US") { 되돌리기(); return; }
+    const 틀 = 화면영역.current?.closest<HTMLElement>("[data-frame]") ?? document.body;
+    영어로바꾸기(틀);
+
+    /*
+     * 화면 안쪽에서 일어난 변화도 잡는다.
+     *
+     * 이 효과는 App 이 다시 그려질 때만 돈다. 그런데 장소를 고르면 세부 옵션이
+     * 나타나는 것처럼, **자식 화면이 제 상태만 바꾸는 경우에는 App 이 안 그려진다.**
+     * 그러면 새로 뜬 부분만 우리말로 남는다 — 실제로 그랬다.
+     *
+     * 그래서 틀 안을 지켜보다가 무언가 붙으면 다시 옮긴다. 우리가 바꾼 글자는
+     * 표에 없으므로 두 번째 바퀴에서는 아무것도 안 바뀌고 멈춘다. 그래도 우리
+     * 손질이 다시 자기를 깨우지 않도록 옮기는 동안에는 잠깐 떼어 둔다.
+     */
+    const 지켜보기 = new MutationObserver(() => {
+      지켜보기.disconnect();
+      영어로바꾸기(틀);
+      지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
+    });
+    지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
+    return () => 지켜보기.disconnect();
+  });
+  // 무엇이 아직 우리말로 남았는지 콘솔에서 확인하는 손잡이. 화면은 안 건드린다.
+  useEffect(() => {
+    (globalThis as unknown as { __안바뀐것?: () => string[] }).__안바뀐것 = () =>
+      안바뀐것(화면영역.current?.closest<HTMLElement>("[data-frame]") ?? document.body);
+  }, []);
   useEffect(() => {
     // 겹이 떠 있으면 겹 안에서 찾는다. 아래 화면이 DOM 앞쪽이라 그냥 찾으면
     // 덮인 화면의 제목으로 포커스가 가고, 읽는 사람은 겹이 열린 줄도 모른다.
@@ -4509,6 +4571,8 @@ export default function App() {
       */}
       <div style={{ width: "100%", maxWidth: FRAME_W, height: FRAME_H }}>
         <div
+          data-frame
+
           ref={화면영역}
           /*
            * 고대비는 색 토큰을 갈아 끼워서 만든다. tokens.ts 의 PALETTE_STYLES 가
@@ -4637,6 +4701,7 @@ export default function App() {
               showOrder={fromQr}
               예산={예산}
               on예산={(원) => 가격한도.바꾸기(원)}
+              영어인가={접근성값.language === "en-US"}
             />
           )}
           {screen === "order-confirm" && pairingId && orderSheet && (

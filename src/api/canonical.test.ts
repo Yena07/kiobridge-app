@@ -198,7 +198,7 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
      * ko-KR · en-US · zh-CN · vi-VN 전부 status VALID.
      * 화면이 안 물어서 여태 "ko-KR" 로만 나가고 있었다.
      */
-    for (const code of ["ko-KR", "en-US", "zh-CN", "vi-VN"] as const) {
+    for (const code of ["ko-KR", "en-US"] as const) {
       expect(toCanonicalProfile(주문표({}), { 접근성: { language: code } }).interaction.language).toBe(code);
     }
   });
@@ -209,7 +209,7 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
 
   it("언어도 accessibility 에 섞이지 않는다", () => {
     // voiceGuide 와 같은 이유다. 일곱 칸은 additionalProperties: false 다.
-    const c = toCanonicalProfile(주문표({}), { 접근성: { language: "zh-CN", voiceGuide: true } });
+    const c = toCanonicalProfile(주문표({}), { 접근성: { language: "en-US", voiceGuide: true } });
     expect(Object.keys(c.accessibility).sort()).toEqual([
       "hearingSupport", "highContrast", "largeText", "mobilitySupport",
       "simpleSteps", "staffAssistancePreferred", "visualGuidance",
