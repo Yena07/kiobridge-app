@@ -21,3 +21,4 @@ _extracted_manifest.txt
 # robocopy /MIR 로 새로 받을 때 지워진다. 규칙은 여기에 둔다.
 .gradle/
 build/
+strings.json

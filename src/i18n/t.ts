@@ -30,7 +30,7 @@ const 영어인가 = (): boolean => 접근성설정.읽기().language === "en-US
  * 빠진 자리가 한국어로 보이는 것은 **일부러 그렇게 둔 것**이다. 빈칸이나
  * 열쇠 이름이 뜨는 것보다 낫고, 무엇이 안 옮겨졌는지도 화면에서 바로 보인다.
  */
-export const t = (ko: string): string => {
+const t = (ko: string): string => {
   if (!영어인가()) return ko;
   return Object.hasOwn(EN, ko) ? EN[ko] : ko;
 };
@@ -46,6 +46,3 @@ export const tf = (ko: string, 값들: Record<string, string | number>): string 
   for (const [k, v] of Object.entries(값들)) 말 = 말.split(`{${k}}`).join(String(v));
   return 말;
 };
-
-/** 화면 언어 코드. <html lang> 과 소리 안내가 쓴다. */
-export const 지금언어 = (): string => 접근성설정.읽기().language;
