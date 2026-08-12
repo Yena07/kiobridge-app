@@ -4969,6 +4969,9 @@ export default function App() {
      * 계속 읽었고, 새 화면에 읽을 것이 없으면 아예 안 끊겼다.
      */
     그만읽기();
+    // 앞 화면에서 읽은 줄 기억도 비운다. 안 비우면 새 화면에 같은 문장이 있을 때
+    // 이미 읽은 것으로 보고 건너뛴다.
+    읽은줄.current = [];
     const 표 = setTimeout(() => {
       const 줄 = 화면글(틀);
       읽은줄.current = 줄;
@@ -5000,7 +5003,16 @@ export default function App() {
     });
     지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
     return () => { clearTimeout(표); 지켜보기.disconnect(); };
-  }, [접근성값.voiceGuide, 접근성값.language]);
+    /*
+     * 화면이 바뀌면 이 효과도 새로 건다.
+     *
+     * 예전에는 안 걸었다. 그러면 앞 화면에서 걸어 둔 350ms 타이머가 새 화면에서
+     * 터져 **새 화면 전체를 '새로 붙은 줄' 로 읽고**, 곧이어 120ms 짜리 전체
+     * 읽기가 같은 것을 또 읽었다. 빠르게 넘기거나 겹을 여닫을 때 그랬다.
+     *
+     * 정리에서 타이머와 지켜보기를 둘 다 끊으므로, 새로 걸면 앞의 것이 안 남는다.
+     */
+  }, [screen, tab, 개인정보겹, 접근성값.voiceGuide, 접근성값.language]);
 
   /*
    * 스위치를 끄거나 화면을 떠나면 읽던 것을 멈춘다.

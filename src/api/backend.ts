@@ -345,7 +345,15 @@ export function createApi(
       const reasons: MappingResponse["reasons"] = [
         ...rec.recommendationReasons.map((text) => ({
           kind: "used" as const,
-          text: 고른값붙이기(rec.recommendedCandidateId ? 이름붙이기(rec.recommendedCandidateId, text) : text),
+          /*
+           * 축은 **서버 원문에서** 본다. 이름을 먼저 붙이면 메뉴 이름에 "컵" 이나
+           * "맵기" 가 들어 있을 때 서버가 말하지도 않은 축이 걸린다 — "종이컵
+           * 세트" 같은 이름이면 컵 얘기가 아닌 문장에 컵 값이 붙는다. 사용자에게
+           * 틀린 근거를 보여 주는 셈이다(#41 리뷰).
+           */
+          text: rec.recommendedCandidateId
+            ? 이름붙이기(rec.recommendedCandidateId, 고른값붙이기(text))
+            : 고른값붙이기(text),
         })),
         ...rec.unmetConditions.map((text) => ({ kind: "unmet" as const, text: 고른값붙이기(text) })),
         ...제외.map((e) => ({ kind: "excluded" as const, text: 이름붙이기(e.candidateId, e.explanation) })),
