@@ -118,8 +118,12 @@ function ConsentCheck({ 동의함, on바꾸기, onDetail }: {
           padding: "6px 0", cursor: "pointer",
         }}
       >
+        {/*
+          aria-hidden 을 붙이면 안 된다. 이 안에 포커스가 가는 체크박스가 있어서,
+          키보드로는 닿는데 스크린리더는 역할도 켜짐 여부도 못 읽는 자리가 된다.
+          자리만 넓히는 껍데기지만 안에 든 것이 조작하는 물건이라 숨기지 않는다.
+        */}
         <span
-          aria-hidden="true"
           style={{ width: 44, height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <input
@@ -4394,9 +4398,17 @@ export default function App() {
             borderRadius: 54, boxShadow: "0 24px 80px rgba(0,0,0,0.16)",
           }}
         >
+        {/*
+          겹이 떠 있으면 이 아래(화면 + 하단 탭)를 통째로 잠근다. inert 는 포커스와
+          스크린리더 읽기를 함께 막는다. 하단 탭까지 감싸는 것이 핵심이다 —
+          빼 두면 겹을 띄운 채로 탭을 눌러 다른 화면으로 갈 수 있다.
+        */}
+        <div
+          className="flex-1 flex flex-col"
+          style={{ minHeight: 0 }}
+          {...(개인정보겹 ? { inert: "" } : {})}
+        >
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
-          {/* 겹이 떠 있으면 아래 화면은 잠근다. inert 는 포커스와 읽기를 함께 막는다. */}
-          <div className="absolute inset-0 overflow-hidden" {...(개인정보겹 ? { inert: "" } : {})}>
           {screen === "welcome" && (
             <WelcomeScreen
               동의함={동의}
@@ -4587,25 +4599,25 @@ export default function App() {
           {screen === "privacy" && (
             <PrivacyScreen guest={guest} onBack={() => { setScreen("saved"); setTab("account"); }} />
           )}
-          </div>
-          {/*
-            '자세히' 로 연 개인정보 안내. 아래 화면을 덮되 언마운트하지는 않으므로
-            로그인.가입 화면에 적어 둔 것이 그대로 남는다. 닫으면 있던 자리로 돌아온다.
-          */}
-          {개인정보겹 && (
-            /*
-              inert 로 덮인 쪽을 통째로 잠근다. 없으면 키보드 Tab 이 겹 아래
-              로그인 칸으로 들어가고, 스크린리더도 안 보이는 화면을 읽는다.
-              읽으라고 띄운 겹이 정작 읽는 사람에게 가장 헷갈리는 자리가 된다.
-            */
-            <div className="absolute inset-0" style={{ zIndex: 20 }} data-겹>
-              <PrivacyScreen guest={guest} onBack={() => set개인정보겹(false)} />
-            </div>
-          )}
         </div>
 
         {inMain && (
           <BottomNav tab={tab} onChange={handleTabChange} />
+        )}
+        </div>
+
+        {/*
+          '자세히' 로 연 개인정보 안내. 아래 화면을 덮되 언마운트하지는 않으므로
+          로그인.가입 화면에 적어 둔 것이 그대로 남는다. 닫으면 있던 자리로 돌아온다.
+
+          **틀 전체를 덮는다.** 예전에는 화면 영역 안에만 있어서 하단 탭이 겹 밖에
+          남았고, 겹을 띄운 채로 탭을 눌러 다른 화면으로 갈 수 있었다. inert 도
+          화면 영역에만 걸려서 Tab 이 하단 탭으로 빠져나갔다.
+        */}
+        {개인정보겹 && (
+          <div className="absolute inset-0" style={{ zIndex: 20 }} data-겹>
+            <PrivacyScreen guest={guest} onBack={() => set개인정보겹(false)} />
+          </div>
         )}
 
         {/* 되돌릴 수 없는 동작을 묻는 자리. 폰 프레임 안에 뜬다. */}
