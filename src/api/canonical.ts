@@ -31,7 +31,7 @@ export interface CanonicalProfile {
     hearingSupport: boolean; mobilitySupport: boolean; highContrast: boolean;
     staffAssistancePreferred: boolean;
   };
-  interaction: { preferredInput: "TOUCH" | "VOICE"; language: "ko-KR"; confirmationRequired: boolean };
+  interaction: { preferredInput: "TOUCH" | "VOICE"; language: string; confirmationRequired: boolean };
   consent: { personalization: boolean; retentionPolicy: "SESSION_ONLY" };
 }
 
@@ -134,7 +134,13 @@ export function toCanonicalProfile(
      */
     interaction: {
       preferredInput: opts.접근성?.voiceGuide ? "VOICE" : "TOUCH",
-      language: "ko-KR",
+      /*
+       * 안내받고 싶은 언어. 여태 "ko-KR" 로 박혀 있었다.
+       *
+       * 계약은 BCP 47 꼴이면 무엇이든 받는다. 로컬 백엔드로 en-US · zh-CN · vi-VN
+       * 까지 확인했다(전부 status VALID). 화면이 안 물어서 늘 한국어로 나가고 있었다.
+       */
+      language: opts.접근성?.language ?? "ko-KR",
       confirmationRequired: true,
     },
     consent: {
