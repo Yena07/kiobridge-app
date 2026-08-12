@@ -250,7 +250,9 @@ describe("손댄 값을 믿지 않는다", () => {
     이어쓰기.쓰기(채운값({ a11y: { ...기본도움설정, language: "en-US" } }));
     expect(이어쓰기.읽기()!.a11y.language).toBe("en-US");
     // 손대서 아무 문자열이나 넣어 두면 서버의 BCP 47 검사에 걸려 주문이 안 된다.
-    for (const 나쁜값 of ["ja-JP", "zh-CN", "아무거나", "", 1, null, true]) {
+    // zh-CN·vi-VN 은 예전에 목록에 있던 값이다. 화면이 실제로 그 언어가 되지
+    // 않아 뺐으므로, 남아 있던 세션에서 되살아나면 안 된다.
+    for (const 나쁜값 of ["ja-JP", "zh-CN", "vi-VN", "아무거나", "", 1, null, true]) {
       망가진것({ a11y: { ...기본도움설정, language: 나쁜값 } });
       expect(이어쓰기.읽기()!.a11y.language).toBe("ko-KR");
     }
