@@ -87,16 +87,24 @@ export const 읽어주기 = (
  * 화면에서 읽어 줄 글을 줄 단위로 모은다.
  *
  * 눈으로 보이는 것만 모은다 — 안 보이는 것을 읽으면 화면과 소리가 어긋난다.
- * 빼는 것은 셋이다.
+ * 빼는 것은 넷이다.
  *
  *   - `data-devlog`  개발용 연동 기록. 사용자에게 하는 말이 아니다.
  *   - `aria-hidden`  장식이라고 우리가 표시해 둔 것. 스크린리더도 안 읽는다.
+ *   - `inert`        겹 아래에 덮인 화면. 스크린리더가 못 읽도록 막아 둔 자리다.
+ *                    소리 안내만 그 약속을 깨면 안 된다(#36 리뷰).
  *   - 자리를 차지하지 않는 것(getClientRects 가 빈 것). 접힌 목록·가려진 화면이다.
+ *
+ * `바뀌는것빼고` 를 켜면 `data-소리조용` 안쪽도 뺀다. 사용자가 적는 동안 따라
+ * 바뀌는 글(가격 한도 안내)과 1초마다 바뀌는 글(남은 시간)이 거기 든다.
+ * 화면에 처음 왔을 때는 읽어야 하지만 **바뀔 때마다 읽으면 안 된다** — 한 글자
+ * 칠 때마다 "8원보다 비싼 메뉴는", "80원보다 비싼 메뉴는" 을 듣게 되고, 연결
+ * 화면에서는 1초에 한 번씩 남은 시간을 듣는다.
  *
  * 줄 단위로 돌려주는 이유는, 같은 화면에서 **새로 붙은 줄만** 골라 읽기 위해서다.
  * 통째로 비교하면 글자 하나만 달라져도 화면 전체를 다시 읽는다.
  */
-export const 화면글 = (뿌리: HTMLElement): string[] => {
+export const 화면글 = (뿌리: HTMLElement, { 바뀌는것빼고 = false } = {}): string[] => {
   const 줄: string[] = [];
   const 훑기 = document.createTreeWalker(뿌리, NodeFilter.SHOW_TEXT);
   for (let n = 훑기.nextNode(); n; n = 훑기.nextNode()) {
@@ -106,6 +114,8 @@ export const 화면글 = (뿌리: HTMLElement): string[] => {
     if (!el) continue;
     if (el.closest("[data-devlog]")) continue;
     if (el.closest('[aria-hidden="true"]')) continue;
+    if (el.closest("[inert]")) continue;
+    if (바뀌는것빼고 && el.closest("[data-소리조용]")) continue;
     if (el.getClientRects().length === 0) continue;
     줄.push(말);
   }

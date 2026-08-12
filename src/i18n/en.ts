@@ -64,6 +64,9 @@ export const EN: Record<string, string> = {
   "부르는 말만 쓰여요. 실제 이름이 아니어도 괜찮아요":
     "Only used to greet you. It doesn’t have to be your real name",
   "부를 호칭": "What to call you",
+  "예: 할머니, 김씨": "e.g. Grandma, Mr. Kim",
+  // 숫자가 끼는 문장이라 조각으로 쪼개진다. tf() 로 통째로 옮긴다.
+  "전체 {전체}단계 중 {지금}단계": "Step {지금} of {전체}",
   "계속하기": "Continue",
   "반가워요,": "Nice to meet you,",
   "님!": "!",
@@ -248,8 +251,15 @@ export const EN: Record<string, string> = {
   /*
    * 원래 "QR 코드를 <strong>다시 스캔</strong>해 주세요" 라 조각이 셋이었다.
    * 영어는 'again' 이 문장 끝에 붙어서 가운데 조각만 옮기면 어순이 무너진다.
-   * 굵은 자리를 "다시 스캔해 주세요" 로 넓혀 조각을 둘로 만들었다. 그러면 두
-   * 언어 다 강조가 '무엇을 해야 하는지' 에 붙는다.
+   * 굵은 자리를 "다시 스캔해 주세요" 로 넓혀 조각을 둘로 만들었다.
+   *
+   * 그래서 굵어지는 곳이 두 언어에서 다르다.
+   *
+   *   우리말  키오스크에 부착된 QR 코드를 **다시 스캔해 주세요**   (동작 전체)
+   *   영어    Scan the QR code on the kiosk **again**            ('again' 만)
+   *
+   * 영어 쪽은 동작(Scan)이 강조 밖에 있다. 어순 때문에 어쩔 수 없고, 그래도
+   * 말이 된다 — 한 번 찍어 본 사람에게 새로 알려야 할 것은 '또' 라는 사실이다.
    */
   "키오스크에 부착된 QR 코드를": "Scan the QR code on the kiosk",
   "다시 스캔해 주세요": "again",

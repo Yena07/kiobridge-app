@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useId } from "react";
 import { ChevronLeft, Check } from "lucide-react";
 
 import { Pictogram } from "@/design/Pictogram";
@@ -69,7 +69,7 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
 // 값이 남으므로 부르는 쪽에서 전부 명시한다.
 function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
   return (
-    <div className="flex justify-center gap-1.5" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={`전체 ${total}단계 중 ${step}단계`}>
+    <div className="flex justify-center gap-1.5" role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={total} aria-label={tf("전체 {전체}단계 중 {지금}단계", { 전체: total, 지금: step })}>
       {Array.from({ length: total }).map((_, i) => (
         <div
           key={i}
@@ -1347,14 +1347,15 @@ function OrderSheetCard({
  * 만들어 둔 주문표만 있는 사람도 바꿀 수 있어야 해서 도움 설정 화면에도 둔다.
  * 알레르기가 가입 때 묻고 설정에서 고치는 것과 같은 모양이다.
  */
-function 한도적기({ 예산, on바꾸기, 영어인가, 칸id = "budget-input" }: {
+function 한도적기({ 예산, on바꾸기, 영어인가 }: {
   예산: number | null;
   on바꾸기: (원: number | null) => void;
   /** 금액 표기가 언어마다 달라서 여기까지 내려온다("6,000원" vs "KRW 6,000"). */
   영어인가: boolean;
-  /** 한 화면에 두 번 나오지 않지만, id 는 화면마다 다르게 줄 수 있어야 한다. */
-  칸id?: string;
 }) {
+  // 이 칸은 만들기 화면과 도움 설정 두 곳에 뜬다. id 를 손으로 적어 두면 언젠가
+  // 둘이 같이 떠서 라벨이 엉뚱한 칸을 가리킨다. React 가 겹치지 않게 지어 준다.
+  const 칸id = useId();
   const [적은것, set적은것] = useState(예산 === null ? "" : String(예산));
 
   /*
@@ -1404,7 +1405,8 @@ function 한도적기({ 예산, on바꾸기, 영어인가, 칸id = "budget-input
         {/* 단위는 표에 넣지 않고 여기서 언어를 보고 적는다 — 돈() 과 같은 이유다. */}
         <span aria-hidden="true" style={{ ...TYPE.body, color: TEXT_2 }}>{영어인가 ? "KRW" : "원"}</span>
       </div>
-      <p id={`${칸id}-help`} style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
+      {/* 적는 동안 글자마다 바뀐다. 바뀔 때마다 읽으면 한 글자에 한 문장씩 듣는다. */}
+      <p id={`${칸id}-help`} data-소리조용 style={{ fontSize: 12, color: TEXT_2, marginTop: 6, lineHeight: 1.6 }}>
         {예산 === null
           ? "비워 두면 한도 없이 찾아요"
           : tf("{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.", { 금액: 돈(예산, 영어인가) })}
@@ -1746,7 +1748,8 @@ function PairingConnected({
             <p style={{ ...TYPE.label, color: TEXT_1, marginBottom: 5 }}>세션 유효시간</p>
             <p style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.5 }}>만료되면 QR을 다시 스캔해 주세요</p>
           </div>
-          <span style={{ fontFamily: SERIF, fontSize: 44, lineHeight: 1, color: TEXT_1, ...NUM }}>{mm}:{ss}</span>
+          {/* 1초마다 바뀐다. 바뀔 때마다 읽으면 1초에 한 번씩 남은 시간을 듣는다. */}
+          <span data-소리조용 style={{ fontFamily: SERIF, fontSize: 44, lineHeight: 1, color: TEXT_1, ...NUM }}>{mm}:{ss}</span>
         </div>
       </div>
 
@@ -4561,7 +4564,7 @@ export default function App() {
     대상.focus({ preventScroll: true });
 
     // 소리는 아래 '화면을 읽어 준다' 효과가 맡는다. 여기는 포커스만 옮긴다.
-  }, [screen, tab, 개인정보겹, 접근성값.voiceGuide]);
+  }, [screen, tab, 개인정보겹]);
 
   /*
    * ── 화면을 읽어 준다 ─────────────────────────────────────────────────────
@@ -4583,7 +4586,37 @@ export default function App() {
    * 끊으면 문장 하나를 통째로 잃는다. 새로 뜬 줄만, 읽던 말 뒤에 붙인다.
    */
   const 읽은줄 = useRef<string[]>([]);
-  const 읽을틀 = () => 화면영역.current?.closest<HTMLElement>("[data-frame]") ?? null;
+  /*
+   * 읽을 자리. 겹이 떠 있으면 겹 안만 읽는다.
+   *
+   * 위 포커스 효과와 같은 규칙이다. 겹 아래 화면은 `inert` 로 막아 스크린리더가
+   * 못 읽게 해 두었는데, 소리 안내만 틀 전체를 읽으면 그 약속이 깨진다 — 겹의
+   * 안내문 앞에 덮인 화면이 통째로 읽힌다(#36 리뷰).
+   */
+  const 읽을틀 = () =>
+    (개인정보겹 && 화면영역.current?.querySelector<HTMLElement>("[data-겹]"))
+    || 화면영역.current?.closest<HTMLElement>("[data-frame]")
+    || null;
+
+  /**
+   * 앞서 읽은 줄에 견줘 **새로 붙은 줄**만 골라 낸다.
+   *
+   * 개수까지 센다. 내용만으로 Set 을 만들면 같은 문구가 두 번 뜰 때 두 번째가
+   * 사라진다. 이 화면에는 같은 문구가 여럿이다 — 세부 옵션마다 붙는 "1개 선택",
+   * 두 메뉴에 똑같이 붙는 제외 사유 같은 것들이다. 제외 사유가 사라지면 눈으로
+   * 못 읽는 사람은 그 후보가 왜 빠졌는지 알 길이 없다(#36 리뷰).
+   */
+  const 새로붙은줄 = (전: string[], 지금: string[]): string[] => {
+    const 남은 = new Map<string, number>();
+    for (const 줄 of 전) 남은.set(줄, (남은.get(줄) ?? 0) + 1);
+    const 새것: string[] = [];
+    for (const 줄 of 지금) {
+      const 몇 = 남은.get(줄) ?? 0;
+      if (몇 > 0) 남은.set(줄, 몇 - 1);
+      else 새것.push(줄);
+    }
+    return 새것;
+  };
 
   useEffect(() => {
     if (!접근성값.voiceGuide) { 읽은줄.current = []; return; }
@@ -4614,9 +4647,10 @@ export default function App() {
     const 지켜보기 = new MutationObserver(() => {
       clearTimeout(표);
       표 = setTimeout(() => {
-        const 지금 = 화면글(틀);
-        const 이미읽은것 = new Set(읽은줄.current);
-        const 새것 = 지금.filter((줄) => !이미읽은것.has(줄));
+        const 틀지금 = 읽을틀();
+        if (!틀지금) return;
+        const 지금 = 화면글(틀지금, { 바뀌는것빼고: true });
+        const 새것 = 새로붙은줄(읽은줄.current, 지금);
         읽은줄.current = 지금;
         if (새것.length > 0) 읽어주기(새것.join(". "), { 언어: 접근성값.language, 이어서: true });
       }, 350);
