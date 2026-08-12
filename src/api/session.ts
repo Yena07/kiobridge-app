@@ -73,6 +73,13 @@ export interface 이어쓸것 {
   /** 도움 설정. 킷의 일곱 칸 + 소리 안내. */
   a11y: 도움설정;
   /**
+   * 개인정보 수집·이용에 동의했는가. 안 했으면 앱에 들어갈 수 없다.
+   *
+   * 이번 이용에만 남는다. 창을 닫으면 사라져서 다음 사람은 다시 동의해야 한다 —
+   * 앞사람의 동의가 다음 사람에게 이어지면 그건 동의가 아니다.
+   */
+  consent: boolean;
+  /**
    * 이 사람이 늘 피해야 하는 것. 주문표의 알레르기와 합쳐서 서버로 나간다.
    *
    * 이번 이용에만 남는다. 알레르기는 그 사람에 대한 사실이라 오래 붙들고 싶어지지만,
@@ -181,6 +188,7 @@ const 남길것이있나 = (v: 이어쓸것): boolean =>
   || v.sheets.length > 0
   || v.planId !== null
   || v.budget !== null
+  || v.consent
   || v.allergies.length > 0
   || 도움설정을건드렸나(v.a11y);
 
@@ -262,6 +270,8 @@ export const 이어쓰기 = {
       sheets,
       fromServer,
       a11y: 접근성읽기(o.a11y),
+      // boolean 이 아니면 동의하지 않은 것으로 본다. 손댄 값으로 동의를 만들지 않는다.
+      consent: o.consent === true,
       // 아는 여섯만 받는다. 모르는 값이 섞이면 서버가 UNKNOWN 으로 읽고 주문을 막는다.
       allergies: Array.isArray(o.allergies) ? o.allergies.filter(아는알레르기) : [],
       // 계약이 minimum: 0 인 number 다. 양의 정수가 아니면 안 정한 것으로 본다 —

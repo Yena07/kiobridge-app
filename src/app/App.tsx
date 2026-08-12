@@ -23,6 +23,7 @@ import { 연동기록, 팀백엔드모드 } from "@/api/devlog";
 import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } from "@/api/a11y";
 import { 소리를낼수있나, 읽어주기, 그만읽기 } from "@/api/speech";
 import { 가격한도, 한도후보 } from "@/api/budget";
+import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
 import { 이어쓰기 } from "@/api/session";
@@ -75,6 +76,86 @@ function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
           style={{ width: i < step ? 16 : 5, height: 5, borderRadius: 100, backgroundColor: i < step ? RULE : BORDER, transition: "all 0.4s" }}
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * 개인정보 수집·이용 동의 칸.
+ *
+ * 이 앱은 실제 이름·전화번호를 안 받는다. 그래도 묻는 이유는 **고른 조건도 그 사람에
+ * 대한 정보**여서다 — 맵기·형태·알레르기·가격 한도·안내 언어가 모이면 그 사람이
+ * 무엇을 못 먹고 무엇이 불편한지가 드러난다. 이름이 없다는 것이 정보가 아니라는
+ * 뜻은 아니다.
+ *
+ * 무엇에 동의하는지 읽을 길을 같이 둔다. 읽을 수 없는 동의는 동의가 아니다.
+ * '자세히' 는 개인정보 안내 화면을 연다.
+ *
+ * checkbox 를 그대로 쓴다. 직접 만든 네모보다 브라우저 것이 스크린리더.키보드에서
+ * 확실하고, 이 화면은 못 들어가면 아무것도 못 하는 자리라 확실한 편이 낫다.
+ */
+/**
+ * 동의 없이도 볼 수 있는 화면.
+ *
+ * 앞의 셋은 들어오는 문이고, privacy 는 무엇에 동의하는지 읽는 곳이다.
+ * 읽을 수 없는 동의는 동의가 아니라서 그 길은 열어 둔다.
+ */
+const 동의없이볼수있는화면 = new Set<Screen>(["welcome", "login", "signup", "privacy"]);
+
+function ConsentCheck({ 동의함, on바꾸기, onDetail }: {
+  동의함: boolean;
+  on바꾸기: (v: boolean) => void;
+  onDetail: () => void;
+}) {
+  const id = "consent-check";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, textAlign: "left" }}>
+      {/*
+        네모 자체는 22px 라도 누르는 자리는 44px 이어야 한다(이 앱의 터치 기준).
+        label 이 네모를 품고 있어서 이 줄 어디를 눌러도 켜지고 꺼진다 — 손이
+        떨리는 분에게 22px 과녁을 맞히라고 하면 그게 가장 어려운 동작이다.
+      */}
+      <label
+        htmlFor={id}
+        style={{
+          flex: 1, minHeight: 44, display: "flex", alignItems: "center", gap: 10,
+          padding: "6px 0", cursor: "pointer",
+        }}
+      >
+        {/*
+          aria-hidden 을 붙이면 안 된다. 이 안에 포커스가 가는 체크박스가 있어서,
+          키보드로는 닿는데 스크린리더는 역할도 켜짐 여부도 못 읽는 자리가 된다.
+          자리만 넓히는 껍데기지만 안에 든 것이 조작하는 물건이라 숨기지 않는다.
+        */}
+        <span
+          style={{ width: 44, height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <input
+            id={id}
+            type="checkbox"
+            checked={동의함}
+            onChange={(e) => on바꾸기(e.target.checked)}
+            style={{ width: 24, height: 24, accentColor: RULE, cursor: "pointer" }}
+          />
+        </span>
+        <span style={{ fontSize: 14, color: TEXT_1, lineHeight: 1.6, flex: 1 }}>
+          주문에 쓸 정보를 모으고 쓰는 데 동의합니다.
+          <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 2 }}>
+            메뉴 조건과 도움 설정이에요. 이름·전화번호는 받지 않아요.
+          </span>
+        </span>
+      </label>
+      <button
+        type="button"
+        onClick={onDetail}
+        style={{
+          flexShrink: 0, minHeight: 44, padding: "0 4px", background: "transparent", border: "none",
+          color: TEXT_2, fontSize: 13, fontWeight: 700, textDecoration: "underline",
+          fontFamily: FONT, cursor: "pointer",
+        }}
+      >
+        자세히
+      </button>
     </div>
   );
 }
@@ -220,7 +301,14 @@ function SectionLabel({ text, required }: { text: string; required?: boolean }) 
  * onStart  익명으로 바로 시작 — 저장은 이번 한 번만, 기기에 남기지 않는다
  * onLogin  선택적 로그인 — 다음에도 불러오고 싶은 사람만 고른다
  */
-function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () => void }) {
+function WelcomeScreen({ onStart, onLogin, 동의함, on동의, onPrivacy }: {
+  onStart: () => void;
+  onLogin: () => void;
+  /** 동의 전에는 어느 길로도 못 들어간다 — 게스트로 시작하는 것도 정보를 쓰는 일이다. */
+  동의함: boolean;
+  on동의: (v: boolean) => void;
+  onPrivacy: () => void;
+}) {
   return (
     <div className="flex flex-col h-full kb-paper">
       {/* 첫 화면은 사진 한 장으로 "어디서 쓰는 앱인지"를 설명한다.
@@ -259,8 +347,18 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
       </div>
 
       <div style={{ padding: `0 ${GAP.screenX}px 32px` }} className="flex flex-col gap-3">
+        {/*
+          동의를 먼저 받는다. 게스트로 시작하는 것도 정보를 쓰는 일이라 같이 막는다 —
+          로그인한 사람에게만 물으면, 정작 가장 많이 쓰일 길에서는 안 묻는 셈이 된다.
+        */}
+        <ConsentCheck 동의함={동의함} on바꾸기={on동의} onDetail={onPrivacy} />
+        {!동의함 && (
+          <p style={{ fontSize: 13, color: TEXT_2, textAlign: "center" }} role="status">
+            동의하셔야 시작할 수 있어요
+          </p>
+        )}
         {/* 주 버튼 = 익명 시작. 가입도 로그인도 요구하지 않는다. */}
-        <PrimaryBtn onClick={onStart}>
+        <PrimaryBtn onClick={onStart} disabled={!동의함}>
           <span className="flex items-center justify-center gap-2">
             {/* 대표 버튼 안이라 버튼 면과 함께 뒤집혀야 한다. #fff 로 박으면 다크에서
                 흰 알약 위에 흰 아이콘이 된다. 코드래빗이 잡은 셋과 같은 종류다. */}
@@ -276,9 +374,11 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void; onLogin: () 
         <button
           type="button"
           onClick={onLogin}
+          disabled={!동의함}
           style={{
             marginTop: 4, minHeight: 56, borderRadius: RADIUS.button, background: SURFACE,
             border: `1px solid ${BORDER}`, color: TEXT_2, fontSize: 15, fontWeight: 600,
+            cursor: 동의함 ? "pointer" : "not-allowed", opacity: 동의함 ? 1 : 0.55,
           }}
           className="flex items-center justify-center gap-2 w-full"
         >
@@ -398,10 +498,13 @@ function AccountField({
  * 아이디가 없는 것과 비밀번호가 틀린 것을 구분해서 알리지 않는다. 구분해 주면 어떤 아이디가
  * 이미 있는지 하나씩 확인할 수 있다. 서버도 같은 예외(InvalidCredentialsException)를 쓴다.
  */
-function LoginScreen({ onDone, onBack, onGoSignup }: {
+function LoginScreen({ onDone, onBack, onGoSignup, 동의함, on동의, onPrivacy }: {
   onDone: (a: Account) => void;
   onBack: () => void;
   onGoSignup: () => void;
+  동의함: boolean;
+  on동의: (v: boolean) => void;
+  onPrivacy: () => void;
 }) {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
@@ -409,7 +512,9 @@ function LoginScreen({ onDone, onBack, onGoSignup }: {
   // 보내는 중에 또 누르면 요청이 두 번 나간다. 로그인에서는 실패 횟수를 두 배로 쌓는 셈이다.
   const [보내는중, set보내는중] = useState(false);
 
-  const 채워짐 = loginId.trim() !== "" && password !== "";
+  // 동의도 조건이다. 첫 화면에서 이미 체크했으면 켜진 채로 온다 —
+  // 이번 이용에 한 번만 묻는 값이라 화면마다 다시 묻지 않는다.
+  const 채워짐 = loginId.trim() !== "" && password !== "" && 동의함;
 
   const 보내기 = () => {
     if (!채워짐 || 보내는중) return;
@@ -454,9 +559,10 @@ function LoginScreen({ onDone, onBack, onGoSignup }: {
       </div>
 
       <StickyFooter>
+        <ConsentCheck 동의함={동의함} on바꾸기={on동의} onDetail={onPrivacy} />
         {!채워짐 && (
           <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
-            아이디와 비밀번호를 적으면 로그인할 수 있어요
+            {동의함 ? "아이디와 비밀번호를 적으면 로그인할 수 있어요" : "동의하셔야 로그인할 수 있어요"}
           </p>
         )}
         <PrimaryBtn onClick={보내기} disabled={!채워짐 || 보내는중}>
@@ -488,10 +594,13 @@ function LoginScreen({ onDone, onBack, onGoSignup }: {
  * 비밀번호를 두 번 받는다. 서버는 한 번만 받지만, 가려진 칸에 오타가 나면 사용자는
  * 다음 로그인에서야 그 사실을 알게 되고 그때는 고칠 방법이 없다.
  */
-function SignupScreen({ onDone, onBack, onGoLogin }: {
+function SignupScreen({ onDone, onBack, onGoLogin, 동의함, on동의, onPrivacy }: {
   onDone: (a: Account) => void;
   onBack: () => void;
   onGoLogin: () => void;
+  동의함: boolean;
+  on동의: (v: boolean) => void;
+  onPrivacy: () => void;
 }) {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
@@ -601,9 +710,11 @@ function SignupScreen({ onDone, onBack, onGoLogin }: {
       </div>
 
       <StickyFooter>
+        <ConsentCheck 동의함={동의함} on바꾸기={on동의} onDetail={onPrivacy} />
         {!보낼수있나 && (
           <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
-            {아이디문제 ?? 비번문제 ?? 다시문제 ?? "아이디와 비밀번호를 적으면 가입할 수 있어요"}
+            {아이디문제 ?? 비번문제 ?? 다시문제
+              ?? (동의함 ? "아이디와 비밀번호를 적으면 가입할 수 있어요" : "동의하셔야 가입할 수 있어요")}
           </p>
         )}
         <PrimaryBtn onClick={보내기} disabled={!보낼수있나 || 보내는중}>
@@ -2335,6 +2446,14 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, o
 const 개인정보항목 = (guest: boolean): { title: string; body: string }[] => {
   const rows: { title: string; body: string }[] = [
     {
+      title: "동의는 언제 받나요",
+      /*
+       * 이 화면은 '자세히' 로 열리는 곳이라, 무엇에 동의하는지가 맨 위에 있어야 한다.
+       * 아래로 밀면 동의 칸 옆의 링크를 눌러 놓고 정작 그 내용을 못 읽는다.
+       */
+      body: "처음 화면에서 한 번 여쭤요. 동의하지 않으시면 앱을 시작할 수 없어요 — 저장해 두신 메뉴 조건으로 골라 드리는 앱이라, 그 조건을 쓰지 못하면 해 드릴 수 있는 일이 없어서예요. 동의는 이번 이용에만 남고, 창을 닫으면 사라져요. 다음에 이 기기를 쓰는 분은 다시 여쭤요.",
+    },
+    {
       title: "저장하는 것",
       body: guest
         ? "메뉴 주문표에 적어 두신 내용(예: 포장, 매운맛, 순살, 종이컵)만 저장해요. 사람이 읽는 말 그대로예요. 지금은 이 기기 안에만 있어요. 실수로 새로고침해도 다시 적지 않으셔도 되게 이 창 안에 남겨 두고, 창을 닫으면 지워요."
@@ -3850,6 +3969,7 @@ export default function App() {
    */
   const [이어받은] = useState(() => {
     const v = 이어쓰기.읽기();
+    if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); 개인정보동의.되살리기(v.consent); }
     if (v) { 접근성설정.되살리기(v.a11y); 가격한도.되살리기(v.budget); 알레르기설정.되살리기(v.allergies); }
     return v;
   });
@@ -3910,6 +4030,25 @@ export default function App() {
    */
   const [예산, set예산] = useState<number | null>(() => 가격한도.읽기());
   /*
+   * 개인정보 수집·이용 동의. 저장소는 api/consent.ts 에 있고 화면은 그걸 비춘다 —
+   * 접근성.가격 한도와 같은 이유다. 연동 계층도 이 값을 읽어야 한다
+   * (consent.personalization 으로 서버에 나간다).
+   */
+  const [동의, set동의] = useState<boolean>(() => 개인정보동의.읽기());
+  /*
+   * 동의 칸 옆 '자세히' 로 여는 개인정보 안내. 화면을 바꾸지 않고 겹으로 띄운다.
+   *
+   * setScreen("privacy") 로 옮기면 그 아래 화면이 언마운트된다 — 로그인.가입
+   * 화면에서 열었다면 적어 둔 아이디와 비밀번호가 통째로 날아가고, 읽고 돌아온
+   * 사람은 처음부터 다시 적어야 한다. 무엇에 동의하는지 읽어 보라고 둔 링크가
+   * 읽으면 벌을 주는 셈이 된다.
+   *
+   * 계정 화면의 '개인정보 안내' 는 그대로 screen 을 쓴다. 거기는 잃을 입력이 없고
+   * 하단 탭으로 오가는 자리라 겹으로 띄우면 오히려 어색하다.
+   */
+  const [개인정보겹, set개인정보겹] = useState(false);
+  useEffect(() => 개인정보동의.구독(() => set동의(개인정보동의.읽기())), []);
+  /*
    * 늘 피해야 하는 것. 저장소는 api/allergy.ts 에 있고 화면은 그걸 비춘다 —
    * 연동 계층도 이 값을 읽어야 한다(주문표의 알레르기와 합쳐서 서버로 나간다).
    */
@@ -3963,9 +4102,9 @@ export default function App() {
     이어쓰기.쓰기({
       screen, tab, name, account: 계정, sheets,
       fromServer: [...서버에서온것.current],
-      a11y: 접근성값, allergies: 알레르기, budget: 예산, planId,
+      a11y: 접근성값, consent: 동의, allergies: 알레르기, budget: 예산, planId,
     });
-  }, [screen, tab, name, 계정, sheets, 접근성값, 알레르기, 예산, planId]);
+  }, [screen, tab, name, 계정, sheets, 접근성값, 동의, 알레르기, 예산, planId]);
 
   const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
@@ -4201,6 +4340,33 @@ export default function App() {
     setFromQr(false);
     setTab("menu");
     setScreen("welcome");
+    /*
+     * 동의도 푼다.
+     *
+     * 처음에는 안 풀었다 — "로그아웃은 계정을 나가는 것이지 이 기기를 넘기는 것이
+     * 아니다" 라고 봤다. 같은 사람이 게스트로 계속 쓰는 흐름에서 두 번 묻게 되니까.
+     *
+     * 그런데 안 풀면 **다음 사람이 앞사람의 동의로 앱에 들어간다.** 로그아웃은
+     * 첫 화면으로 보내는데, 가드는 첫 화면을 통과시키므로 아무것도 막지 않는다.
+     * 거기서 '바로 시작하기' 를 누르면 그냥 들어가진다.
+     *
+     * 두 쪽의 대가가 다르다. 다시 체크하는 것은 한 번 누르는 일이고, 안 푸는 것은
+     * 동의한 적 없는 사람이 앱을 쓰게 되는 일이다. 알레르기를 로그아웃에서
+     * 비우기로 한 것과 같은 판단이다(#33 리뷰).
+     */
+    개인정보동의.비우기();
+    /*
+     * 알레르기도 비운다.
+     *
+     * 로그아웃은 이 기기를 다음 사람에게 넘기는 자리이기도 하다. 남겨 두면 다음
+     * 사람의 주문이 **앞사람의 알레르기로** 걸러지고, 정작 자기 것은 안 걸러진다.
+     * 화면에는 알레르기가 설정된 것처럼 보이니 더 나쁘다 — 걸러지는 줄 알고
+     * 승인한다.
+     *
+     * 다시 고르는 값이 여섯 칸뿐인 것과, 안 걸러져서 못 먹는 것을 먹는 것 중
+     * 어느 쪽이 나쁜지는 분명하다.
+     */
+    알레르기설정.비우기();
     // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
     // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
     // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
@@ -4292,7 +4458,9 @@ export default function App() {
       안바뀐것(화면영역.current?.closest<HTMLElement>("[data-frame]") ?? document.body);
   }, []);
   useEffect(() => {
-    const 뿌리 = 화면영역.current;
+    // 겹이 떠 있으면 겹 안에서 찾는다. 아래 화면이 DOM 앞쪽이라 그냥 찾으면
+    // 덮인 화면의 제목으로 포커스가 가고, 읽는 사람은 겹이 열린 줄도 모른다.
+    const 뿌리 = (개인정보겹 && 화면영역.current?.querySelector<HTMLElement>("[data-겹]")) || 화면영역.current;
     if (!뿌리) return;
     // data-autofocus 로 표시한다. React 는 autoFocus prop 을 DOM 속성으로 남기지 않고
     // 커밋 때 focus() 를 직접 부르므로, [autofocus] 로는 찾을 수 없다.
@@ -4318,7 +4486,7 @@ export default function App() {
      * 알려 주고 나머지는 화면에 그대로 있다.
      */
     if (접근성값.voiceGuide) 읽어주기(대상.innerText || 대상.textContent || "");
-  }, [screen, tab, 접근성값.voiceGuide]);
+  }, [screen, tab, 개인정보겹, 접근성값.voiceGuide]);
 
   /*
    * 스위치를 끄거나 화면을 떠나면 읽던 것을 멈춘다.
@@ -4330,6 +4498,23 @@ export default function App() {
     if (!접근성값.voiceGuide) 그만읽기();
     return 그만읽기;
   }, [접근성값.voiceGuide]);
+
+  /*
+   * 동의 없이는 앱 안으로 못 들어간다.
+   *
+   * 화면마다 버튼을 잠그는 것만으로는 샌다 — 실제로 새는 길이 둘 있었다.
+   *   ① 첫 화면의 '자세히' 로 개인정보 안내를 열고 뒤로 가기
+   *   ② '이 기기에서 정보 지우기' 는 동의를 풀지만 화면은 계정 화면에 그대로 있다
+   * 여기 한 곳에서 되돌린다. 문을 여러 개 만들면 하나를 빠뜨리는 날이 온다.
+   *
+   * privacy 는 열어 둔다. 무엇에 동의하는지 읽으러 가는 길이라, 그 길까지 막으면
+   * 읽을 수 없는 동의가 된다.
+   */
+  useEffect(() => {
+    if (동의 || 동의없이볼수있는화면.has(screen)) return;
+    setScreen("welcome");
+    setTab("menu");
+  }, [동의, screen]);
 
   const inMain = screen === "saved";
 
@@ -4398,9 +4583,22 @@ export default function App() {
             borderRadius: 54, boxShadow: "0 24px 80px rgba(0,0,0,0.16)",
           }}
         >
+        {/*
+          겹이 떠 있으면 이 아래(화면 + 하단 탭)를 통째로 잠근다. inert 는 포커스와
+          스크린리더 읽기를 함께 막는다. 하단 탭까지 감싸는 것이 핵심이다 —
+          빼 두면 겹을 띄운 채로 탭을 눌러 다른 화면으로 갈 수 있다.
+        */}
+        <div
+          className="flex-1 flex flex-col"
+          style={{ minHeight: 0 }}
+          {...(개인정보겹 ? { inert: "" } : {})}
+        >
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
           {screen === "welcome" && (
             <WelcomeScreen
+              동의함={동의}
+              on동의={(v) => 개인정보동의.바꾸기(v)}
+              onPrivacy={() => set개인정보겹(true)}
               // 익명 시작: 계정 화면을 거치지 않고 바로 본 화면으로 간다.
               onStart={() => { setName(""); setScreen("saved"); setTab("menu"); }}
               // 선택적 로그인: 고른 사람만 계정 경로로 간다. 여기서 뒤로 가면
@@ -4410,6 +4608,9 @@ export default function App() {
           )}
           {screen === "login" && (
             <LoginScreen
+              동의함={동의}
+              on동의={(v) => 개인정보동의.바꾸기(v)}
+              onPrivacy={() => set개인정보겹(true)}
               // 이미 계정이 있는 사람이다. 호칭은 서버가 갖고 있지 않지만 다시 묻지 않는다 —
               // 로그인할 때마다 호칭을 적게 하면 로그인이 가입보다 번거로워진다.
               // 계정 화면은 호칭이 없으면 아이디를 부른다.
@@ -4420,6 +4621,9 @@ export default function App() {
           )}
           {screen === "signup" && (
             <SignupScreen
+              동의함={동의}
+              on동의={(v) => 개인정보동의.바꾸기(v)}
+              onPrivacy={() => set개인정보겹(true)}
               // 가입 직후에는 서버에 주문표가 없다. 그래도 같은 경로를 탄다 —
               // 갈래를 둘로 두면 한쪽만 고치는 날이 온다. 빈 목록이면 아무 일도 안 한다.
               onDone={(a) => 계정으로들어가기(a, "name")}
@@ -4532,6 +4736,9 @@ export default function App() {
                   // 가격 한도도 내가 정한 값이다. 남겨 두면 다음 사람이 앞사람의 한도로
                   // 걸러진 목록을 보게 되고, 왜 메뉴가 적게 나오는지 알 수 없다.
                   가격한도.비우기();
+                  // 동의도 되돌린다. 이 기기를 다음에 쓰는 사람이 앞사람의 동의로
+                  // 앱에 들어가면 그건 동의를 받은 것이 아니다.
+                  개인정보동의.비우기();
                   // 알레르기도 지운다. 남겨 두면 다음 사람이 앞사람의 알레르기로
                   // 걸러진 목록을 보게 되고, 정작 자기 것은 안 걸러진다.
                   알레르기설정.비우기();
@@ -4570,7 +4777,7 @@ export default function App() {
               // 끊으면 QR 을 다시 찍는 것 말고 되돌릴 방법이 없다.
               onSheets={() => { setTab("menu"); if (!pairingId) setFromQr(false); }}
               onA11y={() => setScreen("a11y")}
-              onPrivacy={() => setScreen("privacy")}
+              onPrivacy={() => set개인정보겹(true)}
             />
           )}
           {screen === "a11y" && (
@@ -4589,6 +4796,21 @@ export default function App() {
 
         {inMain && (
           <BottomNav tab={tab} onChange={handleTabChange} />
+        )}
+        </div>
+
+        {/*
+          '자세히' 로 연 개인정보 안내. 아래 화면을 덮되 언마운트하지는 않으므로
+          로그인.가입 화면에 적어 둔 것이 그대로 남는다. 닫으면 있던 자리로 돌아온다.
+
+          **틀 전체를 덮는다.** 예전에는 화면 영역 안에만 있어서 하단 탭이 겹 밖에
+          남았고, 겹을 띄운 채로 탭을 눌러 다른 화면으로 갈 수 있었다. inert 도
+          화면 영역에만 걸려서 Tab 이 하단 탭으로 빠져나갔다.
+        */}
+        {개인정보겹 && (
+          <div className="absolute inset-0" style={{ zIndex: 20 }} data-겹>
+            <PrivacyScreen guest={guest} onBack={() => set개인정보겹(false)} />
+          </div>
         )}
 
         {/* 되돌릴 수 없는 동작을 묻는 자리. 폰 프레임 안에 뜬다. */}
