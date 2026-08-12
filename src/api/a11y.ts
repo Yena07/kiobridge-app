@@ -57,7 +57,36 @@ export interface 접근성 {
 export interface 도움설정 extends 접근성 {
   /** 화면에 나온 안내를 소리로 읽어 준다. 서버로는 preferredInput: "VOICE" 로 나간다. */
   voiceGuide: boolean;
+  /**
+   * 키오스크에서 안내받고 싶은 언어. 서버로는 interaction.language 로 나간다.
+   *
+   * 이것도 accessibility 일곱 칸에는 들어갈 수 없다. 계약에서 이 값의 제자리는
+   * interaction.language 이고, BCP 47 꼴이면 무엇이든 받는다
+   * (^[a-z]{2,3}(-[A-Z][a-z]{3})?-([A-Z]{2}|[0-9]{3})$). 로컬 백엔드로
+   * ko-KR · en-US · zh-CN · vi-VN 넷 다 확인했다 — 전부 status VALID.
+   */
+  language: 언어코드;
 }
+
+/**
+ * 고를 수 있는 언어.
+ *
+ * 이름을 그 언어로 적는다. 한국어를 못 읽는 분이 자기 언어를 찾아야 하는 목록이라,
+ * "영어" 라고 적어 두면 정작 그 줄을 찾아야 할 사람이 못 읽는다.
+ *
+ * 둘뿐인 이유 — 이제 앱 화면이 실제로 그 언어로 바뀐다(src/i18n). 화면에 나가는
+ * 문장을 전부 옮겨야 하는 일이라, 옮길 준비가 된 언어만 목록에 올린다.
+ * 고를 수는 있는데 화면은 한국어인 언어를 두면 그게 가장 나쁘다.
+ */
+export const 언어목록 = [
+  { code: "ko-KR", label: "한국어" },
+  { code: "en-US", label: "English" },
+] as const;
+
+export type 언어코드 = (typeof 언어목록)[number]["code"];
+
+export const 아는언어인가 = (v: unknown): v is 언어코드 =>
+  typeof v === "string" && 언어목록.some((x) => x.code === v);
 
 export const 기본접근성: 접근성 = {
   largeText: false,
@@ -69,7 +98,7 @@ export const 기본접근성: 접근성 = {
   staffAssistancePreferred: false,
 };
 
-export const 기본도움설정: 도움설정 = { ...기본접근성, voiceGuide: false };
+export const 기본도움설정: 도움설정 = { ...기본접근성, voiceGuide: false, language: "ko-KR" };
 
 let 값: 도움설정 = { ...기본도움설정 };
 const 듣는이 = new Set<() => void>();
