@@ -65,6 +65,9 @@ export const EN: Record<string, string> = {
   "실제 이름 말고, 불리고 싶은 말을 적어 주세요":
     "Not your real name — write what you’d like to be called",
   "부를 호칭": "What to call you",
+  "예: 할머니, 김씨": "e.g. Grandma, Mr. Kim",
+  // 숫자가 끼는 문장이라 조각으로 쪼개진다. tf() 로 통째로 옮긴다.
+  "전체 {전체}단계 중 {지금}단계": "Step {지금} of {전체}",
   "계속하기": "Continue",
   "반가워요,": "Nice to meet you,",
   "님!": "!",
@@ -130,7 +133,9 @@ export const EN: Record<string, string> = {
   "이 주문표로 주문하기": "Order with this card",
   "삭제": "Delete",
   "가격 한도 (선택)": "Price limit (optional)",
-  "안 정함": "No limit",
+  // 직접 적는 칸이다. 단위(원 / KRW)는 표가 아니라 코드에서 언어를 보고 붙인다.
+  "예: 8000": "e.g. 8000",
+  "비워 두면 한도 없이 찾아요": "Leave it blank to search without a limit",
   "QR 찍기": "Scan QR",
   "내 주문표": "My cards",
   "계정": "Account",
@@ -231,6 +236,36 @@ export const EN: Record<string, string> = {
   "지우는 방법": "How to erase it",
   "이 앱은 주문을 장바구니에 담는 데까지만 도와드려요. 결제는 키오스크에서 직접 하시면 돼요.":
     "This app only helps up to adding items to the cart. You handle the rest at the kiosk yourself.",
+
+  // ─── 키오스크 연동 ────────────────────────────────────────────────────────
+  "키오스크에 연결하는 중": "Connecting to the kiosk",
+  "연결할 수 없습니다": "Can’t connect",
+  "유효하지 않은 QR입니다": "That QR code isn’t valid",
+  /*
+   * 제목이 <br /> 로 두 줄이라 조각 둘로 들어온다. 우리말과 영어의 어순이 같아
+   * 조각째 옮겨도 말이 된다 — "연결 시간이 / 만료되었습니다", "The connection /
+   * has timed out".
+   */
+  "연결 시간이": "The connection",
+  "만료되었습니다": "has timed out",
+  "안전을 위해 연결이 종료되었어요": "The connection was closed for your safety",
+  /*
+   * 원래 "QR 코드를 <strong>다시 스캔</strong>해 주세요" 라 조각이 셋이었다.
+   * 영어는 'again' 이 문장 끝에 붙어서 가운데 조각만 옮기면 어순이 무너진다.
+   * 굵은 자리를 "다시 스캔해 주세요" 로 넓혀 조각을 둘로 만들었다.
+   *
+   * 그래서 굵어지는 곳이 두 언어에서 다르다.
+   *
+   *   우리말  키오스크에 부착된 QR 코드를 **다시 스캔해 주세요**   (동작 전체)
+   *   영어    Scan the QR code on the kiosk **again**            ('again' 만)
+   *
+   * 영어 쪽은 동작(Scan)이 강조 밖에 있다. 어순 때문에 어쩔 수 없고, 그래도
+   * 말이 된다 — 한 번 찍어 본 사람에게 새로 알려야 할 것은 '또' 라는 사실이다.
+   */
+  "키오스크에 부착된 QR 코드를": "Scan the QR code on the kiosk",
+  "다시 스캔해 주세요": "again",
+  "문제가 반복되면 매장 직원에게 도움을 요청하세요":
+    "If this keeps happening, ask a staff member for help",
 
   // ─── 실행 · 결과 ──────────────────────────────────────────────────────────
   "잠시만 기다려 주세요": "Just a moment",
