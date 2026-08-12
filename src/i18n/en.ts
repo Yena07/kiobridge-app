@@ -148,6 +148,11 @@ export const EN: Record<string, string> = {
   "필수": "Required",
   "선택": "Optional",
   "저장하고 시작하기": "Save and start",
+  // 저장해 둔 주문표를 다시 열어 고칠 때의 문구.
+  "주문표 고치기": "Edit this card",
+  "고치고 저장하면 이 주문표가 바뀌어요": "Saving replaces this card",
+  "고친 내용 저장하기": "Save changes",
+  "고치기": "Edit",
   "맨 위 메뉴 이름을 적으면 저장할 수 있어요": "Enter a menu name above to save",
   "주문에 필요한 내용만 적어 주세요. 이름·전화번호·주민등록번호 같은 개인정보는 적지 마세요.":
     "Write only what’s needed for the order. Don’t include personal details like your name, phone number, or ID number.",
