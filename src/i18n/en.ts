@@ -231,6 +231,29 @@ export const EN: Record<string, string> = {
   "이 앱은 주문을 장바구니에 담는 데까지만 도와드려요. 결제는 키오스크에서 직접 하시면 돼요.":
     "This app only helps up to adding items to the cart. You handle the rest at the kiosk yourself.",
 
+  // ─── 키오스크 연동 ────────────────────────────────────────────────────────
+  "키오스크에 연결하는 중": "Connecting to the kiosk",
+  "연결할 수 없습니다": "Can’t connect",
+  "유효하지 않은 QR입니다": "That QR code isn’t valid",
+  /*
+   * 제목이 <br /> 로 두 줄이라 조각 둘로 들어온다. 우리말과 영어의 어순이 같아
+   * 조각째 옮겨도 말이 된다 — "연결 시간이 / 만료되었습니다", "The connection /
+   * has timed out".
+   */
+  "연결 시간이": "The connection",
+  "만료되었습니다": "has timed out",
+  "안전을 위해 연결이 종료되었어요": "The connection was closed for your safety",
+  /*
+   * 원래 "QR 코드를 <strong>다시 스캔</strong>해 주세요" 라 조각이 셋이었다.
+   * 영어는 'again' 이 문장 끝에 붙어서 가운데 조각만 옮기면 어순이 무너진다.
+   * 굵은 자리를 "다시 스캔해 주세요" 로 넓혀 조각을 둘로 만들었다. 그러면 두
+   * 언어 다 강조가 '무엇을 해야 하는지' 에 붙는다.
+   */
+  "키오스크에 부착된 QR 코드를": "Scan the QR code on the kiosk",
+  "다시 스캔해 주세요": "again",
+  "문제가 반복되면 매장 직원에게 도움을 요청하세요":
+    "If this keeps happening, ask a staff member for help",
+
   // ─── 실행 · 결과 ──────────────────────────────────────────────────────────
   "잠시만 기다려 주세요": "Just a moment",
   "화면을 닫지 마세요": "Please don’t close this screen",

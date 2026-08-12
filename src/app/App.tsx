@@ -923,9 +923,14 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 let 주문표일련번호 = 0;
 const newSheetId = () => `p${Date.now()}_${++주문표일련번호}`;
 
-function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
+function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예산, 영어인가 }: {
   onNext: (p: OrderSheet) => void;
   onBack: () => void;
+  /** 이번 이용의 가격 한도. 주문표에는 안 담긴다 — 한도고르기 의 주석을 보라. */
+  예산: number | null;
+  on예산: (원: number | null) => void;
+  /** 금액 표기가 언어마다 다르다. 한도고르기 까지 내려간다. */
+  영어인가: boolean;
   /**
    * 로그인한 사람인가. 저장한 주문표가 서버에도 올라가는지가 달라지므로 화면이 말해 준다.
    * 로그인하지 않았으면 서버 이야기를 꺼내지 않는다 — 하지 않는 일을 설명할 이유가 없다.
@@ -1079,6 +1084,15 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false }: {
             </div>
           </div>
         )}
+
+        {/*
+          조건을 고르는 자리에서 얼마까지 쓸지도 같이 정한다. 맵기·형태와 함께
+          '이 주문의 조건' 이라 여기가 맞다. 다만 값은 주문표가 아니라 이번
+          이용에 담긴다(한도고르기 주석).
+        */}
+        <div style={{ marginBottom: 24 }}>
+          <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={영어인가} />
+        </div>
 
         <div style={{ marginBottom: 8 }}>
           <SectionLabel text="메모" />
@@ -1321,8 +1335,17 @@ function OrderSheetCard({
  * reasonCode 는 PRICE_LIMIT_EXCEEDED 다. 그래서 "비싼 건 빼고 찾아요" 라고
  * 먼저 말한다 — 순위만 밀리는 줄 알고 낮게 잡으면 담을 게 없다는 답을 받는다.
  *
- * 주문표가 아니라 이번 이용에 딸린 값이라 여기(주문 직전)에 둔다. 주문표에 넣으면
- * 예산은 그날그날 다른데 저장해 둔 조건에 굳어 버린다.
+ * **묻는 자리는 주문표를 만들 때다.** 맵기·형태를 고르는 그 자리에서 얼마까지
+ * 쓸지도 같이 정한다. 예전에는 주문 직전에 물었는데, 그때는 이미 어느 키오스크
+ * 앞에 서 있는 참이라 조건을 되짚는 자리가 아니다.
+ *
+ * **담기는 곳은 주문표가 아니라 이번 이용이다.** 예산은 그날그날 다르다. 주문표에
+ * 넣으면 지난주에 정한 한도가 저장된 조건으로 굳어, 오늘 주문에서 말없이 후보를
+ * 자른다. 그래서 값은 budget.ts 의 이용 저장소에 담고 창을 닫으면 사라진다 —
+ * 묻는 자리와 담는 자리가 다른 것은 일부러 그렇게 한 것이다.
+ *
+ * 만들어 둔 주문표만 있는 사람도 바꿀 수 있어야 해서 도움 설정 화면에도 둔다.
+ * 알레르기가 가입 때 묻고 설정에서 고치는 것과 같은 모양이다.
  */
 function 한도고르기({ 예산, on바꾸기, 영어인가 }: {
   예산: number | null;
@@ -1354,17 +1377,13 @@ function 한도고르기({ 예산, on바꾸기, 영어인가 }: {
 }
 
 function SavedSheetsScreen({
-  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false, 예산, on예산, 영어인가,
+  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false,
 }: {
   sheets: OrderSheet[];
   onAddSheet: () => void;
   onDeleteSheet: (id: string) => void;
   onOrder: (sheet: OrderSheet) => void;
   showOrder?: boolean;
-  예산: number | null;
-  on예산: (원: number | null) => void;
-  /** 금액 표기가 언어마다 다르다. 한도고르기 까지 내려간다. */
-  영어인가: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(sheets[0]?.id ?? null);
 
@@ -1432,10 +1451,10 @@ function SavedSheetsScreen({
       </div>
 
       <StickyFooter>
-        {/* 주문 버튼이 보일 때만 묻는다. 연결도 안 된 화면에서 예산부터 물으면 뜬금없다. */}
-        {showOrder && 고른것 && 백엔드가아는장소(고른것) && (
-          <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={영어인가} />
-        )}
+        {/*
+          가격 한도는 여기서 안 묻는다. 주문표를 만들 때 조건과 같이 정하고,
+          만들어 둔 주문표만 있는 사람은 도움 설정에서 고친다.
+        */}
         {/*
           아직 연결되지 않은 장소는 주문으로 보내지 않는다.
           
@@ -1717,7 +1736,7 @@ function PairingFailed({ reason = "유효하지 않은 QR입니다", onScan }: {
 
       <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
         <p style={{ ...TYPE.caption, color: TEXT_1 }}>
-          키오스크에 부착된 QR 코드를 <strong style={{ fontWeight: 600 }}>다시 스캔</strong>해 주세요
+          키오스크에 부착된 QR 코드를 <strong style={{ fontWeight: 600 }}>다시 스캔해 주세요</strong>
         </p>
       </div>
 
@@ -1740,7 +1759,7 @@ function PairingExpired({ onScan }: { onScan: () => void }) {
 
       <div style={{ borderRadius: RADIUS.card, padding: 20, backgroundColor: SURFACE, marginTop: 32 }}>
         <p style={{ ...TYPE.caption, color: TEXT_1 }}>
-          키오스크에 부착된 QR 코드를 <strong style={{ fontWeight: 600 }}>다시 스캔</strong>해 주세요
+          키오스크에 부착된 QR 코드를 <strong style={{ fontWeight: 600 }}>다시 스캔해 주세요</strong>
         </p>
       </div>
 
@@ -2366,12 +2385,15 @@ function SetupScreen({ 설정, onChange, 알레르기, on알레르기, onNext, o
  * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
  * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
  */
-function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, onBack }: {
+function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, 예산, on예산, onBack }: {
   설정: 도움설정;
   onChange: (한칸: Partial<도움설정>) => void;
   /** 가입 직후에 한 번 묻지만 여기서도 고칠 수 있어야 한다 — 한 번 묻고 끝나면 못 고친다. */
   알레르기: AllergenId[];
   on알레르기: (id: AllergenId) => void;
+  /** 주문표를 만들 때 묻지만 여기서도 고칠 수 있어야 한다 — 알레르기와 같은 이유다. */
+  예산: number | null;
+  on예산: (원: number | null) => void;
   onBack: () => void;
 }) {
   return (
@@ -2432,6 +2454,14 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, o
 
         <div style={{ marginTop: 28, paddingTop: 24, borderTop: `2px solid ${RULE}` }}>
           <알레르기고르기 고른것={알레르기} on뒤집기={on알레르기} />
+          {/*
+            한도는 주문표를 만들 때 묻는다. 여기는 고치는 자리다 — 만들어 둔
+            주문표만 쓰는 사람은 만들기 화면에 갈 일이 없어서, 여기가 없으면
+            한 번 정한 한도를 바꿀 길이 없다.
+          */}
+          <div style={{ marginTop: 24 }}>
+            <한도고르기 예산={예산} on바꾸기={on예산} 영어인가={설정.language === "en-US"} />
+          </div>
         </div>
       </div>
     </div>
@@ -4673,6 +4703,9 @@ export default function App() {
               로그인함={!guest}
               onNext={주문표저장}
               onBack={() => setScreen("saved")}
+              예산={예산}
+              on예산={(원) => 가격한도.바꾸기(원)}
+              영어인가={접근성값.language === "en-US"}
             />
           )}
           {inMain && tab === "qr" && (
@@ -4699,9 +4732,6 @@ export default function App() {
               // 실서비스에서는 주문표 저장 시점에 서버로 올라가고 이 줄은 사라진다.
               onOrder={(p) => { registerSheet(p); setOrderSheet(p); setScreen("order-confirm"); }}
               showOrder={fromQr}
-              예산={예산}
-              on예산={(원) => 가격한도.바꾸기(원)}
-              영어인가={접근성값.language === "en-US"}
             />
           )}
           {screen === "order-confirm" && pairingId && orderSheet && (
@@ -4797,6 +4827,8 @@ export default function App() {
               설정={접근성값}
               알레르기={알레르기}
               on알레르기={(id) => 알레르기설정.뒤집기(id)}
+              예산={예산}
+              on예산={(원) => 가격한도.바꾸기(원)}
               onChange={(한칸) => 접근성설정.바꾸기(한칸)}
               onBack={() => { setScreen("saved"); setTab("account"); }}
             />
