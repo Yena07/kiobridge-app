@@ -282,13 +282,30 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
   );
 }
 
-function SectionLabel({ text, required }: { text: string; required?: boolean }) {
-  return (
-    <div className="flex items-baseline gap-2 mb-3">
+/**
+ * 칸 위의 제목.
+ *
+ * `칸id` 를 주면 `<label>` 이 되어 그 칸에 묶인다. **글자를 눌러도 커서가 칸으로
+ * 간다** — 손이 떨리는 분에게는 누를 수 있는 자리가 두 배가 되는 일이다.
+ *
+ * 묶기 전에는 보이는 글자("메뉴 이름")와 읽히는 글자(`aria-label="메뉴 이름 (필수)"`)를
+ * 따로 적어 두었다. 한쪽만 고치는 날이 오면 눈으로 보는 사람과 귀로 듣는 사람이
+ * 다른 말을 받는다. 묶으면 하나가 되어 그 위험이 사라진다.
+ *
+ * 옆의 '필수/선택' 도 label 안에 둔다. 읽으면 "메뉴 이름 필수" 가 되어, 눈으로
+ * 보는 것과 같은 것을 듣는다.
+ */
+function SectionLabel({ text, required, 칸id }: { text: string; required?: boolean; 칸id?: string }) {
+  const 속 = (
+    <>
       <span style={{ ...TYPE.label, color: TEXT_1 }}>{text}</span>
       <span style={{ fontSize: 12, fontWeight: 400, color: TEXT_2 }}>{required ? "필수" : "선택"}</span>
-    </div>
+    </>
   );
+  const 꾸밈 = "flex items-baseline gap-2 mb-3";
+  return 칸id
+    ? <label htmlFor={칸id} className={꾸밈} style={{ cursor: "pointer" }}>{속}</label>
+    : <div className={꾸밈}>{속}</div>;
 }
 
 // ─── Welcome ──────────────────────────────────────────────────────────────────
@@ -953,9 +970,17 @@ function CheckRow({ checked, onToggle, label }: { checked: boolean; onToggle: ()
 let 주문표일련번호 = 0;
 const newSheetId = () => `p${Date.now()}_${++주문표일련번호}`;
 
-function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예산, 영어인가 }: {
+function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예산, 영어인가, 고칠것 = null }: {
   onNext: (p: OrderSheet) => void;
   onBack: () => void;
+  /**
+   * 고치러 들어온 주문표. null 이면 새로 만드는 것이다.
+   *
+   * 예전에는 한 번 만든 주문표를 여는 길이 없었다. 조건 하나가 틀리면 지우고
+   * 처음부터 다시 적어야 했다 — 맵기만 바꾸려 해도 이름·장소·메모를 전부 다시
+   * 적는 일이다. 저장해 둔 것을 다시 쓰자고 만든 앱에서 그건 앞뒤가 안 맞는다.
+   */
+  고칠것?: OrderSheet | null;
   /** 이번 이용의 가격 한도. 주문표에는 안 담긴다 — 한도고르기 의 주석을 보라. */
   예산: number | null;
   on예산: (원: number | null) => void;
@@ -967,10 +992,18 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
    */
   로그인함?: boolean;
 }) {
-  const [menuName, setMenuName] = useState("");
-  const [place, setPlace] = useState<PlaceType>(null);
-  const [selections, setSelections] = useState<Record<string, string[]>>({});
-  const [memo, setMemo] = useState("");
+  const [menuName, setMenuName] = useState(고칠것?.menuName ?? "");
+  const [place, setPlace] = useState<PlaceType>(고칠것?.place ?? null);
+  // 고른 값을 그대로 물려받되 **새 객체로** 담는다. 저장된 주문표의 selections 를
+  // 그대로 쥐고 고치면, 저장을 안 누르고 나가도 목록의 주문표가 이미 바뀌어 있다.
+  const [selections, setSelections] = useState<Record<string, string[]>>(
+    () => Object.fromEntries(Object.entries(고칠것?.selections ?? {}).map(([축, 값]) => [축, [...값]])),
+  );
+  const [memo, setMemo] = useState(고칠것?.memo ?? "");
+
+  // 이름·메모 칸의 id. 라벨을 칸에 묶는 데 쓴다(SectionLabel 주석).
+  const 이름칸id = useId();
+  const 메모칸id = useId();
 
   const options = place ? DETAIL_OPTIONS[place] : [];
 
@@ -1038,16 +1071,18 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
          * 가입 흐름은 가입(1) → 호칭(2) 둘로 끝난다.
          */}
         <BackButton onClick={onBack} />
-        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>메뉴 주문표</h1>
-        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 24 }}>자주 주문하는 메뉴를 저장해두세요</p>
+        <h1 style={{ ...TYPE.display, color: TEXT_1, marginTop: 28 }}>{고칠것 ? "주문표 고치기" : "메뉴 주문표"}</h1>
+        <p style={{ ...TYPE.caption, color: TEXT_2, marginTop: 8, marginBottom: 24 }}>
+          {고칠것 ? "고치고 저장하면 이 주문표가 바뀌어요" : "자주 주문하는 메뉴를 저장해두세요"}
+        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-4" style={{ minHeight: 0, paddingLeft: GAP.screenX, paddingRight: GAP.screenX }}>
         <div style={{ marginBottom: 28 }}>
-          <SectionLabel text="메뉴 이름" required />
+          <SectionLabel text="메뉴 이름" required 칸id={이름칸id} />
           <input
+            id={이름칸id}
             type="text"
-            aria-label="메뉴 이름 (필수)"
             value={menuName}
             onChange={(e) => setMenuName(e.target.value)}
             // 서버의 menuName 이 @Size(max = 100) 이다. 넘으면 저장은 되는데 서버에만
@@ -1125,7 +1160,7 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
         </div>
 
         <div style={{ marginBottom: 8 }}>
-          <SectionLabel text="메모" />
+          <SectionLabel text="메모" 칸id={메모칸id} />
           {/*
            * 메모는 자유 입력이라 사용자가 무엇이든 적을 수 있다.
            * "이 칸을 없애라" 는 지적도 있었지만, '얼음 적게 부탁드려요' 처럼
@@ -1134,7 +1169,9 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
            * placeholder 는 입력하면 사라지므로 안내는 밖에 따로 둔다.
            */}
           <textarea
-            aria-label="메모 (선택). 이름·전화번호·주민등록번호 같은 개인정보는 적지 마세요"
+            id={메모칸id}
+            /* 무엇을 적지 말아야 하는지는 아래 memo-notice 가 읽어 준다. 라벨에
+               또 적으면 칸에 들어갈 때마다 그 긴 문장을 한 번 더 듣는다. */
             aria-describedby="memo-notice"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
@@ -1188,12 +1225,17 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
           </p>
         )}
         <PrimaryBtn
-          // Date.now() 만 쓰면 같은 밀리초에 두 개를 만들 때 id 가 겹친다.
-          // 겹치면 주문표 하나를 지울 때 다른 하나도 같이 사라진다.
-          onClick={() => onNext({ id: newSheetId(), menuName, place, selections, memo })}
+          /*
+           * 고치는 중이면 **같은 id 로** 돌려준다. 새 id 를 주면 고친 것이 아니라
+           * 하나가 더 생기고, 서버에 올라간 주문표는 옛것이 그대로 남는다.
+           *
+           * 새로 만들 때만 id 를 짓는다. Date.now() 만 쓰면 같은 밀리초에 두 개를
+           * 만들 때 겹치고, 겹치면 하나를 지울 때 다른 하나도 같이 사라진다.
+           */
+          onClick={() => onNext({ id: 고칠것?.id ?? newSheetId(), menuName, place, selections, memo })}
           disabled={!menuName.trim() || 개인정보같은메모(memo)}
         >
-          저장하고 시작하기
+          {고칠것 ? "고친 내용 저장하기" : "저장하고 시작하기"}
         </PrimaryBtn>
       </StickyFooter>
     </div>
@@ -1216,9 +1258,9 @@ const SR_ONLY: React.CSSProperties = {
 };
 
 function OrderSheetCard({
-  sheet, selected, onSelect, onDelete,
+  sheet, selected, onSelect, onDelete, onEdit,
 }: {
-  sheet: OrderSheet; selected: boolean; onSelect: () => void; onDelete: () => void;
+  sheet: OrderSheet; selected: boolean; onSelect: () => void; onDelete: () => void; onEdit: () => void;
 }) {
   const allTags = [...(sheet.place ? [sheet.place] : []), ...Object.values(sheet.selections).flat()];
   const visibleTags = allTags.slice(0, 4);
@@ -1332,8 +1374,25 @@ function OrderSheetCard({
         )}
       </label>
 
-      {/* 삭제는 라벨 바깥에 둔다. 안에 있으면 label 이 클릭을 가로채 선택으로 바꿔 버린다. */}
-      <div className="flex justify-end" style={{ padding: "0 20px 20px", marginTop: 4 }}>
+      {/* 고치기·삭제는 라벨 바깥에 둔다. 안에 있으면 label 이 클릭을 가로채 선택으로 바꿔 버린다. */}
+      <div className="flex justify-end" style={{ gap: 4, padding: "0 20px 20px", marginTop: 4 }}>
+        {/*
+          고치기를 삭제 왼쪽에 둔다. 손이 가는 순서가 그렇고, 되돌릴 수 없는 쪽이
+          끝에 있어야 잘못 눌러도 덜 위험하다.
+        */}
+        <button
+          type="button"
+          aria-label={`${듣는이름(sheet)}, 주문표 고치기`}
+          onClick={onEdit}
+          style={{
+            fontSize: 13, fontWeight: 500, minHeight: 44, minWidth: 44, padding: "6px 10px",
+            background: "none", border: "none", cursor: "pointer",
+            color: selected ? PAPER : TEXT_2,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}
+        >
+          고치기
+        </button>
         <button
           type="button"
           // 삭제는 되돌릴 수 없다. 고르는 쪽보다 더 정확히 말해 줘야 한다.
@@ -1452,11 +1511,12 @@ const 숫자만읽기 = (글: string): number | null => {
 };
 
 function SavedSheetsScreen({
-  sheets, onAddSheet, onDeleteSheet, onOrder, showOrder = false,
+  sheets, onAddSheet, onDeleteSheet, onEditSheet, onOrder, showOrder = false,
 }: {
   sheets: OrderSheet[];
   onAddSheet: () => void;
   onDeleteSheet: (id: string) => void;
+  onEditSheet: (sheet: OrderSheet) => void;
   onOrder: (sheet: OrderSheet) => void;
   showOrder?: boolean;
 }) {
@@ -1519,6 +1579,7 @@ function SavedSheetsScreen({
                 // 움직이고 '그대로 두기' 를 눌러도 돌아오지 않는다.
                 // 실제로 지워진 뒤의 선택 이동은 아래 useEffect 가 맡는다.
                 onDelete={() => onDeleteSheet(sheet.id)}
+                onEdit={() => onEditSheet(sheet)}
               />
             ))}
           </fieldset>
@@ -4196,6 +4257,13 @@ export default function App() {
   // 만료 때문에 QR 화면으로 되돌아왔는지. 되돌아왔으면 안내부터 띄운다.
   const [qrExpired, setQrExpired] = useState(false);
   const [orderSheet, setOrderSheet] = useState<OrderSheet | null>(null);
+  /**
+   * 지금 고치고 있는 주문표. null 이면 새로 만드는 중이다.
+   *
+   * 적어 두지 않는다(session.ts). 새로고침하면 만들기 화면 자체가 안 살아나므로
+   * 여기에만 있으면 된다. 저장을 안 누르고 나가면 목록의 주문표는 그대로다.
+   */
+  const [고칠주문표, set고칠주문표] = useState<OrderSheet | null>(null);
   /*
    * 연결(pairingId)은 안 이어 받는데 이것만 이어 받는다. 되살린 값으로 하는 일이
    * 읽기뿐이라서다 — 진행 상황을 물어보는 GET 하나다. 계획을 새로 만들거나 실행하는
@@ -4224,7 +4292,6 @@ export default function App() {
     });
   }, [screen, tab, name, 계정, sheets, 접근성값, 동의, 알레르기, 예산, planId]);
 
-  const addSheet = (p: OrderSheet) => setSheets((prev) => [...prev, p]);
   // 화면에서만 지우면 목에 등록해 둔 사본이 남는다. 둘을 같이 지운다.
   const deleteSheet = (id: string) => {
     const 이름 = sheets.find((p) => p.id === id)?.menuName ?? "이 주문표";
@@ -4378,7 +4445,20 @@ export default function App() {
    * 대신 주문표 화면이 저장하기 전에 미리 알려 준다(아래 OrderSheetScreen 의 안내 한 줄).
    */
   const 주문표저장 = (p: OrderSheet): void => {
-    addSheet(p);
+    /*
+     * 고친 것이면 그 자리에 덮고, 새것이면 뒤에 붙인다.
+     *
+     * 자리를 지키는 게 중요하다. 고쳤다고 목록 맨 뒤로 가면, 방금 고친 주문표를
+     * 다시 찾아야 한다. 세 개쯤 되면 그때부터 헷갈린다.
+     *
+     * 목에 등록해 둔 사본도 새 내용으로 갈아 준다. 안 갈면 조건은 고쳐졌는데
+     * 추천은 옛 조건으로 돌아, 화면이 말하는 것과 실제로 담기는 것이 달라진다.
+     */
+    setSheets((prev) => prev.some((있던) => 있던.id === p.id)
+      ? prev.map((있던) => (있던.id === p.id ? p : 있던))
+      : [...prev, p]);
+    registerSheet(p);
+    set고칠주문표(null);
     setScreen("saved");
     setTab("menu");
     // 못올리는이유() 는 이유 문자열이거나 null 이다. null 일 때만 올린다.
@@ -4877,9 +4957,13 @@ export default function App() {
           )}
           {screen === "sheet" && (
             <OrderSheetScreen
+              // 고치던 것이 바뀌면 화면을 새로 만든다. 안 그러면 첫 useState 값이
+              // 남아 다른 주문표를 눌러도 앞엣것이 그대로 떠 있다.
+              key={고칠주문표?.id ?? "new"}
               로그인함={!guest}
+              고칠것={고칠주문표}
               onNext={주문표저장}
-              onBack={() => setScreen("saved")}
+              onBack={() => { set고칠주문표(null); setScreen("saved"); }}
               예산={예산}
               on예산={(원) => 가격한도.바꾸기(원)}
               영어인가={접근성값.language === "en-US"}
@@ -4903,8 +4987,9 @@ export default function App() {
           {inMain && tab === "menu" && (
             <SavedSheetsScreen
               sheets={sheets}
-              onAddSheet={() => { setScreen("sheet"); }}
+              onAddSheet={() => { set고칠주문표(null); setScreen("sheet"); }}
               onDeleteSheet={deleteSheet}
+              onEditSheet={(p) => { set고칠주문표(p); setScreen("sheet"); }}
               // 매핑을 요청하기 전에 이 주문표를 서버가 찾을 수 있게 등록한다.
               // 실서비스에서는 주문표 저장 시점에 서버로 올라가고 이 줄은 사라진다.
               onOrder={(p) => { registerSheet(p); setOrderSheet(p); setScreen("order-confirm"); }}
