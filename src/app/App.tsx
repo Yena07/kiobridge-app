@@ -3240,9 +3240,12 @@ function OptionCard({
 }
 
 function OrderExact({
-  item, reasons, onReasons, onApprove, onCancel,
+  item, reasons, 합계알림, onReasons, onApprove, onCancel,
 }: {
-  item: MappedItem; reasons?: RecommendationReason[]; onReasons: () => void; onApprove: () => void; onCancel: () => void;
+  item: MappedItem; reasons?: RecommendationReason[];
+  /** 합계가 한 개 값 한도를 넘을 때의 한 줄. 넘지 않으면 없다. */
+  합계알림?: string;
+  onReasons: () => void; onApprove: () => void; onCancel: () => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -3253,6 +3256,18 @@ function OrderExact({
         ))}
         <ConfirmRow label="가격" value={item.priceText} large />
       </ConfirmCard>
+      {/*
+        한 개 값은 한도 안인데 수량을 곱하면 넘는 경우를 알려 준다.
+
+        **막지는 않는다.** 킷 규칙(CHICKEN_PRICE_LIMIT)은 단가에만 걸려 있어서
+        서버는 이 주문을 통과시킨다. 여기서 막으면 서버는 되는데 앱만 안 되는
+        상태가 되고, 사용자는 왜 막혔는지 알 수 없다. 알려 주고 정하게 한다.
+      */}
+      {합계알림 && (
+        <p role="status" style={{ fontSize: 13, color: TEXT_2, lineHeight: 1.7, textAlign: "center" }}>
+          {합계알림}
+        </p>
+      )}
       <ReasonSummary reasons={reasons} onOpen={onReasons} />
       <PrimaryBtn onClick={onApprove}>승인하고 담기</PrimaryBtn>
       <OutlineBtn onClick={onCancel}>취소</OutlineBtn>
@@ -3474,6 +3489,23 @@ function OrderConfirmScreen({
   const [mapping, setMapping] = useState<MappingResponse | null>(null);
   // 서버가 이유를 여러 줄 줄 수 있어 문장 하나가 아니라 목록으로 들고 있는다.
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
+  /*
+   * 한 개 값은 한도 안인데 수량을 곱하면 넘는 경우.
+   *
+   * 킷 규칙(CHICKEN_PRICE_LIMIT)은 후보의 단가에만 MAX 를 건다 — quantity 는 그
+   * 비교에 안 들어간다. 그래서 8,000원 한도에 8,000원짜리 두 개가 통과한다.
+   * 서버가 틀린 것이 아니라 그 값의 뜻이 '한 개 값 상한' 이라서다.
+   *
+   * 우리가 대신 세어 알려만 준다. 막지 않는 이유는 OrderExact 주석에 적었다.
+   */
+  const 한도 = 가격한도.읽기();
+  const 수량 = Number((sheet.selections?.["수량"]?.[0] ?? "").replace(/[^0-9]/g, "")) || 1;
+  const 단가 = mapping?.result === "exact" ? mapping.item?.price : undefined;
+  const 합계알림 = (한도 !== null && typeof 단가 === "number" && 수량 > 1 && 단가 * 수량 > 한도)
+    ? tf("한 개 값은 한도 안이지만, {수량}개면 {합계}예요.", {
+        수량, 합계: 돈(단가 * 수량, 접근성설정.읽기().language === "en-US"),
+      })
+    : undefined;
   // 승인은 한 번만. 연타로 실행 계획이 두 번 만들어지면 안 된다.
   const approving = useRef(false);
 
@@ -3622,7 +3654,7 @@ function OrderConfirmScreen({
          * 목은 이제 그 경우를 not_found 로 답하지만, 화면이 서버를 믿고 단정할 이유는 없다.
          */}
         {mapping?.result === "exact" && mapping.item && (
-          <OrderExact item={mapping.item} reasons={mapping.reasons} onReasons={() => set이유먼저(true)} onApprove={() => approve()} onCancel={거절하기} />
+          <OrderExact item={mapping.item} reasons={mapping.reasons} 합계알림={합계알림} onReasons={() => set이유먼저(true)} onApprove={() => approve()} onCancel={거절하기} />
         )}
         {mapping?.result === "clarification" && (
           <OrderClarification

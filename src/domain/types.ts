@@ -61,6 +61,12 @@ export interface MappedOption {
 export interface MappedItem {
   displayName: string;
   priceText: string;
+  /**
+   * 한 개 값(숫자). priceText 는 이미 "8,000원" 으로 적어 둔 글자라 계산에 못 쓴다.
+   *
+   * 수량과 곱해 합계가 한 개 값 한도를 넘는지 볼 때만 쓴다. 서버가 안 주면 없다.
+   */
+  price?: number;
   options: MappedOption[];
   imageUrl?: string;
 }
