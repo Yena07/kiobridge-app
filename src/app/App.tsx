@@ -1405,21 +1405,11 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
 
       <StickyFooter>
         {/*
-         * 버튼이 잠긴 이유를 버튼 옆에서 밝힌다.
-         * 폼이 길어 버튼까지 내려오면 '메뉴 이름' 칸은 이미 화면 위로 사라진 뒤라,
-         * 이 줄이 없으면 그냥 고장 난 버튼으로 보인다. 어느 칸인지까지 짚어 준다.
-         */}
-        {!menuName.trim() && (
-          <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
-            맨 위 <span style={{ fontWeight: 600, color: TEXT_1 }}>메뉴 이름</span>을 적으면 저장할 수 있어요
-          </p>
-        )}
-        {/*
           서버는 장소가 빈 주문표를 받지 않는다(place 가 @NotBlank). 올리고 나서 400 을
           받아 "못 올렸어요" 를 띄우는 대신, 저장하기 전에 무엇을 하면 되는지 말한다.
           막지는 않는다 — 장소는 선택 항목이고, 이 기기에는 그대로 저장된다.
         */}
-        {로그인함 && menuName.trim() && !place && (
+        {로그인함 && !place && (
           <p style={{ textAlign: "center", fontSize: 13, color: TEXT_2, marginBottom: 2 }}>
             <span style={{ fontWeight: 600, color: TEXT_1 }}>장소</span>를 정해 두시면 다음에 로그인해도 불러올 수 있어요
           </p>
@@ -1432,8 +1422,23 @@ function OrderSheetScreen({ onNext, onBack, 로그인함 = false, 예산, on예�
            * 새로 만들 때만 id 를 짓는다. Date.now() 만 쓰면 같은 밀리초에 두 개를
            * 만들 때 겹치고, 겹치면 하나를 지울 때 다른 하나도 같이 사라진다.
            */
-          onClick={() => onNext({ id: 고칠것?.id ?? newSheetId(), menuName, place, selections, memo })}
-          disabled={!menuName.trim() || 개인정보같은메모(memo)}
+          /*
+           * 이름을 안 적어도 저장한다.
+           *
+           * 예전에는 이름이 있어야만 저장할 수 있었다. 그런데 이름은 이 주문표를
+           * 나중에 알아보려고 붙이는 이름표일 뿐이고, 주문을 만드는 데 필요한 것은
+           * 장소와 고른 값들이다. 말로 채우고 바로 쓰려는 사람에게 이름부터
+           * 적으라고 막을 이유가 없다.
+           *
+           * 비워 두면 목록에서 '이름 없는 주문표' 로 보인다 — 빈 줄로 두면 무엇이
+           * 저장됐는지 알 수 없다.
+           */
+          onClick={() => onNext({
+            id: 고칠것?.id ?? newSheetId(),
+            menuName: menuName.trim() || "이름 없는 주문표",
+            place, selections, memo,
+          })}
+          disabled={개인정보같은메모(memo)}
         >
           {고칠것 ? "고친 내용 저장하기" : "저장하고 시작하기"}
         </PrimaryBtn>
@@ -2543,13 +2548,17 @@ const 바로바꾸는것: 도움항목[] = [
   { key: "mobilitySupport", label: "시간 여유", sub: "연결 시간이 지나도 보던 화면을 멋대로 닫지 않아요" },
   { key: "staffAssistancePreferred", label: "직원 도움", sub: "승인 화면에도 직원에게 보여 달라는 안내를 띄워요" },
 ];
-/** 켜도 이 앱 화면은 그대로다. 키오스크로 전해지기만 한다. */
-const 전해드릴것: 도움항목[] = [
-  { key: "visualGuidance", label: "그림 안내", sub: "글보다 그림으로 알려 달라고 전해요" },
-  // '소리 대신 화면' 은 소리 안내를 못 듣는 분의 항목이다. 위의 '소리로 읽어 주기' 와
-  // 반대되는 것이 아니라 서로 다른 사정이라, 둘 다 켤 수 있게 둔다.
-  { key: "hearingSupport", label: "소리 대신 화면", sub: "소리 안내를 못 들어요. 키오스크에 그렇게 전해요" },
-];
+/*
+ * 켜도 이 앱 화면은 그대로고 키오스크로 전해지기만 하던 자리.
+ *
+ * 지금은 비어 있다. '그림 안내' 와 '소리 대신 화면' 을 뺐다 — 이번 시나리오에
+ * 쓰지 않는 값이고, 켜도 아무 일이 안 일어나는 스위치가 화면에 있으면 사용자는
+ * 켜 놓고 무언가 달라지기를 기다린다.
+ *
+ * 계약의 일곱 칸은 그대로 나간다(canonical.ts 의 일곱칸만). 안 묻는 칸은 false 다.
+ * 목록만 비우고 틀은 남겨 둔다 — 다시 물을 값이 생기면 여기에 넣으면 된다.
+ */
+const 전해드릴것: 도움항목[] = [];
 
 /** 이 브라우저에서 실제로 되는 항목만 남긴다. */
 const 쓸수있는것 = (항목들: 도움항목[]): 도움항목[] => 항목들.filter((r) => !r.될때만 || r.될때만());
