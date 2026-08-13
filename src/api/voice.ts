@@ -43,8 +43,10 @@ const 다르게부르는말: Record<string, string[]> = {
   "매운맛": ["매운", "맵게", "매워"],
   "뼈": ["뼈있", "뼈 있"],
   "순살": ["뼈없", "뼈 없", "살만"],
-  "종이컵": ["종이"],
-  "일반컵": ["일반"],
+  // '종이'·'일반' 만으로는 컵 얘기인지 알 수 없다. "일반적으로 순한맛" 이
+  // 일반컵을 고르면 안 된다 — 축을 같이 말한 것만 받는다(#99 리뷰).
+  "종이컵": [],
+  "일반컵": [],
   "1개": ["한 개", "한개", "하나"],
   "2개": ["두 개", "두개", "둘"],
   "3개": ["세 개", "세개", "셋"],
@@ -78,14 +80,16 @@ const 아니라는말: Record<string, string[]> = {
  */
 const 영어로다르게 : Record<string, string[]> = {
   "포장하기": ["to go", "takeout", "take out", "take-out", "to-go"],
-  "먹고 가기": ["eat in", "dine in", "dine-in", "here"],
+  // 'here' 를 뺐다. "I am here" 가 먹고 가기를 고르면 안 된다.
+  "먹고 가기": ["eat in", "dine in", "dine-in"],
   "순한맛": ["mild", "not spicy", "no spice"],
   "보통맛": ["medium"],
   "매운맛": ["spicy", "hot"],
   "뼈": ["bone in", "bone-in", "with bone"],
   "순살": ["boneless", "no bone"],
-  "종이컵": ["paper cup", "paper"],
-  "일반컵": ["regular cup", "regular"],
+  // 'paper'·'regular' 를 뺐다. "regular chicken" 이 일반컵을 고르면 안 된다.
+  "종이컵": ["paper cup"],
+  "일반컵": ["regular cup"],
   "1개": ["one", "1"],
   "2개": ["two", "2"],
   "3개": ["three", "3"],
@@ -141,6 +145,38 @@ export const 말로채울수있나 = (place: PlaceType, 영어인가: boolean): 
   return 축들.every((축) => 축.choices.some((값) => (EN[값] ?? "") !== "" || (영어로다르게[값] ?? []).length > 0));
 };
 
+/**
+ * 이 축을 말하기는 했다는 표시.
+ *
+ * 값은 하나도 못 골랐는데 축 얘기는 한 경우가 있다 — "적당히 매콤하게" 는 맵기를
+ * 말한 것이지 안 말한 것이 아니다. 그런데 값이 0개면 전부 '못 들었어요' 로 갔다.
+ * 말한 사람은 다시 또박또박 말해 보다가 같은 답을 받는다(#99 리뷰).
+ *
+ * 값으로는 안 쓴다. **무엇을 고를지는 여전히 사용자가 정한다** — 이 표는 화면이
+ * 뭐라고 말할지만 가른다.
+ */
+const 축을말했나: Record<string, { ko: string[]; en: string[] }> = {
+  "맵기": { ko: ["맵기", "매콤", "맵기는"], en: ["spice", "spiciness"] },
+  /*
+   * '배달' 은 이용 방식 얘기인데 우리 목록에 없다. 값으로 등록하면 안 되고
+   * (없는 것을 고를 수는 없다) 못 들은 것으로 두어도 안 된다 — 말한 사람에게
+   * "못 들었어요" 라고 하면 다시 또박또박 말해 보게 된다. 축을 말한 것으로
+   * 보고 "어느 쪽인지 못 골랐어요" 라고 답한다(#99 리뷰).
+   */
+  "이용 방식": { ko: ["이용 방식", "배달"], en: ["dine or", "service type", "delivery", "deliver"] },
+  "형태": { ko: ["형태"], en: ["bone or"] },
+  "컵": { ko: ["컵"], en: ["cup"] },
+  "수량": { ko: ["수량", "몇 개"], en: ["how many", "quantity"] },
+};
+
+const 축얘기를했나 = (글: string, 축: string, 영어인가: boolean): boolean => {
+  const 말들 = 축을말했나[축];
+  if (!말들) return false;
+  return 영어인가
+    ? 말들.en.some((말) => 글.toLowerCase().includes(말))
+    : 말들.ko.some((말) => 글.includes(말));
+};
+
 export interface 들은결과 {
   /** 우리 목록에서 고른 값. 화면이 쓰는 우리말 그대로다. */
   고른값: Record<string, string[]>;
@@ -187,7 +223,11 @@ export const 말에서고르기 = (들은말: string, place: PlaceType, 영어�
     if (걸린것.length === 1) 고른값[축.label] = [걸린것[0]];
     // 0개면 안 말한 것, 2개 이상이면 말은 했는데 어느 쪽인지 우리가 정할 수 없는
     // 것. 어느 쪽이든 우리가 고르지 않지만, 화면이 다르게 말해야 해서 나눠 준다.
-    else if (걸린것.length === 0) 못들은축.push(축.label);
+    // 값은 못 골랐지만 축 얘기는 한 경우가 있다. 안 말한 것과 나눈다.
+    else if (걸린것.length === 0) {
+      if (축얘기를했나(글, 축.label, 영어인가)) 모호한축.push(축.label);
+      else 못들은축.push(축.label);
+    }
     else 모호한축.push(축.label);
   }
 

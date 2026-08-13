@@ -97,7 +97,11 @@ export const 수량숫자 = (v: string | undefined): number | null => {
  */
 export function toCanonicalProfile(
   p: OrderSheet,
-  opts: { providerId?: string; collectedAt?: string; 접근성?: Partial<도움설정>; personalization?: boolean } = {},
+  opts: {
+    providerId?: string; collectedAt?: string; 접근성?: Partial<도움설정>; personalization?: boolean;
+    /** 이번 이용에서 말로 채운 적이 있나. voiceGuide 와 다른 값이다 — inputsource.ts 를 보라. */
+    말로채웠나?: boolean;
+  } = {},
 ): CanonicalProfile {
   return {
     profileId: p.id,
@@ -128,12 +132,16 @@ export function toCanonicalProfile(
     /*
      * 화면 글은 한국어고 승인은 사람이 반드시 누른다.
      *
-     * preferredInput 은 여태 "TOUCH" 로 박혀 있었다. 소리로 듣기를 바라는 분이
-     * 접근성 화면에서 켜면 "VOICE" 로 나간다 — 킷 enum 에 원래 있던 값이고,
+     * preferredInput 은 여태 "TOUCH" 로 박혀 있었다. 킷 enum 에 원래 있던 값이고,
      * 로컬 백엔드로 확인했다(status VALID · contractValidation.valid true).
+     *
+     * 한동안 voiceGuide(소리로 읽어 주기)에서 끌어 왔는데 그건 **읽어 주는
+     * 설정이지 입력 방식이 아니다.** 말로 채우고 읽어 주기를 껐으면 TOUCH 로
+     * 나갔고, 손으로 고르고 읽어 주기를 켰으면 VOICE 로 나갔다. 키오스크는 이
+     * 값을 보고 안내 방식을 정하므로 틀리면 그쪽이 잘못 준비한다(#99 리뷰).
      */
     interaction: {
-      preferredInput: opts.접근성?.voiceGuide ? "VOICE" : "TOUCH",
+      preferredInput: opts.말로채웠나 ? "VOICE" : "TOUCH",
       /*
        * 안내받고 싶은 언어. 여태 "ko-KR" 로 박혀 있었다.
        *
@@ -296,7 +304,9 @@ export interface ContextNormalizationInput {
 
 export function toProfileNormalizationInput(
   p: OrderSheet,
-  opts: { collectedAt?: string; 접근성?: Partial<도움설정>; personalization?: boolean } = {},
+  opts: {
+    collectedAt?: string; 접근성?: Partial<도움설정>; personalization?: boolean; 말로채웠나?: boolean;
+  } = {},
 ): ProfileNormalizationInput {
   const c = toCanonicalProfile(p, opts);
   // providerId 와 dataClassification 은 서버가 채운다. 보내지 않는다.

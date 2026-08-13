@@ -75,6 +75,7 @@ const 채운값 = (덮을것: Partial<이어쓸것> = {}): 이어쓸것 => ({
   consent: true,
   allergies: [],
   budget: null,
+  voiceUsed: false,
   planId: null,
   ...덮을것,
 });
@@ -104,11 +105,23 @@ describe("남으면 안 되는 것", () => {
    * 남기는가' 를 바꾼 것이니, session.ts 의 설명과 개인정보 화면 문구를
    * 같이 고쳤는지 다시 보라는 뜻이다.
    */
-  it("적어 두는 칸은 정해진 열한 개뿐이다", () => {
+  it("적어 두는 칸은 정해진 열두 개뿐이다", () => {
     이어쓰기.쓰기(채운값());
     expect(Object.keys(적힌것()).sort()).toEqual(
-      ["a11y", "account", "allergies", "budget", "consent", "fromServer", "name", "planId", "screen", "sheets", "tab"],
+      ["a11y", "account", "allergies", "budget", "consent", "fromServer", "name", "planId", "screen", "sheets", "tab", "voiceUsed"],
     );
+  });
+
+  it("말로 채웠다는 사실은 새로고침을 넘어 남는다", () => {
+    // 계약의 preferredInput 으로 나가는 값이다. 새로고침 한 번에 풀리면 말로 넣은
+    // 사람이 "손으로 넣는 사람" 이 되어 키오스크에 전해진다(#99 리뷰).
+    이어쓰기.쓰기(채운값({ voiceUsed: true }));
+    expect(이어쓰기.읽기()!.voiceUsed).toBe(true);
+  });
+
+  it("voiceUsed 가 boolean 이 아니면 안 쓴 것으로 본다", () => {
+    저장소.setItem("kb.session.v3", JSON.stringify({ ...채운값(), voiceUsed: "네" }));
+    expect(이어쓰기.읽기()!.voiceUsed).toBe(false);
   });
 
   it("연결 정보는 적어 두더라도 되살리지 않는다", () => {

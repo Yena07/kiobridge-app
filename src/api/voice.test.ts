@@ -139,3 +139,63 @@ describe("못 알아듣는 자리에서는 안 내민다", () => {
     expect(말로채울수있나(null, true)).toBe(false);
   });
 });
+
+describe("문맥 없는 말로는 고르지 않는다", () => {
+  it("'here' 만으로 먹고 가기를 고르지 않는다", () => {
+    // "I am here" 는 이용 방식을 말한 것이 아니다(#99 리뷰).
+    const r = 말에서고르기("I am here, what do you have", "음식점", true);
+    expect(r.고른값["이용 방식"]).toBeUndefined();
+  });
+
+  it("'regular' · 'paper' 만으로 컵을 고르지 않는다", () => {
+    for (const 말 of ["regular chicken please", "paper bag please"]) {
+      expect(말에서고르기(말, "음식점", true).고른값["컵"]).toBeUndefined();
+    }
+    // 축을 같이 말하면 받는다.
+    expect(말에서고르기("regular cup please", "음식점", true).고른값["컵"]).toEqual(["일반컵"]);
+  });
+
+  it("'일반' · '종이' 만으로 컵을 고르지 않는다", () => {
+    expect(말에서고르기("일반적으로 순한맛으로 주세요", "음식점").고른값["컵"]).toBeUndefined();
+    expect(말에서고르기("종이컵으로 주세요", "음식점").고른값["컵"]).toEqual(["종이컵"]);
+  });
+});
+
+describe("말은 했는데 못 고른 축", () => {
+  it("'적당히 매콤하게' 는 못 들은 것이 아니라 모호한 것이다", () => {
+    // 맵기를 말하기는 했다. 못 들었다고 하면 다시 또박또박 말해 보다가 같은
+    // 답을 받는다(#99 리뷰).
+    const r = 말에서고르기("적당히 매콤하게 해 주세요", "음식점");
+    expect(r.모호한축).toContain("맵기");
+    expect(r.못들은축).not.toContain("맵기");
+  });
+
+  it("축 얘기가 아예 없으면 못 들은 축이다", () => {
+    const r = 말에서고르기("치킨 먹고 싶어요", "음식점");
+    expect(r.못들은축).toContain("맵기");
+    expect(r.모호한축).toEqual([]);
+  });
+});
+
+describe("지원하지 않는 이용 방식", () => {
+  it("'배달' 은 못 들은 것이 아니라 모호한 것이다", () => {
+    /*
+     * 우리 목록에 없는 값이다. 값으로 등록할 수는 없고(없는 것을 고를 수 없다),
+     * 못 들은 것으로 두어도 안 된다 — 말한 사람에게 "못 들었어요" 라고 하면
+     * 다시 또박또박 말해 보게 된다(#99 리뷰).
+     */
+    const r = 말에서고르기("배달로 할게요", "음식점");
+    expect(r.고른값["이용 방식"]).toBeUndefined();
+    expect(r.모호한축).toContain("이용 방식");
+    expect(r.못들은축).not.toContain("이용 방식");
+  });
+
+  it("영어도 같다", () => {
+    // 우리말과 같은 것을 본다. 모호한축에 들어갔는지만 보면, 값이 몰래 골라졌는지도
+    // 못 들은 것으로 숨겨졌는지도 알 수 없다(#99 리뷰).
+    const r = 말에서고르기("can you deliver it", "음식점", true);
+    expect(r.고른값["이용 방식"]).toBeUndefined();
+    expect(r.모호한축).toContain("이용 방식");
+    expect(r.못들은축).not.toContain("이용 방식");
+  });
+});
