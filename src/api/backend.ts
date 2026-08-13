@@ -308,10 +308,55 @@ export function createApi(
        * 실서버 경로에만 걸면 목에서는 안 걸리는데, 화면으로 나가는 길은 여기
        * 하나다. 막는 자리는 나가는 자리여야 한다.
        */
+      /*
+       * 서버 문장에 **무엇에 대한 얘기인지**를 붙인다.
+       *
+       * 서버는 "지금은 품절이라 제외됐어요" 라고만 한다. 어느 메뉴가 품절인지는
+       * 말해 주지 않는다. 후보가 여럿일 때 사용자는 무엇이 빠졌는지 알 수 없고,
+       * 화면은 이유를 보여 주면서 정작 대상을 감추는 셈이 된다.
+       *
+       * 추천 쪽도 같다. "선호하신 맵기와 맞는 메뉴라" 는 어느 맵기를 말하는지
+       * 안 밝힌다. 자기가 고른 값이 무엇이었는지는 사용자가 기억해야 했다.
+       *
+       * **서버 문장은 그대로 둔다.** 앞뒤에 우리가 아는 사실만 덧댄다 — 문장을
+       * 고쳐 쓰면 그건 인용이 아니라 우리가 지어낸 말이 된다.
+       */
+      const 이름붙이기 = (id: string, 글: string): string => {
+        const 이름 = rec.display[id]?.displayName;
+        return 이름 ? `${이름} — ${글}` : 글;
+      };
+      /*
+       * 서버가 축을 부르는 말 → 우리 주문표의 축.
+       *
+       * 대부분 같은 말인데 형태만 다르다. 서버는 "뼈/순살" 이라 부르고 우리
+       * 주문표의 축 이름은 "형태" 다.
+       */
+      const 서버가부르는축: [string, string][] = [
+        ["이용 방식", "이용 방식"], ["맵기", "맵기"], ["뼈/순살", "형태"], ["컵", "컵"], ["수량", "수량"],
+      ];
+      const 고른값붙이기 = (글: string): string => {
+        for (const [서버말, 축] of 서버가부르는축) {
+          if (!글.includes(서버말)) continue;
+          const 값 = profile?.selections?.[축]?.[0];
+          if (값) return `${글} (고르신 값: ${값})`;
+        }
+        return 글;
+      };
       const reasons: MappingResponse["reasons"] = [
-        ...rec.recommendationReasons.map((text) => ({ kind: "used" as const, text })),
-        ...rec.unmetConditions.map((text) => ({ kind: "unmet" as const, text })),
-        ...제외.map((e) => ({ kind: "excluded" as const, text: e.explanation })),
+        ...rec.recommendationReasons.map((text) => ({
+          kind: "used" as const,
+          /*
+           * 축은 **서버 원문에서** 본다. 이름을 먼저 붙이면 메뉴 이름에 "컵" 이나
+           * "맵기" 가 들어 있을 때 서버가 말하지도 않은 축이 걸린다 — "종이컵
+           * 세트" 같은 이름이면 컵 얘기가 아닌 문장에 컵 값이 붙는다. 사용자에게
+           * 틀린 근거를 보여 주는 셈이다(#41 리뷰).
+           */
+          text: rec.recommendedCandidateId
+            ? 이름붙이기(rec.recommendedCandidateId, 고른값붙이기(text))
+            : 고른값붙이기(text),
+        })),
+        ...rec.unmetConditions.map((text) => ({ kind: "unmet" as const, text: 고른값붙이기(text) })),
+        ...제외.map((e) => ({ kind: "excluded" as const, text: 이름붙이기(e.candidateId, e.explanation) })),
       ].filter((r) => 보여도되나(r.text));
       /*
        * 서버가 점수를 매길 때 본 축들. 담을 것이 정해진 뒤에만 뜻이 있어서

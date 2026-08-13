@@ -48,6 +48,9 @@ function AppLogo({ light = false, size = 34 }: { light?: boolean; size?: number 
   const color = light ? ON_DARK : TEXT_1;
   return (
     <div
+      /* 화면마다 "kio bridge" 를 다시 듣지 않는다. 눈으로는 어디에 왔는지 알려
+         주는 표시지만, 귀로는 매번 같은 말이라 알려 주는 것이 없다. */
+      data-소리생략
       aria-label="키오브릿지"
       style={{
         fontFamily: SERIF, fontSize: size, lineHeight: 1, color,
@@ -140,11 +143,13 @@ function ConsentCheck({ 동의함, on바꾸기, onDetail }: {
             style={{ width: 24, height: 24, accentColor: RULE, cursor: "pointer" }}
           />
         </span>
+        {/*
+          한 줄로 줄였다. 무엇을 모으는지는 옆의 '자세히' 가 여는 개인정보 화면이
+          말한다 — 체크 옆에 두 줄을 붙여 두면 읽지 않고 넘기게 되고, 정작 자세한
+          설명은 그 화면에 또 있다.
+        */}
         <span style={{ fontSize: 14, color: TEXT_1, lineHeight: 1.6, flex: 1 }}>
-          주문에 쓸 정보를 모으고 쓰는 데 동의합니다.
-          <span style={{ display: "block", fontSize: 13, color: TEXT_2, marginTop: 2 }}>
-            메뉴 조건과 도움 설정이에요. 이름·전화번호는 받지 않아요.
-          </span>
+          개인정보 수집 동의서
         </span>
       </label>
       <button
@@ -1880,7 +1885,9 @@ function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab) => 
     { id: "account", icon: <Pictogram name="userCircle" size={25} />, label: "계정" },
   ];
   return (
-    <nav aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: PAPER, paddingBottom: 12 }}>
+    /* 화면마다 끝에 "QR 찍기 내 주문표 계정" 이 붙어 읽혔다. 늘 같은 자리에
+       있는 것이라, 새 화면에 왔다는 소식에 끼워 읽을 값어치가 없다. */
+    <nav data-소리생략 aria-label="주요 메뉴" className="shrink-0 flex" style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: PAPER, paddingBottom: 12 }}>
       {items.map(({ id, label }) => {
         const active = tab === id;
         return (
@@ -2707,13 +2714,8 @@ function SetupScreen({ 설정, onChange, 알레르기, on알레르기, onNext, o
         <CenterHeadline
           kicker="accessibility"
           title={<>필요한 도움이<br />있으신가요?</>}
-          desc="켜는 즉시 이 화면이 바로 바뀌어요. 안 켜셔도 괜찮아요"
           spot={<GlassesSpot />}
         />
-
-        <p style={{ fontSize: 13, color: TEXT_2, margin: "24px 0 20px", lineHeight: 1.7, textAlign: "center" }}>
-          나중에 계정 화면에서 언제든 바꿀 수 있어요.
-        </p>
 
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
         <도움목록 항목들={쓸수있는것(바로바꾸는것)} 설정={설정} onChange={onChange} />
@@ -2753,15 +2755,9 @@ function SetupScreen({ 설정, onChange, 알레르기, on알레르기, onNext, o
  * 앱이 고장 났다고 생각하므로, 무엇을 하는 값인지 제목으로 먼저 밝힌다.
  * 바꾸지 않는 것을 바꾼다고 말하지 않는다.
  */
-function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, 예산, on예산, onBack }: {
+function AccessibilityScreen({ 설정, onChange, onBack }: {
   설정: 도움설정;
   onChange: (한칸: Partial<도움설정>) => void;
-  /** 가입 직후에 한 번 묻지만 여기서도 고칠 수 있어야 한다 — 한 번 묻고 끝나면 못 고친다. */
-  알레르기: AllergenId[];
-  on알레르기: (id: AllergenId) => void;
-  /** 주문표를 만들 때 묻지만 여기서도 고칠 수 있어야 한다 — 알레르기와 같은 이유다. */
-  예산: number | null;
-  on예산: (원: number | null) => void;
   onBack: () => void;
 }) {
   return (
@@ -2782,19 +2778,6 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, �
           다섯 문단이던 것을 둘로 줄였다. 지운 것이 아니라 합쳤다 -
           없어지면 안 되는 말들이다(어디까지 남는지 · 직원 도움).
         */}
-        {/*
-          예전에는 "새로고침하면 처음으로 돌아가요" 라고 적혀 있었다. 이제는 안 돌아간다.
-          도움이 필요해서 켠 설정이 새로고침 한 번에 꺼지던 것을 고쳤으니, 문장도 같이
-          고친다 - 안 고치면 켜 놓고도 꺼진 줄 알고 다시 들어와 확인하게 된다.
-        */}
-        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 10, lineHeight: 1.7 }}>
-          필요하신 것만 켜 주세요. 켠 것은 이 기기에만 남고, 이 창을 닫으면 처음으로 돌아가요.
-        </p>
-        <p style={{ fontSize: 13, color: TEXT_2, marginBottom: 20, lineHeight: 1.7 }}>
-          이 앱은 원래 큰 버튼과 또렷한 대비로 만들었고, 소리로만 알리는 것은 하나도 없어요.
-          어려우면 이 화면을 직원에게 보여 주세요.
-        </p>
-
         <h2 style={{ ...TYPE.label, color: TEXT_2, marginBottom: 2 }}>이 앱이 바로 바꿔요</h2>
         <도움목록 항목들={쓸수있는것(바로바꾸는것)} 설정={설정} onChange={onChange} />
 
@@ -2820,17 +2803,15 @@ function AccessibilityScreen({ 설정, onChange, 알레르기, on알레르기, �
         <도움목록 항목들={쓸수있는것(전해드릴것)} 설정={설정} onChange={onChange} />
         <언어고르기 고른것={설정.language} on바꾸기={(v) => onChange({ language: v })} />
 
-        <div style={{ marginTop: 28, paddingTop: 24, borderTop: `2px solid ${RULE}` }}>
-          <알레르기고르기 고른것={알레르기} on뒤집기={on알레르기} />
-          {/*
-            한도는 주문표를 만들 때 묻는다. 여기는 고치는 자리다 — 만들어 둔
-            주문표만 쓰는 사람은 만들기 화면에 갈 일이 없어서, 여기가 없으면
-            한 번 정한 한도를 바꿀 길이 없다.
-          */}
-          <div style={{ marginTop: 24 }}>
-            <한도적기 예산={예산} on바꾸기={on예산} 영어인가={설정.language === "en-US"} />
-          </div>
-        </div>
+        {/*
+          알레르기와 가격 한도는 여기 없다.
+          
+          계약에서 자리가 다르다 — 이 화면의 것들은 accessibility 와 interaction 에
+          들어가고, 저 둘은 hardConstraints 다. 도움이 필요한 정도를 말하는 값과,
+          이번 주문에서 무엇을 빼라는 값은 같은 화면에 있을 것이 아니다.
+          
+          알레르기는 가입할 때, 가격 한도는 주문표를 만들 때 묻는다.
+        */}
       </div>
     </div>
   );
@@ -4187,7 +4168,8 @@ function 연동표시({ onOpenLog, onOpenSide }: { onOpenLog: () => void; onOpen
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#37d67a", flexShrink: 0 }} />
-        <strong style={{ fontSize: 13 }}>실서버에 붙어 있습니다</strong>
+        {/* 개발용 막대다. 사용자에게 하는 말이 아니다. */}
+        <strong data-소리생략 style={{ fontSize: 13 }}>실서버에 붙어 있습니다</strong>
         <span style={{ marginLeft: "auto", color: "#9a9aa2" }}>{성공}/{목록.length} {펼침 ? "▾" : "▸"}</span>
       </button>
       {!펼침 ? null : (
@@ -4987,12 +4969,24 @@ export default function App() {
      * 첫 그리기가 아직 안 끝나 있을 수 있다. 그때 읽으면 영어 화면을 한국어로
      * 읽거나, 반쯤 그려진 화면을 읽는다.
      */
+    /*
+     * 화면이 바뀌면 **먼저 입을 다문다.**
+     *
+     * 앞 화면을 통째로 읽는 중이었다면 그 말은 이미 지난 얘기다. 예전에는 새
+     * 화면의 읽기가 시작될 때에야 끊겼는데, 그 사이 120ms 동안 지나간 화면을
+     * 계속 읽었고, 새 화면에 읽을 것이 없으면 아예 안 끊겼다.
+     */
+    그만읽기();
+    // 앞 화면에서 읽은 줄 기억도 비운다. 안 비우면 새 화면에 같은 문장이 있을 때
+    // 이미 읽은 것으로 보고 건너뛴다.
+    읽은줄.current = [];
     const 표 = setTimeout(() => {
       const 줄 = 화면글(틀);
       읽은줄.current = 줄;
       읽어주기(줄.join(". "), { 언어: 접근성값.language });
     }, 120);
-    return () => clearTimeout(표);
+    // 떠날 때도 멈춘다. 다음 화면이 읽기 시작하기 전에 조용해진다.
+    return () => { clearTimeout(표); 그만읽기(); };
   }, [screen, tab, 개인정보겹, 접근성값.voiceGuide, 접근성값.language]);
 
   useEffect(() => {
@@ -5017,7 +5011,16 @@ export default function App() {
     });
     지켜보기.observe(틀, { childList: true, subtree: true, characterData: true });
     return () => { clearTimeout(표); 지켜보기.disconnect(); };
-  }, [접근성값.voiceGuide, 접근성값.language]);
+    /*
+     * 화면이 바뀌면 이 효과도 새로 건다.
+     *
+     * 예전에는 안 걸었다. 그러면 앞 화면에서 걸어 둔 350ms 타이머가 새 화면에서
+     * 터져 **새 화면 전체를 '새로 붙은 줄' 로 읽고**, 곧이어 120ms 짜리 전체
+     * 읽기가 같은 것을 또 읽었다. 빠르게 넘기거나 겹을 여닫을 때 그랬다.
+     *
+     * 정리에서 타이머와 지켜보기를 둘 다 끊으므로, 새로 걸면 앞의 것이 안 남는다.
+     */
+  }, [screen, tab, 개인정보겹, 접근성값.voiceGuide, 접근성값.language]);
 
   /*
    * 스위치를 끄거나 화면을 떠나면 읽던 것을 멈춘다.
@@ -5319,10 +5322,6 @@ export default function App() {
           {screen === "a11y" && (
             <AccessibilityScreen
               설정={접근성값}
-              알레르기={알레르기}
-              on알레르기={(id) => 알레르기설정.뒤집기(id)}
-              예산={예산}
-              on예산={(원) => 가격한도.바꾸기(원)}
               onChange={(한칸) => 접근성설정.바꾸기(한칸)}
               onBack={() => { setScreen("saved"); setTab("account"); }}
             />
