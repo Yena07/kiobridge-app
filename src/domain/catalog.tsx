@@ -66,11 +66,18 @@ export const DETAIL_OPTIONS: Record<NonNullable<PlaceType>, DetailOption[]> = {
 };
 
 // 장소 픽토그램. 관공서는 기둥이 선 관청 형태(bank)가 가장 알아보기 쉽다.
+/**
+ * 화면이 고르게 하는 장소.
+ *
+ * 이번 시나리오는 닭강정집 하나만 쓴다. 카페·병원·관공서를 뺐다 — 백엔드가
+ * 다루는 것은 닭강정집뿐이라, 다른 장소로 주문표를 만들면 서버가 축을 못 찾아
+ * UNKNOWN 으로 채우고 확인 카드가 텅 빈 채로 승인 화면이 뜬다.
+ *
+ * 타입(PlaceType)과 축 표(DETAIL_OPTIONS)는 그대로 둔다. 목이 카페 후보를 들고
+ * 있고, 저장된 옛 주문표도 읽을 수 있어야 한다 — 고르는 자리만 좁힌다.
+ */
 export const PLACE_LIST: { label: PlaceType; icon: ReactNode }[] = [
-  { label: "카페", icon: <Pictogram name="coffee" size={22} /> },
   { label: "음식점", icon: <Pictogram name="forkKnife" size={22} /> },
-  { label: "병원", icon: <Pictogram name="hospital" size={22} /> },
-  { label: "관공서", icon: <Pictogram name="bank" size={22} /> },
 ];
 
 export const PLACE_ICONS: Record<NonNullable<PlaceType>, ReactNode> = {

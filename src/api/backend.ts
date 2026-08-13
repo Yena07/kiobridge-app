@@ -1508,10 +1508,16 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
         // 서버가 세션 생성 시점의 값을 그대로 돌려준다. 조립 계층이 이후 단계에서
         // 이 값을 쓴다 — 화면이 보낸 값을 다시 믿지 않는다.
         ...(r.environmentId ? { environmentId: r.environmentId } : {}),
-        // 백엔드가 키오스크 이름과 만료를 아직 안 준다. 받게 되면 여기서 쓴다.
-        // 만료를 클라이언트 시계로 가정하고 있어서, 서버가 먼저 끝내면 앱은 모른다.
-        // docs/BACKEND_INTEGRATION.md 질문 ① 이 이것이다.
-        kioskName: "키오스크",
+        /*
+         * 백엔드가 키오스크 이름과 만료를 아직 안 준다. 받게 되면 여기서 쓴다.
+         * 만료를 클라이언트 시계로 가정하고 있어서, 서버가 먼저 끝내면 앱은 모른다.
+         * docs/BACKEND_INTEGRATION.md 질문 ① 이 이것이다.
+         *
+         * 그때까지는 킷이 적어 둔 이름을 쓴다 — environments/chicken-store/
+         * manifest.json 의 displayName 이 "닭강정 가게" 다. 지점 번호는 킷 어디에도
+         * 없어서 안 붙인다. 지어내면 화면이 사실이 아닌 것을 말하게 된다.
+         */
+        kioskName: "닭강정 가게",
         expiresAt: Date.now() + 5 * 60 * 1000,
       };
     },
