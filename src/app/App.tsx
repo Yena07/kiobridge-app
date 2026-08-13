@@ -25,6 +25,7 @@ import { 소리를낼수있나, 읽어주기, 그만읽기, 화면글 } from "@/
 import { 들을수있나, 들어보기, type 못들은이유 } from "@/api/listen";
 import { 말에서고르기, 말로채울수있나, type 들은결과 } from "@/api/voice";
 import { 가격한도 } from "@/api/budget";
+import { 접근토큰 } from "@/api/token";
 import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
@@ -4790,6 +4791,8 @@ export default function App() {
      * 바로 보이는 값이라, 다음 사람이 모르고 쓰게 되는 종류가 아니다.
      */
     가격한도.비우기();
+    // 토큰도 버린다. 로그아웃한 사람의 토큰으로 다음 사람이 서버를 부르면 안 된다.
+    접근토큰.비우기();
     // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
     // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
     // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
@@ -5275,6 +5278,7 @@ export default function App() {
                   // 가격 한도도 내가 정한 값이다. 남겨 두면 다음 사람이 앞사람의 한도로
                   // 걸러진 목록을 보게 되고, 왜 메뉴가 적게 나오는지 알 수 없다.
                   가격한도.비우기();
+                  접근토큰.비우기();
                   // 동의도 되돌린다. 이 기기를 다음에 쓰는 사람이 앞사람의 동의로
                   // 앱에 들어가면 그건 동의를 받은 것이 아니다.
                   개인정보동의.비우기();
