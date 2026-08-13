@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useLayoutEffect, useId } from "react";
 import { ChevronLeft, Check } from "lucide-react";
 
 import { Pictogram } from "@/design/Pictogram";
-import kioskHeroImg from "@/assets/images/kiosk-hero.jpg";
 import {
   P, TEXT_1, TEXT_2, TEXT_3, BORDER, SURFACE, CANVAS, BACKDROP,
   SUCCESS, WARN, WARN_BG, FAIL, FAIL_BG, TEXT_BTN, TEXT_CHIP,
@@ -25,6 +24,7 @@ import { 소리를낼수있나, 읽어주기, 그만읽기, 화면글 } from "@/
 import { 들을수있나, 들어보기, type 못들은이유 } from "@/api/listen";
 import { 말에서고르기, 말로채울수있나, type 들은결과 } from "@/api/voice";
 import { 가격한도 } from "@/api/budget";
+import { 접근토큰 } from "@/api/token";
 import { 개인정보동의 } from "@/api/consent";
 import { 알레르기설정, 알레르기목록 } from "@/api/allergy";
 import type { AllergenId } from "@/api/canonical";
@@ -336,51 +336,13 @@ function WelcomeScreen({ onStart, onLogin, 동의함, on동의, onPrivacy }: {
   return (
     <div className="flex flex-col h-full kb-paper" style={{ overflowY: "auto" }}>
       {/*
-        첫 화면은 사진 한 장으로 "어디서 쓰는 앱인지"를 설명한다.
-        아래쪽을 흰색으로 흘려보내 사진과 본문의 경계를 지운다.
-
-        자리가 모자라면 **사진이 먼저 양보한다.** 예전에는 사진을 42% 로 박아 두고
-        (shrink-0) 가운데 칸을 flex-1 로 뒀는데, flex-1 은 바탕 크기가 0 이라
-        가운데 칸이 '남은 만큼' 만 받았다. 동의 문구가 한 줄 늘어 아래 칸이 커지면
-        남는 자리가 글보다 작아지고, 그러면 글이 칸 밖으로 나가 아래 칸을 덮었다.
-        동의를 안 한 첫 화면에서 안내 문구가 소개 문장 위에 겹쳐 보였다.
-
-        사진은 없어도 뜻이 통하는 그림이고 글은 아니다. 그래서 줄어드는 쪽을
-        사진으로 정한다. 160 아래로는 안 줄인다 — 그보다 작으면 무슨 장면인지
-        알아볼 수 없어서 있으나 마나다.
-
-        더 짧은 화면(작은 폰 세로 667 같은)에서는 사진을 다 줄여도 모자란다.
-        그때는 겹치거나 잘리는 대신 **화면이 스크롤된다**(위 kb-paper 칸의
-        overflowY). 로그인 단추가 화면 밖에 남아 못 누르는 것이 제일 나쁘다.
-      */}
-      <div className="relative" style={{ height: "42%", minHeight: 160, flexShrink: 1, overflow: "hidden" }}>
-        <img
-          src={kioskHeroImg}
-          alt=""
-          aria-hidden="true"
-          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 40%" }}
-        />
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0"
-          /*
-            그라데이션 끝색을 종이색으로 맞춘다.
-            사진 위에서 시작해 아래 배경으로 이어지는 띠라, 끝이 배경과 같아야
-            이음매가 안 보인다. #fff 로 박아 두면 다크에서 이 띠만 하얗게 남고
-            바로 아래 #0C0C0C 와 맞닿아 화면이 두 동강 난다.
-          */
-          style={{
-            height: "58%",
-            background: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, color-mix(in srgb, ${PAPER} 85%, transparent) 62%, ${PAPER} 100%)`,
-          }}
-        />
-      </div>
-
-      {/*
         flex: "1 0 auto" 다. 남으면 늘어나되(1) 줄지는 않고(0), 바탕 크기는 글의
         실제 높이(auto)다. 이 셋이 다 있어야 이 칸의 글이 자리 계산에 들어간다.
       */}
-      <div className="flex flex-col items-center justify-center" style={{ flex: "1 0 auto", padding: `0 ${GAP.screenX}px 14px`, marginTop: -12 }}>
+      <div
+        className="flex flex-col items-center justify-center"
+        style={{ flex: "1 0 auto", padding: `0 ${GAP.screenX}px 14px` }}
+      >
         <Pictogram name="handPointing" size={54} color={TEXT_1} />
         <div style={{ marginTop: 18 }}>
           <AppLogo size={40} />
@@ -4790,6 +4752,8 @@ export default function App() {
      * 바로 보이는 값이라, 다음 사람이 모르고 쓰게 되는 종류가 아니다.
      */
     가격한도.비우기();
+    // 토큰도 버린다. 로그아웃한 사람의 토큰으로 다음 사람이 서버를 부르면 안 된다.
+    접근토큰.비우기();
     // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
     // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
     // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
@@ -5275,6 +5239,7 @@ export default function App() {
                   // 가격 한도도 내가 정한 값이다. 남겨 두면 다음 사람이 앞사람의 한도로
                   // 걸러진 목록을 보게 되고, 왜 메뉴가 적게 나오는지 알 수 없다.
                   가격한도.비우기();
+                  접근토큰.비우기();
                   // 동의도 되돌린다. 이 기기를 다음에 쓰는 사람이 앞사람의 동의로
                   // 앱에 들어가면 그건 동의를 받은 것이 아니다.
                   개인정보동의.비우기();

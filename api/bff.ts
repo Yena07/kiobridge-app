@@ -64,11 +64,11 @@ const 허용경로 = [
    *                   세지 않느니만 못하다. 시도 횟수 제한은 서버가 해야 한다.
    *
    *   users/{id}/profiles
-   *                   백엔드가 토큰을 발급하지 않아 이 경로에 인증 검사가 없다.
-   *                   userId 는 1부터 올라가는 숫자라, 숫자만 바꾸면 남의 주문표를
-   *                   읽고 남의 계정에 쓴다. 여기를 닫아도 해결되지 않는다 —
-   *                   백엔드가 열려 있는 한 누구든 직접 부를 수 있고, 닫으면
-   *                   우리 화면만 못 쓰게 된다. 막는 자리는 서버다.
+   *                   백엔드가 accessToken 을 발급하면서 이 경로가 Authorization 을
+   *                   요구하게 됐다. 예전에는 검사가 없어서 userId 숫자만 바꾸면
+   *                   남의 주문표를 읽고 쓸 수 있었다 — 그건 막혔다.
+   *                   이 함수는 그 헤더를 백엔드로 넘기기만 한다(아래 인증헤더).
+   *                   검사하는 자리는 여전히 서버다.
    *
    * 둘 다 docs/BACKEND_INTEGRATION.md 에 요청으로 적어 두었다.
    * 이 앱이 여기 싣는 것은 주문 조건뿐이고(장소·맵기·형태·컵·수량·알레르기·메모)
@@ -121,6 +121,23 @@ const 메서드가되나 = (method: string, 경로: string): boolean =>
   기본허용메서드.has(method)
   || 메서드별추가허용.some((x) => x.메서드 === method && x.경로.test(경로));
 
+/**
+ * 브라우저가 보낸 Authorization 을 백엔드로 넘길 값으로 고른다.
+ *
+ * 한 칸만 고르고 모양까지 본다. 아무 값이나 그대로 실어 보내면 이 함수가 헤더
+ * 통로가 된다 — 백엔드가 Bearer 만 받으므로 다른 방식은 여기서 떨어뜨린다.
+ *
+ * 길이도 자른다. 헤더 하나로 백엔드에 큰 값을 밀어 넣는 길을 막는다.
+ */
+const 인증헤더 = (req: { headers: Record<string, string | string[] | undefined> }): string | null => {
+  const v = req.headers?.authorization ?? req.headers?.Authorization;
+  const 값 = Array.isArray(v) ? v[0] : v;
+  if (typeof 값 !== "string") return null;
+  const 다듬은 = 값.trim();
+  if (다듬은.length > 4096) return null;
+  return /^Bearer [A-Za-z0-9._~+/=-]+$/.test(다듬은) ? 다듬은 : null;
+};
+
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const 보내기 = (status: number, body: unknown, type = "application/json") => {
     res.statusCode = status;
@@ -160,9 +177,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const 응답 = await fetch(`${base.replace(/\/$/, "")}/${경로}${쿼리문자열 ? `?${쿼리문자열}` : ""}`, {
       method: req.method,
       signal: ac.signal,
-      // 클라이언트 헤더를 그대로 넘기지 않는다. 쿠키·인증 헤더가 실려 가면
-      // 이 함수가 의도치 않은 권한 통로가 된다.
-      headers: { "content-type": "application/json" },
+      /*
+       * 클라이언트 헤더를 **그대로** 넘기지는 않는다. 쿠키가 실려 가면 이 함수가
+       * 의도치 않은 권한 통로가 된다.
+       *
+       * 다만 Authorization 하나는 넘긴다. 백엔드가 로그인 응답에 accessToken 을
+       * 주기 시작했고, 주문표 조회·저장·삭제가 그 헤더를 요구한다. 여기서 안
+       * 넘기면 로그인은 되는데 주문표는 전부 401 이 된다.
+       *
+       * 통째로 넘기는 것과 다르다 — **이 한 칸만** 고르고, 모양도 본다.
+       * 백엔드가 Bearer 만 받으므로 다른 방식은 여기서 떨어뜨린다.
+       */
+      headers: {
+        "content-type": "application/json",
+        ...(인증헤더(req) ? { authorization: 인증헤더(req)! } : {}),
+      },
       ...(본문 === undefined || 본문 === "" ? {} : { body: 본문 }),
     });
     const text = await 응답.text();
