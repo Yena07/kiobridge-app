@@ -96,6 +96,14 @@ export interface 이어쓸것 {
    */
   budget: number | null;
   /**
+   * 이번 이용에서 말로 채운 적이 있나.
+   *
+   * 계약의 preferredInput 으로 나가는 값이라(inputsource.ts) 새로고침에 풀리면
+   * 안 된다. 말로 넣은 사람이 새로고침 한 번에 "손으로 넣는 사람" 이 되어
+   * 키오스크에 전해진다.
+   */
+  voiceUsed: boolean;
+  /**
    * 실행 중인 계획.
    *
    * 연결(pairingId)은 안 남기는데 이것만 남기는 이유는, 이 값으로 하는 일이
@@ -188,6 +196,7 @@ const 남길것이있나 = (v: 이어쓸것): boolean =>
   || v.sheets.length > 0
   || v.planId !== null
   || v.budget !== null
+  || v.voiceUsed
   || v.consent
   || v.allergies.length > 0
   || 도움설정을건드렸나(v.a11y);
@@ -286,6 +295,8 @@ export const 이어쓰기 = {
       // 손대서 음수를 넣어 두면 서버가 400 으로 되돌려서 주문 자체가 안 된다.
       budget: typeof o.budget === "number" && Number.isInteger(o.budget) && o.budget > 0
         ? o.budget : null,
+      // boolean 이 아니면 안 쓴 것으로 본다. 손댄 값으로 입력 방식을 만들지 않는다.
+      voiceUsed: o.voiceUsed === true,
       // 실행 화면으로 돌아가지 못하면 계획도 들고 있을 이유가 없다.
       planId: screen === "execution" ? planId : null,
     };

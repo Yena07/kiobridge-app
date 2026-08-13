@@ -178,13 +178,27 @@ describe("주문표에 실제 개인정보를 담지 않는다", () => {
     expect(JSON.stringify(c.accessibility)).not.toContain("voiceGuide");
   });
 
-  it("소리 안내를 켜면 preferredInput 이 VOICE 로 나간다", () => {
+  it("말로 채웠으면 preferredInput 이 VOICE 로 나간다", () => {
     /*
      * 킷 enum 에 원래 있던 값이다(TOUCH · VOICE · KEYBOARD · SWITCH · ASSISTED ·
      * MULTIMODAL). 여태 "TOUCH" 로 박아 보내고 있었다. 로컬 백엔드로 확인했다 -
      * status VALID, contractValidation.valid true.
      */
-    expect(toCanonicalProfile(주문표({}), { 접근성: { voiceGuide: true } }).interaction.preferredInput).toBe("VOICE");
+    expect(toCanonicalProfile(주문표({}), { 말로채웠나: true }).interaction.preferredInput).toBe("VOICE");
+  });
+
+  it("읽어 주기를 켠 것만으로는 VOICE 가 아니다", () => {
+    /*
+     * voiceGuide 는 **읽어 주는** 설정이고 preferredInput 은 **넣는** 방식이다.
+     * 한동안 앞엣것에서 뒤엣것을 끌어 썼는데 둘은 자주 어긋난다 — 손으로 고르고
+     * 읽어 주기만 켠 사람이 "말로 넣는 사람" 으로 키오스크에 전해졌다(#99 리뷰).
+     */
+    expect(toCanonicalProfile(주문표({}), { 접근성: { voiceGuide: true } }).interaction.preferredInput).toBe("TOUCH");
+  });
+
+  it("말로 채운 뒤 손으로 고쳐도 VOICE 그대로다", () => {
+    // 몇 칸 고쳤다고 "말로 넣는 사람" 이 아니게 되지는 않는다.
+    expect(toCanonicalProfile(주문표({ "맵기": ["매운맛"] }), { 말로채웠나: true }).interaction.preferredInput).toBe("VOICE");
   });
 
   it("안 켜면 그대로 TOUCH 다", () => {

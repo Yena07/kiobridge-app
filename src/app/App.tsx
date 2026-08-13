@@ -23,6 +23,7 @@ import { 접근성설정, 언어목록, type 도움설정, type 언어코드 } f
 import { 소리를낼수있나, 읽어주기, 그만읽기, 화면글 } from "@/api/speech";
 import { 들을수있나, 들어보기, type 못들은이유 } from "@/api/listen";
 import { 말에서고르기, 말로채울수있나, type 들은결과 } from "@/api/voice";
+import { 입력출처 } from "@/api/inputsource";
 import { 가격한도 } from "@/api/budget";
 import { 접근토큰 } from "@/api/token";
 import { 개인정보동의 } from "@/api/consent";
@@ -1096,7 +1097,15 @@ function 말로채우기({ place, 언어, on받기 }: {
 
         <div className="flex" style={{ gap: 8, marginTop: 16 }}>
           <div style={{ flex: 1 }}>
-            <OutlineBtn onClick={() => { if (장소그대로) on받기(들은것); set상태("쉬는중"); }}>
+            <OutlineBtn onClick={() => {
+              /*
+               * 실제로 채웠을 때만 '말로 채운 사람' 으로 표시한다. 말해 보고
+               * 확인을 안 눌렀거나 장소가 바뀌어 못 채운 경우는 아니다.
+               * 이 값이 계약의 preferredInput 으로 나간다(inputsource.ts).
+               */
+              if (장소그대로) { on받기(들은것); 입력출처.말로채움(); }
+              set상태("쉬는중");
+            }}>
               {장소그대로 ? "이대로 채우기" : "장소가 바뀌어 못 채워요"}
             </OutlineBtn>
           </div>
@@ -4363,6 +4372,7 @@ export default function App() {
     if (v) {
       접근성설정.되살리기(v.a11y);
       가격한도.되살리기(v.budget);
+      입력출처.되살리기(v.voiceUsed);
       개인정보동의.되살리기(v.consent);
       알레르기설정.되살리기(v.allergies);
     }
@@ -4424,6 +4434,12 @@ export default function App() {
    * 연동 계층(backend.ts)도 이 값을 읽어야 한다. 서버로 나가는 hardConstraints 에 실린다.
    */
   const [예산, set예산] = useState<number | null>(() => 가격한도.읽기());
+  /*
+   * 말로 채운 적이 있나. 저장소는 api/inputsource.ts 에 있고 화면은 그걸 비춘다.
+   * 연동 계층도 이 값을 읽는다 — 계약의 interaction.preferredInput 으로 나간다.
+   */
+  const [말로채웠나, set말로채웠나] = useState<boolean>(() => 입력출처.말로채운적있나());
+  useEffect(() => 입력출처.구독(() => set말로채웠나(입력출처.말로채운적있나())), []);
   /*
    * 개인정보 수집·이용 동의. 저장소는 api/consent.ts 에 있고 화면은 그걸 비춘다 —
    * 접근성.가격 한도와 같은 이유다. 연동 계층도 이 값을 읽어야 한다
@@ -4504,7 +4520,7 @@ export default function App() {
     이어쓰기.쓰기({
       screen, tab, name, account: 계정, sheets,
       fromServer: [...서버에서온것.current],
-      a11y: 접근성값, consent: 동의, allergies: 알레르기, budget: 예산, planId,
+      a11y: 접근성값, consent: 동의, allergies: 알레르기, budget: 예산, voiceUsed: 말로채웠나, planId,
     });
   }, [screen, tab, name, 계정, sheets, 접근성값, 동의, 알레르기, 예산, planId]);
 
@@ -4794,6 +4810,9 @@ export default function App() {
     가격한도.비우기();
     // 토큰도 버린다. 로그아웃한 사람의 토큰으로 다음 사람이 서버를 부르면 안 된다.
     접근토큰.비우기();
+    // 입력 방식도 이 사람 것이다. 남겨 두면 다음 사람이 말한 적도 없는데
+    // 키오스크에 "말로 넣는 사람" 이라고 전해진다.
+    입력출처.비우기();
     // 적어 둔 것도 같이 지운다. 안 지우면 새로고침 한 번에 로그아웃이 되돌아간다.
     // 위의 setState 들이 끝나면 저장 효과가 한 번 더 도는데, 그때는 담을 것이
     // 남아 있지 않아서 다시 쓰이지 않는다(session.ts 의 남길것이있나).
@@ -5280,6 +5299,7 @@ export default function App() {
                   // 걸러진 목록을 보게 되고, 왜 메뉴가 적게 나오는지 알 수 없다.
                   가격한도.비우기();
                   접근토큰.비우기();
+                  입력출처.비우기();
                   // 동의도 되돌린다. 이 기기를 다음에 쓰는 사람이 앞사람의 동의로
                   // 앱에 들어가면 그건 동의를 받은 것이 아니다.
                   개인정보동의.비우기();

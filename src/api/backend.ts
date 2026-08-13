@@ -13,6 +13,7 @@ import { 접근성설정 } from "@/api/a11y";
 import { 돈 } from "@/i18n/apply";
 import { 가격한도 } from "@/api/budget";
 import { 개인정보동의 } from "@/api/consent";
+import { 입력출처 } from "@/api/inputsource";
 import { 알레르기설정 } from "@/api/allergy";
 
 /**
@@ -1325,6 +1326,7 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
     const 프로필입력 = toProfileNormalizationInput(p, {
       접근성: 접근성설정.읽기(),
       personalization: 개인정보동의.읽기(),
+      말로채웠나: 입력출처.말로채운적있나(),
     });
     const 정규화입력 = toContextNormalizationInput(p, {
       예산: 가격한도.읽기(),
