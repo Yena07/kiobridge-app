@@ -151,7 +151,7 @@ export const EN: Record<string, string> = {
   "+ 새 주문표 추가": "+ Add an order card",
   "이 주문표로 주문하기": "Order with this card",
   "삭제": "Delete",
-  "가격 한도 (선택)": "Price limit (optional)",
+  "한 개 값 한도 (선택)": "Price limit per item (optional)",
   // 직접 적는 칸이다. 단위(원 / KRW)는 표가 아니라 코드에서 언어를 보고 붙인다.
   "예: 8000": "e.g. 8000",
   "비워 두면 한도 없이 찾아요": "Leave it blank to search without a limit",
@@ -370,8 +370,8 @@ export const EN: Record<string, string> = {
   "QR 스캔 닫기": "Close the scanner",
   // 한 덩어리로 오는 자리. 줄 단위 항목만으로는 안 맞아서 줄바꿈째 넣는다.
   "키오스크의 QR 코드를\n카메라에 맞춰주세요": "Point your camera\nat the kiosk’s QR code",
-  "{금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.":
-    "We’ll leave out anything above {금액}. If nothing is left, we’ll tell you so.",
+  "한 개에 {금액}보다 비싼 메뉴는 빼고 찾아요. 남는 게 없으면 그렇다고 알려 드려요.":
+    "We’ll leave out anything over {금액} per item. If nothing is left, we’ll tell you so.",
   "주문표 삭제": "Delete order card",
   // ─── QR 다시 찍기 갈래 ────────────────────────────────────────────────────
   "QR 코드를": "Scan the",
