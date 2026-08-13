@@ -1515,7 +1515,11 @@ describe("팀 백엔드의 새 경로를 실제 모양대로 부른다", () => {
     } });
     const r = await b.filterCandidates({ environmentId: "chicken-store", profileId: "p1", profile: 목주문표 });
     expect(r.survivingCandidateIds).toEqual(["candidate-alpha", "candidate-beta"]);
-    expect(r.display?.["candidate-alpha"]).toEqual({ displayName: "매운 순살 닭강정", priceText: "6,000원" });
+    // 숫자 price 도 같이 싣는다. priceText 는 글자라 수량과 곱할 수 없다 —
+    // 한 개 값 한도를 넘는지 보려면 숫자가 있어야 한다.
+    expect(r.display?.["candidate-alpha"]).toEqual({
+      displayName: "매운 순살 닭강정", priceText: "6,000원", price: 6000,
+    });
     // 규칙 추적 문자열이 화면으로 새지 않는다.
     expect(r.excluded[0].explanation).toBe("[PEANUT] 알레르기와 겹쳐서 제외됐어요.");
     expect(JSON.stringify(r.excluded)).not.toContain("ruleId=");

@@ -53,7 +53,7 @@ export interface Backend {
     survivingCandidateIds: string[];
     excluded: { candidateId: string; reasonCode: string; explanation: string }[];
     /** 후보 표시 정보. 서버가 이름·가격을 함께 주면 여기 실린다. */
-    display?: Record<string, { displayName: string; priceText: string; imageUrl?: string }>;
+    display?: Record<string, { displayName: string; priceText: string; price?: number; imageUrl?: string }>;
   }>;
 
   /** POST /api/v1/recommendations — 1순위 추천·이유·대안·제외 사유·확신도 */
@@ -114,7 +114,15 @@ export interface RecommendationResult {
   confidence: number;
   requiresReconfirmation: boolean;
   /** 후보 표시 정보. 상품 ID 가 아니라 사람이 읽는 값이어야 한다. */
-  display: Record<string, { displayName: string; priceText: string; imageUrl?: string }>;
+  /**
+   * 후보를 화면에 보여 줄 값.
+   *
+   * priceText 는 이미 "8,000원" 으로 적어 둔 글자다. 화면이 그대로 쓰면 되지만
+   * **계산은 못 한다.** 한 개 값 한도를 넘는지 보려면 수량과 곱해야 하고, 그러려면
+   * 숫자가 있어야 한다. 글자에서 숫자를 도로 뽑아내는 것보다 둘 다 싣는 편이 낫다 —
+   * 글자를 파싱하면 통화 표기가 바뀌는 날 조용히 틀린다.
+   */
+  display: Record<string, { displayName: string; priceText: string; price?: number; imageUrl?: string }>;
   /** 사용자가 고른 조건이 반영됐는지 항목별로. 1순위 추천 기준이다. */
   matchedOptions: { label: string; value: string; matched: boolean; note?: string }[];
   /**
@@ -1538,9 +1546,16 @@ export function createTeamBackend(baseUrl = "/api/bff"): Backend {
       const 담을수있는 = (r.eligibleCandidates ?? [])
         .filter((c) => c?.candidateId && c.available !== false && !막힌후보(c.candidateId));
 
-      const display: Record<string, { displayName: string; priceText: string }> = {};
+      const display: Record<string, { displayName: string; priceText: string; price?: number }> = {};
       for (const c of 담을수있는) {
-        if (c.name) display[c.candidateId] = { displayName: c.name, priceText: 원(c.price) };
+        if (c.name) {
+          display[c.candidateId] = {
+            displayName: c.name,
+            priceText: 원(c.price),
+            // 숫자도 같이 싣는다. 화면이 수량과 곱해 한도를 넘는지 본다.
+            ...(typeof c.price === "number" ? { price: c.price } : {}),
+          };
+        }
       }
       후보.set(profile.id, new Map(담을수있는.map((c) => [c.candidateId, c])));
       규칙판정들.set(profile.id, {

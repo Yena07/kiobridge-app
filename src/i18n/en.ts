@@ -152,6 +152,8 @@ export const EN: Record<string, string> = {
   "이 주문표로 주문하기": "Order with this card",
   "삭제": "Delete",
   "한 개 값 한도 (선택)": "Price limit per item (optional)",
+  "한 개 값은 한도 안이지만, {수량}개면 {합계}예요.":
+    "Each one is under your limit, but {수량} of them come to {합계}.",
   // 직접 적는 칸이다. 단위(원 / KRW)는 표가 아니라 코드에서 언어를 보고 붙인다.
   "예: 8000": "e.g. 8000",
   "비워 두면 한도 없이 찾아요": "Leave it blank to search without a limit",
